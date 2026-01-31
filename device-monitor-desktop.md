@@ -14,10 +14,12 @@ A comprehensive Electron-based desktop application for complete system security 
 - Remote access software detection (TeamViewer, AnyDesk, VNC, RDP)
 - Malware and ransomware signatures
 - Suspicious permission usage
-- Network-based intrusions
+- Network-based
+ intrusions
 
 ### Security Actions
-- **Quick Fix Buttons**: One-click remediation for detected threats
+- **Quick Fix Buttons**: One-click remediation for detected threatsecho 'npm install status:' && ls -la node_modules | head -10
+
 - **Automated Blocking**: Firewall integration for blocking connections
 - **Service Disabling**: Stop malicious services
 - **Permission Revocation**: Remove suspicious application permissions
