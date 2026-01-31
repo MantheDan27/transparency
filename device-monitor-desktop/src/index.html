@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Device Monitor Desktop</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>🛡️ Device Security Monitor</h1>
+      <p class="subtitle">Complete System Scanning & Threat Detection</p>
+    </header>
+    
+    <div class="container">
+      <section class="control-panel">
+        <button id="scanBtn" class="btn btn-primary btn-large">🔍 Full System Scan</button>
+        <button id="fixAllBtn" class="btn btn-secondary">⚡ Fix All Issues</button>
+        <button id="exportBtn" class="btn btn-secondary">📊 Export Report</button>
+      </section>
+      
+      <section id="results" class="results-section" style="display: none;">
+        <div class="system-info">
+          <h2>System Information</h2>
+          <div id="systemDetails" class="info-grid"></div>
+        </div>
+        
+        <div class="threats-section">
+          <h2>🚨 Detected Threats</h2>
+          <div id="threatsList" class="threats-list"></div>
+        </div>
+        
+        <div class="devices-section">
+          <h2>📱 Connected Devices</h2>
+          <div id="devicesList" class="devices-list"></div>
+        </div>
+        
+        <div class="connections-section">
+          <h2>🌐 Network Connections</h2>
+          <div id="connectionsList" class="connections-list"></div>
+        </div>
+      </section>
+      
+      <section id="loading" class="loading" style="display: none;">
+        <div class="spinner"></div>
+        <p>Scanning system...</p>
+      </section>
+    </div>
+  </div>
+  
+  <script src="renderer.js"></script>
+</body>
+</html>
