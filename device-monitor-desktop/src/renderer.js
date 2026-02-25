@@ -1,17 +1,20 @@
-const { ipcRenderer } = require('electron');
-
 const scanBtn = document.getElementById('scanBtn');
 const fixAllBtn = document.getElementById('fixAllBtn');
 const exportBtn = document.getElementById('exportBtn');
 const loading = document.getElementById('loading');
 const results = document.getElementById('results');
 
+// Check if electronAPI is available
+if (!window.electronAPI) {
+  console.error('electronAPI not found. Make sure preload.js is loaded correctly.');
+}
+
 scanBtn.addEventListener('click', async () => {
   loading.style.display = 'block';
   results.style.display = 'none';
   
   try {
-    const scanResults = await ipcRenderer.invoke('scan-system');
+    const scanResults = await window.electronAPI.scanSystem();
     displayResults(scanResults);
   } catch (error) {
     console.error('Scan error:', error);
@@ -38,14 +41,29 @@ function displayResults(data) {
   `;
   
   // Threats
-  threatsDiv.innerHTML = data.threats.map((threat, idx) => `
-    <div class="threat-item threat-${threat.risk.toLowerCase()}" onclick="showThreatDetail('${threat.name}')">
+  threatsDiv.innerHTML = '';
+  data.threats.forEach((threat, idx) => {
+    const threatItem = document.createElement('div');
+    threatItem.className = `threat-item threat-${threat.risk.toLowerCase()}`;
+    threatItem.innerHTML = `
       <strong>${threat.name}</strong><br>
       <small>Risk: ${threat.risk} | Status: ${threat.status}</small><br>
       <small>${threat.description}</small>
-      <button class="btn btn-small" onclick="fixThreat('${threat.name}', event)" style="margin-top: 0.5rem;">Fix Now</button>
-    </div>
-  `).join('');
+      <button class="btn btn-small fix-btn" style="margin-top: 0.5rem;">Fix Now</button>
+    `;
+    
+    threatItem.addEventListener('click', () => {
+      showThreatDetail(threat.name);
+    });
+    
+    const fixBtn = threatItem.querySelector('.fix-btn');
+    fixBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fixThreat(threat.name);
+    });
+    
+    threatsDiv.appendChild(threatItem);
+  });
   
   // Devices & Connections (mock data for now)
   devicesDiv.innerHTML = '<div class="device-item">No USB/Bluetooth devices detected</div>';
@@ -54,10 +72,13 @@ function displayResults(data) {
   results.style.display = 'block';
 }
 
-function fixThreat(threatName, event) {
-  event.stopPropagation();
+async function fixThreat(threatName) {
   alert(`Applying fixes for ${threatName}...`);
-  ipcRenderer.invoke('fix-threat', threatName);
+  try {
+    await window.electronAPI.fixThreat(threatName);
+  } catch (error) {
+    console.error('Fix error:', error);
+  }
 }
 
 function showThreatDetail(threatName) {

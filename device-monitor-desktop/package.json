@@ -31,11 +31,24 @@
     "publish": null,
     "files": [
       "main.js",
+      "preload.js",
       "src/**/*",
       "package.json"
     ],
     "directories": {
       "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "snap"
+      ]
     }
   }
 }

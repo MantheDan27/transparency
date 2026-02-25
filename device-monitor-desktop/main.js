@@ -19,8 +19,13 @@ const createWindow = () => {
     }
   });
 
-  mainWindow.loadFile('src/index.html');
-  mainWindow.webContents.openDevTools();
+  mainWindow.loadFile('src/index.html').catch(err => {
+    console.error('Failed to load index.html:', err);
+  });
+  
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 };
 
 app.on('ready', createWindow);
