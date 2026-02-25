@@ -16,14 +16,19 @@
     "chart.js": "^4.0.0"
   },
   "devDependencies": {
-    "electron": "^latest",
-    "electron-builder": "^latest"
+    "electron": "latest",
+    "electron-builder": "latest"
   },
   "author": "Security Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MantheDan27/transparency.git"
+  },
   "build": {
     "appId": "com.devicemonitor.app",
     "productName": "Device Monitor Desktop",
+    "publish": null,
     "files": [
       "main.js",
       "src/**/*",
