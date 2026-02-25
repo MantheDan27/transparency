@@ -1,0 +1,36 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: device-monitor-desktop/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd device-monitor-desktop
+        npm install
+
+    - name: Build Windows executable
+      run: |
+        cd device-monitor-desktop
+        npm run build:win
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-executable
+        path: device-monitor-desktop/dist/*.exe
