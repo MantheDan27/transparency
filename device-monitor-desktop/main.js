@@ -4,16 +4,120 @@ const os = require('os');
 const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
+const express = require('express');
+const axios = require('axios');
 const execPromise = util.promisify(exec);
 
 let mainWindow;
+let cloudMockApp;
+let cloudMockServer;
 
+// --- Cloud Mock Service ---
+function startCloudMock() {
+  cloudMockApp = express();
+  cloudMockApp.use(express.json());
+  
+  const activityLog = [];
+
+  cloudMockApp.post('/enrich', (req, res) => {
+    const { device } = req.body;
+    activityLog.push({ action: 'enrich', device, timestamp: new Date() });
+    
+    // Defensive guidance
+    res.json({
+      guidance: `Device ${device.ip} (${device.name || 'Unknown'}) was analyzed. Recommendation: Ensure strong passwords and disable unused services like SMB or RDP.`,
+      riskLevel: 'Informational'
+    });
+  });
+
+  cloudMockApp.delete('/data', (req, res) => {
+    activityLog.push({ action: 'delete_all', timestamp: new Date() });
+    res.json({ success: true, message: 'All cloud data deleted.' });
+  });
+
+  cloudMockApp.get('/ledger', (req, res) => {
+    res.json(activityLog);
+  });
+
+  cloudMockServer = cloudMockApp.listen(3000, () => {
+    console.log('Cloud Mock Service running on port 3000');
+  });
+}
+
+// --- Scanner Logic ---
+async function discoverDevices() {
+  const devices = [];
+  const networkInfo = os.networkInterfaces();
+  let baseIp = '192.168.1'; // Default fallback
+  
+  // Try to find local IP
+  for (const name of Object.keys(networkInfo)) {
+    for (const net of networkInfo[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        baseIp = net.address.split('.').slice(0, 3).join('.');
+      }
+    }
+  }
+
+  console.log(`Scanning base IP: ${baseIp}.x`);
+
+  // Mock discovery for speed in this demo, but structured for real logic
+  const mockDevices = [
+    { ip: `${baseIp}.1`, mac: '00:11:22:33:44:55', name: 'Gateway', ports: [80, 443] },
+    { ip: `${baseIp}.10`, mac: 'AA:BB:CC:DD:EE:FF', name: 'Work Laptop', ports: [22, 445] },
+    { ip: `${baseIp}.15`, mac: 'Unknown', name: 'IoT Device', ports: [8080, 23] }
+  ];
+
+  return mockDevices;
+}
+
+function analyzeAnomalies(devices, previousSnapshot = []) {
+  const anomalies = [];
+  const riskyPorts = [23, 445, 3389, 139]; // Telnet, SMB, RDP
+
+  devices.forEach(device => {
+    // Risky ports rule
+    const exposedRiskyPorts = device.ports.filter(p => riskyPorts.includes(p));
+    if (exposedRiskyPorts.length > 0) {
+      anomalies.push({
+        type: 'Risky Port',
+        severity: 'High',
+        device: device.ip,
+        description: `Device exposes dangerous ports: ${exposedRiskyPorts.join(', ')}`
+      });
+    }
+
+    // MAC unknown rule
+    if (device.mac === 'Unknown') {
+      anomalies.push({
+        type: 'Unknown MAC',
+        severity: 'Medium',
+        device: device.ip,
+        description: 'Device MAC address could not be resolved.'
+      });
+    }
+
+    // New device rule (vs snapshot)
+    const exists = previousSnapshot.find(d => d.ip === device.ip);
+    if (!exists && previousSnapshot.length > 0) {
+      anomalies.push({
+        type: 'New Device',
+        severity: 'Low',
+        device: device.ip,
+        description: 'New device detected on network since last scan.'
+      });
+    }
+  });
+
+  return anomalies;
+}
+
+// --- Window Management ---
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    show: false,
-    backgroundColor: '#0a0e27', // Set background color to match app theme
+    width: 1200,
+    height: 800,
+    backgroundColor: '#0a0e27',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -23,109 +127,74 @@ const createWindow = () => {
   });
 
   const indexPath = path.join(__dirname, 'src', 'index.html');
+  console.log('Loading index.html from:', indexPath);
   
-  if (fs.existsSync(indexPath)) {
-    mainWindow.loadFile(indexPath).catch(err => {
-      console.error('Failed to load index.html:', err);
-    });
-  } else {
-    console.error('index.html not found at:', indexPath);
-    mainWindow.loadURL(`data:text/html,<html><body style="background: #0a0e27; color: white; font-family: sans-serif; padding: 20px;">
-      <h1>Error: index.html not found</h1>
-      <p>The application could not find the required files at: <code>${indexPath}</code></p>
-    </body></html>`);
-  }
+  mainWindow.loadFile(indexPath).catch(err => {
+    console.error('Failed to load index.html:', err);
+  });
   
   mainWindow.once('ready-to-show', () => {
+    console.log('Main window ready to show');
     mainWindow.show();
   });
 
-  // Open DevTools in development or if explicitly requested
-  if (!app.isPackaged || process.env.DEBUG_ELECTRON) {
-    mainWindow.webContents.openDevTools();
-  }
+  // mainWindow.webContents.openDevTools();
 };
 
-// Error handling for the main process
-process.on('uncaughtException', (error) => {
-  console.error('Main Process Uncaught Exception:', error);
-});
+app.whenReady().then(() => {
+  startCloudMock();
+  createWindow();
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Main Process Unhandled Rejection at:', promise, 'reason:', reason);
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
 });
-
-app.on('ready', createWindow);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    if (cloudMockServer) cloudMockServer.close();
     app.quit();
   }
 });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+// --- IPC Handlers ---
+let lastSnapshot = [];
 
-// IPC Handlers for system scanning
-ipcMain.handle('scan-system', async () => {
+ipcMain.handle('scan-network', async () => {
   try {
-    const isWindows = process.platform === 'win32';
-    const isMac = process.platform === 'darwin';
-    const isLinux = process.platform === 'linux';
-    
-    let results = {
-      platform: process.platform,
-      osVersion: os.release(),
-      cpus: os.cpus().length,
-      arch: process.arch,
-      totalMemory: Math.round(os.totalmem() / (1024 * 1024 * 1024)) + ' GB',
-      freeMemory: Math.round(os.freemem() / (1024 * 1024 * 1024)) + ' GB',
-      hostname: os.hostname(),
-      processes: [],
-      networkConnections: [],
-      devices: [],
-      threats: []
-    };
-
-    // Get process list
-    if (isWindows) {
-      try {
-        const { stdout } = await execPromise('tasklist /FO CSV /NH');
-        results.processes = stdout.split('\n').filter(p => p.trim()).map(p => ({
-          name: p.split(',')[0].replace(/"/g, ''),
-          pid: p.split(',')[1]?.replace(/"/g, '') || 'N/A'
-        }));
-      } catch (e) {
-        console.log('Process scanning unavailable');
-      }
-    }
-
-    // Check for remote access tools
-    const remoteAccessTools = [
-      'teamviewer', 'anydesk', 'zoom', 'skype', 'slack',
-      'chrome', 'firefox', 'edge', 'vnc', 'rdp'
-    ];
-
-    results.threats = remoteAccessTools.map(tool => ({
-      name: tool,
-      risk: 'Medium',
-      description: `Monitoring ${tool} for suspicious activity`,
-      status: 'Active'
-    }));
-
-    return results;
+    const devices = await discoverDevices();
+    const anomalies = analyzeAnomalies(devices, lastSnapshot);
+    lastSnapshot = devices;
+    return { devices, anomalies };
   } catch (error) {
+    console.error('Scan Error:', error);
     return { error: error.message };
   }
 });
 
-ipcMain.handle('fix-threat', async (event, threatId) => {
+ipcMain.handle('get-cloud-ledger', async () => {
   try {
-    return { success: true, message: `Threat ${threatId} mitigated` };
+    const response = await axios.get('http://localhost:3000/ledger');
+    return response.data;
   } catch (error) {
-    return { error: error.message };
+    return [];
+  }
+});
+
+ipcMain.handle('delete-cloud-data', async () => {
+  try {
+    const response = await axios.delete('http://localhost:3000/data');
+    return response.data;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('enrich-device', async (event, device) => {
+  try {
+    const response = await axios.post('http://localhost:3000/enrich', { device });
+    return response.data;
+  } catch (error) {
+    return { guidance: 'Cloud enrichment unavailable.' };
   }
 });

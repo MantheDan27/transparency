@@ -1,53 +1,132 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Device Monitor Desktop</title>
-  <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transparency - Device Monitor</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="app">
-    <header>
-      <h1>🛡️ Device Security Monitor</h1>
-      <p class="subtitle">Complete System Scanning & Threat Detection</p>
-    </header>
-    
-    <div class="container">
-      <section class="control-panel">
-        <button id="scanBtn" class="btn btn-primary btn-large">🔍 Full System Scan</button>
-        <button id="fixAllBtn" class="btn btn-secondary">⚡ Fix All Issues</button>
-        <button id="exportBtn" class="btn btn-secondary">📊 Export Report</button>
-      </section>
-      
-      <section id="results" class="results-section" style="display: none;">
-        <div class="system-info">
-          <h2>System Information</h2>
-          <div id="systemDetails" class="info-grid"></div>
-        </div>
-        
-        <div class="threats-section">
-          <h2>🚨 Detected Threats</h2>
-          <div id="threatsList" class="threats-list"></div>
-        </div>
-        
-        <div class="devices-section">
-          <h2>📱 Connected Devices</h2>
-          <div id="devicesList" class="devices-list"></div>
-        </div>
-        
-        <div class="connections-section">
-          <h2>🌐 Network Connections</h2>
-          <div id="connectionsList" class="connections-list"></div>
-        </div>
-      </section>
-      
-      <section id="loading" class="loading" style="display: none;">
-        <div class="spinner"></div>
-        <p>Scanning system...</p>
-      </section>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="icon">🛡️</span>
+                <span class="text">Transparency</span>
+            </div>
+            <nav>
+                <button class="nav-item active" data-tab="dashboard">
+                    <span class="icon">📊</span> Dashboard
+                </button>
+                <button class="nav-item" data-tab="anomalies">
+                    <span class="icon">🚨</span> Anomalies
+                </button>
+                <button class="nav-item" data-tab="ledger">
+                    <span class="icon">📜</span> Data Ledger
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <span class="icon">⚙️</span> Settings
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <p>v1.0.4</p>
+                <p>Status: <span id="connectionStatus" class="status-online">Online</span></p>
+            </div>
+        </aside>
+
+        <main class="content">
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-content active">
+                <header class="tab-header">
+                    <h1>Network Dashboard</h1>
+                    <button id="scanBtn" class="btn btn-primary">🔍 Start Network Scan</button>
+                </header>
+                
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <h3>Total Devices</h3>
+                        <p id="totalDevicesCount">0</p>
+                    </div>
+                    <div class="kpi-card warning">
+                        <h3>Active Threats</h3>
+                        <p id="activeThreatsCount">0</p>
+                    </div>
+                    <div class="kpi-card info">
+                        <h3>Cloud Syncs</h3>
+                        <p id="cloudSyncCount">0</p>
+                    </div>
+                </div>
+
+                <div class="data-table-container">
+                    <h2>Device List</h2>
+                    <table id="deviceTable">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>MAC Address</th>
+                                <th>Name/Type</th>
+                                <th>Open Ports</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviceListBody">
+                            <tr>
+                                <td colspan="5" style="text-align:center">No scan data available. Click "Start Network Scan"</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Anomalies Tab -->
+            <section id="anomalies" class="tab-content">
+                <header class="tab-header">
+                    <h1>Security Anomalies</h1>
+                </header>
+                <div id="anomaliesList" class="anomalies-grid">
+                    <p class="empty-msg">No anomalies detected. Run a scan to find potential risks.</p>
+                </div>
+            </section>
+
+            <!-- Data Ledger Tab -->
+            <section id="ledger" class="tab-content">
+                <header class="tab-header">
+                    <h1>Cloud Transparency Ledger</h1>
+                    <button id="refreshLedgerBtn" class="btn btn-secondary">🔄 Refresh</button>
+                </header>
+                <p class="subtitle">Real-time log of data sent to or deleted from the cloud.</p>
+                <div class="ledger-container">
+                    <ul id="ledgerList" class="ledger-list">
+                        <li>No activity recorded yet.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Settings Tab -->
+            <section id="settings" class="tab-content">
+                <header class="tab-header">
+                    <h1>Privacy & Settings</h1>
+                </header>
+                <div class="settings-card">
+                    <h2>Your Privacy</h2>
+                    <p>Transparency monitors your local network for security risks. Some device metadata (IP, Name) is sent to our cloud enrichment service to provide defensive guidance.</p>
+                    <div class="action-zone">
+                        <button id="deleteDataBtn" class="btn btn-danger">🗑️ Request Cloud Data Deletion</button>
+                        <p class="hint">This will remove all your device history from our mock cloud servers.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
-  </div>
-  
-  <script src="renderer.js"></script>
+
+    <!-- Modal for Enrichment Details -->
+    <div id="enrichModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle">Device Enrichment</h2>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
 </body>
 </html>
