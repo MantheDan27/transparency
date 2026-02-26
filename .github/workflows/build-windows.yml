@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build and Release
 
 on:
   push:
@@ -8,46 +8,67 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-electron:
     runs-on: windows-latest
     permissions:
       contents: write
-
     steps:
     - uses: actions/checkout@v4
-
     - name: Use Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
         cache-dependency-path: device-monitor-desktop/package-lock.json
-
     - name: Install dependencies
       run: |
         cd device-monitor-desktop
         npm install
-
     - name: Build Windows executable
       run: |
         cd device-monitor-desktop
         npm run build:win
-
-    - name: Upload Artifact
+    - name: Upload Electron Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: windows-executable
+        name: electron-v1
         path: device-monitor-desktop/dist/*.exe
 
-    - name: Release
+  build-native:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+    - name: Build Native App
+      run: |
+        cd transparency-native/TransparencyApp
+        dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true
+    - name: Upload Native Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: native-v2
+        path: transparency-native/TransparencyApp/bin/Release/net10.0-windows/win-x64/publish/TransparencyApp.exe
+
+  release:
+    needs: [build-electron, build-native]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    - name: Create Release
       uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
-          device-monitor-desktop/dist/*.exe
-          device-monitor-desktop/dist/*.AppImage
-          device-monitor-desktop/dist/*.zip
-          device-monitor-desktop/dist/*.snap
+          electron-v1/*.exe
+          native-v2/TransparencyApp.exe
         draft: false
         prerelease: false
       env:

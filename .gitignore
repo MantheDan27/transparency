@@ -7,3 +7,5 @@ build/
 *.swp
 *.swo
 .vscode
+**/bin/
+**/obj/
