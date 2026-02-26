@@ -47,12 +47,12 @@ jobs:
     - name: Build Native App
       run: |
         cd transparency-native/TransparencyApp
-        dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true
+        dotnet publish -c Release -r win-x64 --self-contained true
     - name: Upload Native Artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-v2
-        path: transparency-native/TransparencyApp/bin/Release/net10.0-windows/win-x64/publish/TransparencyApp.exe
+        path: transparency-native/TransparencyApp/bin/Release/net10.0-windows/win-x64/publish/
 
   release:
     needs: [build-electron, build-native]
@@ -63,12 +63,15 @@ jobs:
     steps:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
+    - name: Create ZIP for Native App
+      run: |
+        cd native-v2 && zip -r ../TransparencyApp-Native.zip . && cd ..
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           electron-v1/*.exe
-          native-v2/TransparencyApp.exe
+          TransparencyApp-Native.zip
         draft: false
         prerelease: false
       env:

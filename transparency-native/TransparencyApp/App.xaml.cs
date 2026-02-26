@@ -1,13 +1,18 @@
-﻿using System.Configuration;
-using System.Data;
+using System;
 using System.Windows;
 
-namespace TransparencyApp;
-
-/// <summary>
-/// Interaction logic for App.xaml
-/// </summary>
-public partial class App : Application
+namespace TransparencyApp
 {
-}
+    public partial class App : Application
+    {
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            AppDomain.CurrentDomain.UnhandledException += (s, args) => {
+                var ex = (Exception)args.ExceptionObject;
+                MessageBox.Show($"CRITICAL ERROR: {ex.Message}\n\n{ex.StackTrace}", "Transparency Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            };
 
+            base.OnStartup(e);
+        }
+    }
+}
