@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
@@ -11,22 +12,48 @@ const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    show: false,
+    backgroundColor: '#0a0e27', // Set background color to match app theme
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      enableRemoteModule: false,
+      sandbox: false,
     }
   });
 
-  mainWindow.loadFile('src/index.html').catch(err => {
-    console.error('Failed to load index.html:', err);
-  });
+  const indexPath = path.join(__dirname, 'src', 'index.html');
   
-  if (!app.isPackaged) {
+  if (fs.existsSync(indexPath)) {
+    mainWindow.loadFile(indexPath).catch(err => {
+      console.error('Failed to load index.html:', err);
+    });
+  } else {
+    console.error('index.html not found at:', indexPath);
+    mainWindow.loadURL(`data:text/html,<html><body style="background: #0a0e27; color: white; font-family: sans-serif; padding: 20px;">
+      <h1>Error: index.html not found</h1>
+      <p>The application could not find the required files at: <code>${indexPath}</code></p>
+    </body></html>`);
+  }
+  
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // Open DevTools in development or if explicitly requested
+  if (!app.isPackaged || process.env.DEBUG_ELECTRON) {
     mainWindow.webContents.openDevTools();
   }
 };
+
+// Error handling for the main process
+process.on('uncaughtException', (error) => {
+  console.error('Main Process Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Main Process Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 app.on('ready', createWindow);
 
@@ -37,7 +64,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
+  if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
