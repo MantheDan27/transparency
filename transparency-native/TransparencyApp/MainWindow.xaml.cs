@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -14,7 +13,6 @@ namespace TransparencyApp
     {
         private NetworkScanner _scanner = new NetworkScanner();
         private CloudService _cloud = new CloudService();
-        private ObservableCollection<LedgerEntry> _ledgerHistory = new ObservableCollection<LedgerEntry>();
 
         public MainWindow()
         {
@@ -31,7 +29,7 @@ namespace TransparencyApp
                 var (devices, anomalies) = await _scanner.ScanAsync();
                 DeviceGrid.ItemsSource = devices;
                 AnomaliesList.ItemsSource = anomalies;
-                
+
                 TxtTotalDevices.Text = devices.Count.ToString();
                 TxtActiveThreats.Text = anomalies.Count.ToString();
             }
@@ -52,14 +50,29 @@ namespace TransparencyApp
             }
         }
 
+        private async void DeleteData_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Are you sure you want to delete all your history from the cloud?",
+                "Confirm Deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                await _cloud.DeleteCloudDataAsync();
+                MessageBox.Show("All cloud data has been deleted.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                UpdateLedger();
+            }
+        }
+
         private void Nav_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn)
             {
-                string target = btn.Tag.ToString();
+                string target = btn.Tag.ToString()!;
                 ViewDashboard.Visibility = target == "Dashboard" ? Visibility.Visible : Visibility.Collapsed;
                 ViewAnomalies.Visibility = target == "Anomalies" ? Visibility.Visible : Visibility.Collapsed;
-                ViewLedger.Visibility = target == "Ledger" ? Visibility.Visible : Visibility.Collapsed;
+                ViewLedger.Visibility   = target == "Ledger"    ? Visibility.Visible : Visibility.Collapsed;
+                ViewSettings.Visibility = target == "Settings"  ? Visibility.Visible : Visibility.Collapsed;
 
                 if (target == "Ledger") UpdateLedger();
             }
