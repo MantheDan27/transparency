@@ -630,7 +630,7 @@
                         <TextBlock FontSize="13" Foreground="#AAAAC0" TextWrapping="Wrap" LineHeight="22">
                             Transparency scans your local network by sending ICMP ping probes and attempting
                             TCP connections to well-known ports. No data leaves your machine during a scan.&#x0A;&#x0A;
-                            When you click <Bold><Foreground>#4A9EFF</Foreground>Enrich</Bold> on a device,
+                            When you click <Bold><Run Foreground="#4A9EFF">Enrich</Run></Bold> on a device,
                             limited metadata (IP address, hostname, open ports) is sent to the mock cloud
                             enrichment service running on this machine. No data is sent to any external server.&#x0A;&#x0A;
                             You may request deletion of all enrichment history at any time using the button below.
