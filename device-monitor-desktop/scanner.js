@@ -38,7 +38,6 @@ async function pingHost(ip) {
     await execPromise(cmd, { timeout: 3000 });
     return true;
   } catch {
-    // TCP fallback: check a handful of common ports
     const checks = await Promise.all([
       probePort(ip, 80, 400), probePort(ip, 443, 400),
       probePort(ip, 22, 400),  probePort(ip, 8080, 400)
@@ -92,6 +91,62 @@ async function resolveHostname(ip) {
   try { return (await dnsReverse(ip))[0] || null; }
   catch { return null; }
 }
+
+// ── Per-port business impact descriptions ─────────────────────────────────────
+const PORT_IMPACT = {
+  23:   'Plaintext credential exposure can compromise the entire network. Credentials captured via Telnet are reusable against other systems, enabling lateral movement and full domain takeover.',
+  135:  'MS-RPC exploitation enables remote code execution. Historic worms (Blaster, Sasser) spread across corporate networks in hours via this single port — zero user interaction required.',
+  139:  'NetBIOS exposure enables credential harvesting, share enumeration, and lateral movement. Combined with pass-the-hash attacks, a single exposed device can lead to full domain compromise.',
+  445:  'SMB exploits like EternalBlue (MS17-010) allow wormable remote code execution and ransomware self-propagation. WannaCry infected 200,000+ systems in 150 countries through this port alone.',
+  3389: 'Direct RDP exposure is the primary ransomware entry vector. A single compromised account grants full interactive control — including the ability to disable endpoint protection and exfiltrate data at will.',
+  5900: 'VNC exposure allows complete graphical takeover of the desktop. Weak passwords are trivially brute-forced; several VNC versions have had authentication-bypass CVEs with public exploits.',
+};
+
+// ── Per-port runbook / reference links ───────────────────────────────────────
+const PORT_RUNBOOKS = {
+  23: [
+    { label: 'CISA: Eliminate Telnet', url: 'https://www.cisa.gov/uscert/ncas/tips/ST05-006' },
+    { label: 'CIS Control 4: Secure Config', url: 'https://www.cisecurity.org/controls/secure-configuration-of-enterprise-assets-and-software/' },
+  ],
+  135: [
+    { label: 'Microsoft: Securing MS-RPC', url: 'https://learn.microsoft.com/en-us/windows/win32/rpc/security' },
+    { label: 'CISA: Windows Hardening', url: 'https://www.cisa.gov/resources-tools/services/cyber-hygiene-services' },
+  ],
+  139: [
+    { label: 'Microsoft: Disable NetBIOS over TCP/IP', url: 'https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/disable-netbios-tcp-ip-using-dhcp' },
+    { label: 'NSA: Network Infrastructure Security', url: 'https://media.defense.gov/2022/Jun/15/2003018261/-1/-1/0/CTR_NSA_NETWORK_INFRASTRUCTURE_SECURITY_GUIDE_20220615.PDF' },
+  ],
+  445: [
+    { label: 'Microsoft Security Bulletin MS17-010', url: 'https://learn.microsoft.com/en-us/security-updates/securitybulletins/2017/ms17-010' },
+    { label: 'CISA Alert: SMB Security (AA20-302A)', url: 'https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-302a' },
+    { label: 'CIS: Disable SMBv1', url: 'https://www.cisecurity.org/benchmark/microsoft_windows_10' },
+  ],
+  3389: [
+    { label: 'CISA: Reducing RDP Exposure', url: 'https://www.cisa.gov/news-events/alerts/2018/10/19/alert-ta18-074a' },
+    { label: 'Microsoft: Secure RDP Deployment', url: 'https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/rds-secure-deployment' },
+    { label: 'NSA: Hardening Remote Access', url: 'https://media.defense.gov/2021/Aug/25/2002873168/-1/-1/0/CTR_NETWORK_INFRASTRUCTURE_SECURITY_GUIDANCE_20210825.PDF' },
+  ],
+  5900: [
+    { label: 'NIST SP 800-46: Remote Access Security', url: 'https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-46r2.pdf' },
+    { label: 'RealVNC: Security Hardening Guide', url: 'https://help.realvnc.com/hc/en-us/categories/360001543791-Security' },
+  ],
+};
+
+// ── Generic runbook links (non-port anomalies) ────────────────────────────────
+const ANOMALY_RUNBOOKS = {
+  'Unknown MAC': [
+    { label: 'CIS Control 1: Device Inventory', url: 'https://www.cisecurity.org/controls/inventory-and-control-of-enterprise-assets/' },
+    { label: 'NIST: Asset Management', url: 'https://www.nist.gov/cyberframework' },
+  ],
+  'New Device': [
+    { label: 'CIS Control 1: Authorized Device Policy', url: 'https://www.cisecurity.org/controls/inventory-and-control-of-enterprise-assets/' },
+    { label: 'CISA: Network Segmentation', url: 'https://www.cisa.gov/resources-tools/resources/cisa-network-segmentation' },
+  ],
+  'Ports Changed': [
+    { label: 'CIS Control 4: Configuration Management', url: 'https://www.cisecurity.org/controls/secure-configuration-of-enterprise-assets-and-software/' },
+    { label: 'NIST: Configuration Baseline', url: 'https://csrc.nist.gov/publications/detail/sp/800-128/final' },
+  ],
+};
 
 // ── Anomaly explanation library ───────────────────────────────────────────────
 const PORT_EXPLAIN = {
@@ -159,49 +214,81 @@ const PORT_EXPLAIN = {
 function getAnomalyExplanation(type, ports = []) {
   if (type === 'Risky Port') {
     const details = ports.map(p => PORT_EXPLAIN[p]).filter(Boolean);
-    if (details.length === 1) return details[0];
-    if (details.length > 1) return {
-      what: details.map(d => d.what).join(' | '),
-      risk: details.map(d => d.risk).join(' '),
-      steps: [...new Set(details.flatMap(d => d.steps))]
-    };
+    const impacts = ports.map(p => PORT_IMPACT[p]).filter(Boolean);
+    const runbookLinks = [...new Set(
+      ports.flatMap(p => PORT_RUNBOOKS[p] || [])
+        .map(r => JSON.stringify(r))
+    )].map(s => JSON.parse(s));
+
+    const explanation = details.length === 1 ? details[0] :
+      details.length > 1 ? {
+        what: details.map(d => d.what).join(' | '),
+        risk: details.map(d => d.risk).join(' '),
+        steps: [...new Set(details.flatMap(d => d.steps))]
+      } : {
+        what: `Unusual service(s) on port(s): ${ports.join(', ')}`,
+        risk: 'One or more services may be exploitable for unauthorized access.',
+        steps: ['Identify the service with: ss -tlnp', 'Disable if not required', 'Add firewall rules to restrict access']
+      };
+
     return {
-      what: `Unusual service(s) on port(s): ${ports.join(', ')}`,
-      risk: 'One or more services may be exploitable for unauthorized access.',
-      steps: ['Identify the service with: ss -tlnp', 'Disable if not required', 'Add firewall rules to restrict access']
+      ...explanation,
+      impact: impacts[0] || 'This service may be exploitable for unauthorized remote access.',
+      runbookLinks,
+      category: 'exposure',
     };
   }
+
   if (type === 'Unknown MAC') return {
     what: 'The device\'s hardware (MAC) address could not be resolved via the ARP table.',
     risk: 'An unresolvable MAC may indicate a device using MAC spoofing to evade identification, a new unauthorized guest device, or a stale ARP cache entry.',
+    impact: 'Unresolvable device identity prevents accurate inventory tracking. Without confirmed MAC addresses, MAC-based access controls and device spoofing detection are ineffective.',
     steps: [
       'Check your router\'s DHCP client list to identify the device by lease time',
       'Run manually: arp -n <ip> to attempt resolution after the device sends traffic',
       'If the device is unrecognized, isolate it by blocking its IP at the router',
       'Enable MAC-address filtering on your router for additional access control'
-    ]
+    ],
+    runbookLinks: ANOMALY_RUNBOOKS['Unknown MAC'],
+    category: 'identity',
   };
+
   if (type === 'New Device') return {
     what: 'A device appeared on the network that was not present in the previous scan.',
     risk: 'New devices could represent unauthorized access (e.g., neighbor on your Wi-Fi), a new IoT device with insecure defaults, or a guest connecting without authorization.',
+    impact: 'An unverified device has full network access. If unauthorized, it can exfiltrate data, intercept traffic via ARP spoofing, or act as a pivot point for further attacks.',
     steps: [
       'Log in to your router admin panel and review the DHCP lease table',
       'Check the device\'s open ports with the Enrich feature to assess risk',
       'If unrecognized, block its MAC at the router and change your Wi-Fi password',
       'Enable WPA3 encryption and disable WPS on your access point'
-    ]
+    ],
+    runbookLinks: ANOMALY_RUNBOOKS['New Device'],
+    category: 'inventory',
   };
+
   if (type === 'Ports Changed') return {
     what: 'The open port configuration on this device changed since the last scan.',
     risk: 'Newly opened ports may indicate a newly installed service (possibly malicious), a backdoor being opened, or a misconfiguration that introduced a new attack surface.',
+    impact: 'The attack surface of this device changed unexpectedly. New open ports may expose vulnerable services; unexpected closures may indicate a service was disabled after exfiltration.',
     steps: [
       'Identify what opened with: ss -tlnp (Linux) or netstat -ano (Windows)',
       'If the change was unintentional, run a full malware scan on the device',
       'Review recent software installations and scheduled task changes',
       'Check firewall logs for unusual outbound connection attempts'
-    ]
+    ],
+    runbookLinks: ANOMALY_RUNBOOKS['Ports Changed'],
+    category: 'drift',
   };
-  return { what: type, risk: 'Review this anomaly carefully.', steps: [] };
+
+  return {
+    what: type,
+    risk: 'Review this anomaly carefully.',
+    impact: 'Potential security risk — manual investigation required.',
+    steps: [],
+    runbookLinks: [],
+    category: 'unknown',
+  };
 }
 
 // ── Anomaly rules engine ──────────────────────────────────────────────────────
@@ -210,9 +297,23 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
   const prevMap   = new Map(previousSnapshot.map(d => [d.ip, d]));
 
   for (const dev of devices) {
+    const prev = prevMap.get(dev.ip);
+
     // Rule 1: Risky ports
     const risky = dev.ports.filter(p => RISKY_PORTS.has(p));
     if (risky.length > 0) {
+      // Compute drift type based on previous scan
+      let driftType = 'risk_detected';
+      if (prev) {
+        const prevRisky = new Set(prev.ports.filter(p => RISKY_PORTS.has(p)));
+        const newlyRisky = risky.filter(p => !prevRisky.has(p));
+        if (newlyRisky.length > 0) {
+          driftType = 'risk_increased';
+        } else {
+          driftType = 'persistent_risk';
+        }
+      }
+
       anomalies.push({
         id: `risky-${dev.ip}-${risky.join('-')}`,
         type: 'Risky Port',
@@ -220,6 +321,10 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
         device: dev.ip,
         description: `Dangerous service(s): ${risky.map(p => `${PORT_NAMES[p]||p} (${p})`).join(', ')}`,
         ports: risky,
+        driftType,
+        driftDetails: prev
+          ? { previousPorts: prev.ports, currentPorts: dev.ports }
+          : null,
         ...getAnomalyExplanation('Risky Port', risky)
       });
     }
@@ -233,6 +338,8 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
         device: dev.ip,
         description: 'MAC address could not be resolved via ARP.',
         ports: [],
+        driftType: 'identity_gap',
+        driftDetails: null,
         ...getAnomalyExplanation('Unknown MAC')
       });
     }
@@ -246,12 +353,13 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
         device: dev.ip,
         description: 'Device not present in previous scan — appeared since last check.',
         ports: [],
+        driftType: 'new_device',
+        driftDetails: { firstSeen: new Date().toISOString() },
         ...getAnomalyExplanation('New Device')
       });
     }
 
     // Rule 4: Port list changed since last snapshot
-    const prev = prevMap.get(dev.ip);
     if (prev) {
       const prevSet = new Set(prev.ports);
       const currSet = new Set(dev.ports);
@@ -261,6 +369,8 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
         const changes = [];
         if (added.length)   changes.push(`+${added.map(p=>PORT_NAMES[p]||p).join(', ')}`);
         if (removed.length) changes.push(`-${removed.map(p=>PORT_NAMES[p]||p).join(', ')}`);
+
+        const hasNewRisky = added.some(p => RISKY_PORTS.has(p));
         anomalies.push({
           id: `ports-${dev.ip}`,
           type: 'Ports Changed',
@@ -268,6 +378,8 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
           device: dev.ip,
           description: `Port profile changed since last scan: ${changes.join(' | ')}`,
           ports: added,
+          driftType: hasNewRisky ? 'risk_increased' : 'ports_changed',
+          driftDetails: { added, removed, previousPorts: prev.ports, currentPorts: dev.ports },
           ...getAnomalyExplanation('Ports Changed')
         });
       }
@@ -296,7 +408,6 @@ async function scanNetwork(progressCallback) {
     report(`Ping sweep: ${Math.min(i + BATCH, 254)}/254 — ${alive.length} host(s) responding`);
   }
 
-  // Always include this machine
   if (!alive.includes(localIp)) alive.push(localIp);
 
   report(`${alive.length} device(s) found. Probing ports and resolving identities...`);

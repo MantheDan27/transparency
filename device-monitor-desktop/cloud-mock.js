@@ -44,13 +44,18 @@ function createCloudMockService() {
   let ledger      = [];              // chronological activity log
   let deviceStore = {};              // ip → [ledger entry ids]
 
-  function addEntry(action, deviceIp, details) {
+  function addEntry(action, deviceIp, details, meta = {}) {
     const entry = {
-      id:        `${action}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+      id:             `${action}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
       action,
       deviceIp,
       details,
-      timestamp: new Date().toISOString()
+      timestamp:      new Date().toISOString(),
+      // Transparency fields
+      endpoint:       meta.endpoint       || null,
+      dataCategories: meta.dataCategories || [],
+      dataPreview:    meta.dataPreview    || null,
+      reason:         meta.reason         || null,
     };
     ledger.push(entry);
     return entry;
@@ -65,7 +70,17 @@ function createCloudMockService() {
     const entry  = addEntry(
       'SEND',
       device.ip,
-      `Enrichment — ${device.ip} (${device.name || 'Unknown'}) — Risk: ${result.riskLevel}`
+      `Enrichment — ${device.ip} (${device.name || 'Unknown'}) — Risk: ${result.riskLevel}`,
+      {
+        endpoint:       'POST /enrich',
+        dataCategories: ['network_metadata', 'device_identity', 'service_inventory'],
+        dataPreview: {
+          ip:       device.ip,
+          hostname: device.name || null,
+          ports:    device.ports || [],
+        },
+        reason: 'User-initiated cloud enrichment for defensive risk assessment and remediation guidance',
+      }
     );
 
     if (!deviceStore[device.ip]) deviceStore[device.ip] = [];
@@ -89,7 +104,11 @@ function createCloudMockService() {
     const count = ledger.length;
     ledger      = [];
     deviceStore = {};
-    const entry = addEntry('DELETE_ALL', null, `All data purged — ${count} record(s) deleted`);
+    addEntry('DELETE_ALL', null, `All data purged — ${count} record(s) deleted`, {
+      endpoint:       'DELETE /data',
+      dataCategories: ['network_metadata', 'device_identity', 'service_inventory'],
+      reason:         'User-requested deletion of all cloud enrichment records',
+    });
     res.json({ success: true, deleted: count, message: `${count} record(s) permanently removed from cloud storage.` });
   });
 
@@ -102,7 +121,11 @@ function createCloudMockService() {
     ledger = ledger.filter(e => !ids.has(e.id));
     delete deviceStore[ip];
 
-    const entry = addEntry('DELETE_DEVICE', ip, `Device data purged — ${ip} — ${count} record(s) deleted`);
+    addEntry('DELETE_DEVICE', ip, `Device data purged — ${ip} — ${count} record(s) deleted`, {
+      endpoint:       `DELETE /data/${ip}`,
+      dataCategories: ['network_metadata', 'device_identity', 'service_inventory'],
+      reason:         `User-requested deletion of enrichment records for device ${ip}`,
+    });
     res.json({ success: true, deleted: count, message: `${count} record(s) for ${ip} permanently removed.` });
   });
 

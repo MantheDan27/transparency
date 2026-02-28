@@ -53,7 +53,7 @@
     <div class="sidebar-footer">
       <div class="footer-row">
         <span class="footer-label">Version</span>
-        <span>1.0.5</span>
+        <span>1.1.0</span>
       </div>
       <div class="footer-row">
         <span class="footer-label">Cloud</span>
@@ -72,12 +72,41 @@
           <h1>Network Dashboard</h1>
           <p class="subtitle" id="lastScanLabel">No scan performed yet — click Start Scan to begin.</p>
         </div>
-        <button id="scanBtn" class="btn btn-primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <div class="header-actions">
+          <button id="exportReportBtn" class="btn btn-secondary btn-sm" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export Report
+          </button>
+          <button id="scanBtn" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Start Scan
+          </button>
+        </div>
+      </div>
+
+      <!-- Cloud enrichment toggle -->
+      <div class="cloud-toggle-bar">
+        <div class="cloud-toggle-info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--accent-light);flex-shrink:0">
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
           </svg>
-          Start Scan
-        </button>
+          <div>
+            <strong>Cloud Enrichment</strong>
+            <span>Preview exactly what data is sent before submitting to the local analysis service</span>
+          </div>
+        </div>
+        <div class="toggle-wrap">
+          <span class="toggle-label" id="cloudToggleLabel">Enabled</span>
+          <label class="toggle-switch" title="Toggle cloud enrichment on/off">
+            <input type="checkbox" id="cloudEnrichToggle" checked>
+            <span class="toggle-knob"></span>
+          </label>
+        </div>
       </div>
 
       <!-- Scan progress bar -->
@@ -193,18 +222,73 @@
     <section id="tab-ledger" class="tab">
       <div class="page-header">
         <div>
-          <h1>Cloud Transparency Ledger</h1>
-          <p class="subtitle">Every interaction with the cloud service is logged here for your review.</p>
+          <h1>Data Transparency Ledger</h1>
+          <p class="subtitle">Complete audit trail: what left this device, when, to which endpoint, which data categories, and why.</p>
         </div>
-        <button id="refreshLedgerBtn" class="btn btn-secondary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-          </svg>
-          Refresh
-        </button>
+        <div class="header-actions">
+          <button id="exportLedgerBtn" class="btn btn-secondary btn-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export Ledger
+          </button>
+          <button id="refreshLedgerBtn" class="btn btn-secondary btn-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
+      <!-- Ledger KPI strip -->
+      <div class="ledger-stats">
+        <div class="ledger-stat">
+          <span class="ledger-stat-value" id="lstatSend">0</span>
+          <span class="ledger-stat-label">Data Transmissions</span>
+        </div>
+        <div class="ledger-stat">
+          <span class="ledger-stat-value" id="lstatDelete">0</span>
+          <span class="ledger-stat-label">Deletion Requests</span>
+        </div>
+        <div class="ledger-stat">
+          <span class="ledger-stat-value" id="lstatDevices">0</span>
+          <span class="ledger-stat-label">Unique Devices</span>
+        </div>
+      </div>
+
+      <!-- Per-device cache controls -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Per-Device Controls</h2>
+          <span class="tag">Compliance Actions</span>
+        </div>
+        <div class="ledger-device-actions">
+          <p class="ldact-desc">Select a device to manage its local scan cache and cloud enrichment records independently.</p>
+          <div class="ldact-row">
+            <select id="ledgerDeviceSelect" class="sel-input">
+              <option value="">Select a device…</option>
+            </select>
+            <button id="deleteLocalCacheBtn" class="btn btn-secondary btn-sm" disabled title="Remove this device from the local scan snapshot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/><path d="M14 11v6"/>
+              </svg>
+              Delete Local Cache
+            </button>
+            <button id="requestCloudDeleteBtn" class="btn btn-danger btn-sm" disabled title="Request deletion of this device's cloud enrichment records">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+              </svg>
+              Request Cloud Delete
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity log -->
       <div class="card">
         <div class="card-header">
           <h2>Activity Log</h2>
@@ -235,14 +319,17 @@
 
         <h3 class="settings-sub">What Enrichment sends to the cloud</h3>
         <ul class="data-list">
-          <li>Device IP address</li>
-          <li>Device hostname (if DNS-resolvable)</li>
-          <li>List of open network ports detected by this scanner</li>
+          <li><strong>network_metadata</strong> — Device IP address on your local network</li>
+          <li><strong>device_identity</strong> — Device hostname (if DNS-resolvable)</li>
+          <li><strong>service_inventory</strong> — List of open TCP ports detected by this scanner</li>
         </ul>
         <p>The cloud service returns <strong>defensive guidance only</strong> — no exploit instructions, no external scanning, no personal information stored beyond the session.</p>
 
+        <h3 class="settings-sub">Cloud enrichment mode</h3>
+        <p>When Cloud Enrichment is enabled, a <strong>data preview</strong> is shown before any information is transmitted. You can review exactly what will be sent and choose to cancel.</p>
+
         <h3 class="settings-sub">Your rights</h3>
-        <p>You may delete any or all cloud records at any time using the controls below. Every deletion is permanently logged in the Data Ledger for full transparency.</p>
+        <p>You may delete any or all cloud records at any time. Every deletion is permanently logged in the Data Ledger for full transparency. Use the Data Ledger tab for per-device controls.</p>
       </div>
 
       <!-- Deletion controls -->
@@ -308,6 +395,33 @@
       </button>
     </div>
     <div id="modalBody" class="modal-body"></div>
+  </div>
+</div>
+
+<!-- ── Data preview modal ─────────────────────────────────────────────── -->
+<div id="previewModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal modal-preview">
+    <div class="modal-header">
+      <div>
+        <h2>Data Preview — Cloud Enrichment</h2>
+        <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.1rem">Review exactly what will be sent before transmitting</p>
+      </div>
+      <button class="modal-close" id="previewClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="previewBody" class="modal-body"></div>
+    <div class="modal-footer">
+      <button id="previewCancelBtn" class="btn btn-secondary">Cancel</button>
+      <button id="previewConfirmBtn" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+        </svg>
+        Send for Analysis
+      </button>
+    </div>
   </div>
 </div>
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path  = require('path');
 const axios = require('axios');
 
@@ -53,14 +53,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// ── IPC handlers ──────────────────────────────────────────────────────────────
-let lastSnapshot = [];
+// ── Scan state ────────────────────────────────────────────────────────────────
+let lastSnapshot   = [];
+let lastScanResult = null;   // stored for report export
 
+// ── IPC handlers ──────────────────────────────────────────────────────────────
 ipcMain.handle('scan-network', async () => {
   try {
+    const scannedAt = new Date().toISOString();
     const devices   = await scanNetwork(msg => mainWindow?.webContents.send('scan-progress', msg));
     const anomalies = analyzeAnomalies(devices, lastSnapshot);
     lastSnapshot    = devices;
+    lastScanResult  = { devices, anomalies, scannedAt };
     return { devices, anomalies };
   } catch (err) {
     console.error('[scan]', err);
@@ -94,6 +98,77 @@ ipcMain.handle('delete-device-data', async (_e, ip) => {
 });
 
 ipcMain.handle('clear-local-snapshot', async () => {
-  lastSnapshot = [];
+  lastSnapshot   = [];
+  lastScanResult = null;
   return { success: true };
+});
+
+// ── New: local device cache management ───────────────────────────────────────
+ipcMain.handle('get-local-devices', async () => {
+  // Return IP list of devices in the current local snapshot
+  return lastSnapshot.map(d => d.ip);
+});
+
+ipcMain.handle('delete-local-device', async (_e, ip) => {
+  const before = lastSnapshot.length;
+  lastSnapshot = lastSnapshot.filter(d => d.ip !== ip);
+  if (lastScanResult) {
+    lastScanResult = {
+      ...lastScanResult,
+      devices: lastScanResult.devices.filter(d => d.ip !== ip),
+    };
+  }
+  return { success: true, removed: before - lastSnapshot.length };
+});
+
+// ── New: data preview before cloud enrichment ─────────────────────────────────
+ipcMain.handle('get-cloud-preview', async (_e, device) => {
+  return {
+    endpoint:       'POST /enrich',
+    serviceUrl:     `http://127.0.0.1:${CLOUD_PORT}/enrich`,
+    dataFields: [
+      { field: 'ip',       value: device.ip,              category: 'network_metadata',    description: 'Device IP address on local network' },
+      { field: 'hostname', value: device.name || '—',     category: 'device_identity',     description: 'DNS-resolved hostname, if available' },
+      { field: 'ports',    value: device.ports || [],     category: 'service_inventory',   description: 'List of open TCP ports detected by scanner' },
+    ],
+    dataCategories:  ['network_metadata', 'device_identity', 'service_inventory'],
+    retentionPolicy: 'Session only — data is held in memory and purged when the application closes.',
+    purpose:         'Defensive risk assessment — returns hardening guidance and service-level remediation steps. No exploit instructions are returned.',
+    thirdParties:    'None — this enrichment service runs locally (localhost) and makes no external network connections.',
+  };
+});
+
+// ── New: export full scan report ─────────────────────────────────────────────
+ipcMain.handle('export-report', async () => {
+  try {
+    const ledger = await cloud('/ledger');
+    return {
+      reportVersion:    '1.0',
+      reportFormat:     'transparency-scan-report',
+      generatedAt:      new Date().toISOString(),
+      generatedBy:      'Transparency v1.0.5',
+      scan:             lastScanResult || { devices: [], anomalies: [], scannedAt: null },
+      cloudLedger:      ledger,
+      summary: {
+        totalDevices:   lastScanResult?.devices?.length ?? 0,
+        totalAnomalies: lastScanResult?.anomalies?.length ?? 0,
+        highSeverity:   lastScanResult?.anomalies?.filter(a => a.severity === 'High').length ?? 0,
+        mediumSeverity: lastScanResult?.anomalies?.filter(a => a.severity === 'Medium').length ?? 0,
+        lowSeverity:    lastScanResult?.anomalies?.filter(a => a.severity === 'Low').length ?? 0,
+        cloudSends:     ledger.filter(e => e.action === 'SEND').length,
+      }
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+// ── New: open external URL via OS browser ─────────────────────────────────────
+ipcMain.handle('open-external-url', async (_e, url) => {
+  // Only allow https:// links for safety
+  if (typeof url === 'string' && url.startsWith('https://')) {
+    await shell.openExternal(url);
+    return { success: true };
+  }
+  return { success: false, error: 'Only HTTPS URLs are permitted.' };
 });

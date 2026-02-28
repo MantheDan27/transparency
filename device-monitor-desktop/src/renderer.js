@@ -13,10 +13,22 @@ const PORT_NAMES  = {
   5900:'VNC', 8080:'HTTP-Alt', 8443:'HTTPS-Alt'
 };
 
+// Human-readable drift type labels
+const DRIFT_LABELS = {
+  new_device:      'New Device',
+  ports_changed:   'Ports Changed',
+  risk_detected:   'Risk Detected',
+  risk_increased:  'Risk Increased',
+  persistent_risk: 'Persistent Risk',
+  identity_gap:    'Identity Gap',
+};
+
 // ── State ─────────────────────────────────────────────────────────────────────
-let allAnomalies   = [];
-let currentFilter  = 'all';
-let deviceAnomalyMap = {};  // ip -> highest severity string
+let allAnomalies    = [];
+let currentFilter   = 'all';
+let deviceAnomalyMap = {};   // ip -> highest severity string
+let cloudEnrichEnabled = true;
+let pendingEnrichDevice = null;  // device waiting for preview confirm
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -36,6 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ── Cloud enrichment toggle ──────────────────────────────────────────────────
+  $('cloudEnrichToggle').addEventListener('change', () => {
+    cloudEnrichEnabled = $('cloudEnrichToggle').checked;
+    $('cloudToggleLabel').textContent = cloudEnrichEnabled ? 'Enabled' : 'Disabled';
+  });
+
   // ── Scan ────────────────────────────────────────────────────────────────────
   $('scanBtn').addEventListener('click', runScan);
 
@@ -48,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     $('scanProgressBar').classList.remove('hidden');
 
-    // Listen for progress events
     const removeListener = window.electronAPI.onScanProgress(msg => {
       $('progressText').textContent = msg;
     });
@@ -67,8 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
       updateKPIs(result.devices, result.anomalies);
 
       const now = new Date();
-      $('kpiLastScan').textContent  = now.toLocaleTimeString();
+      $('kpiLastScan').textContent   = now.toLocaleTimeString();
       $('lastScanLabel').textContent = `Last scan: ${now.toLocaleTimeString()} — ${result.devices.length} device(s) found`;
+
+      // Enable export button
+      $('exportReportBtn').disabled = false;
     } catch (err) {
       removeListener();
       showToast('Scan error: ' + err.message, 'error');
@@ -105,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Device table ─────────────────────────────────────────────────────────────
   function renderDevices(devices, anomalies) {
-    // Build ip → risk map
     deviceAnomalyMap = {};
     const sevOrder = { High: 3, Medium: 2, Low: 1 };
     for (const a of anomalies) {
@@ -134,10 +153,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const portBadges = dev.ports.length
         ? dev.ports.map(p => {
             const risky = RISKY_PORTS.has(p);
-            const label = PORT_NAMES[p] ? `${p}<small style="opacity:.65"> ${PORT_NAMES[p]}</small>` : p;
             return `<span class="port-badge${risky ? ' risky' : ''}" title="Port ${p}${PORT_NAMES[p] ? ' — ' + PORT_NAMES[p] : ''}">${p}</span>`;
           }).join('')
         : '<span style="color:var(--text-muted);font-size:0.8rem">None</span>';
+
+      const enrichBtn = cloudEnrichEnabled
+        ? `<button class="btn btn-secondary btn-sm enrich-btn" data-ip="${dev.ip}">Enrich</button>`
+        : `<button class="btn btn-secondary btn-sm enrich-btn" data-ip="${dev.ip}" title="Enable Cloud Enrichment to use this feature" disabled>Enrich</button>`;
 
       return `
         <tr>
@@ -146,11 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td style="color:var(--text-secondary);font-size:0.85rem">${dev.name}</td>
           <td>${portBadges}</td>
           <td>${riskBadge}</td>
-          <td>
-            <button class="btn btn-secondary btn-sm enrich-btn" data-ip="${dev.ip}">
-              Enrich
-            </button>
-          </td>
+          <td>${enrichBtn}</td>
         </tr>`;
     }).join('');
 
@@ -167,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderAnomalies(anomalies) {
     allAnomalies = anomalies;
 
-    // Update filter counts
     const counts = { High: 0, Medium: 0, Low: 0 };
     for (const a of anomalies) counts[a.severity] = (counts[a.severity] || 0) + 1;
     $('fAll').textContent    = anomalies.length;
@@ -205,12 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bind expand toggles
     container.querySelectorAll('.anomaly-header').forEach(header => {
       header.addEventListener('click', () => {
-        const card = header.closest('.anomaly-card');
-        card.classList.toggle('expanded');
+        header.closest('.anomaly-card').classList.toggle('expanded');
       });
     });
 
-    // Bind per-anomaly delete buttons
+    // Bind per-anomaly cloud delete buttons
     container.querySelectorAll('.delete-device-data-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const ip = btn.dataset.ip;
@@ -224,14 +240,76 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+    // Bind runbook link buttons
+    container.querySelectorAll('.runbook-link').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.dataset.url;
+        if (url) window.electronAPI.openExternalUrl(url);
+      });
+    });
   }
 
-  function buildAnomalyCard(a, idx) {
+  function buildAnomalyCard(a) {
+    const driftLabel = a.driftType ? (DRIFT_LABELS[a.driftType] || a.driftType) : null;
+    const driftBadge = driftLabel
+      ? `<span class="drift-badge drift-${a.driftType}">${escHtml(driftLabel)}</span>`
+      : '';
+
     const steps = (a.steps || []).map(s => `<li>${escHtml(s)}</li>`).join('');
+
+    const impactHtml = a.impact ? `
+      <div class="explain-section">
+        <h4>Impact</h4>
+        <div class="impact-panel impact-${a.severity}">${escHtml(a.impact)}</div>
+      </div>` : '';
+
+    const runbookHtml = (a.runbookLinks && a.runbookLinks.length > 0) ? `
+      <div class="explain-section">
+        <h4>References &amp; Runbooks</h4>
+        <div class="runbook-links">
+          ${a.runbookLinks.map(r => `
+            <button class="runbook-link" data-url="${escHtml(r.url)}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              ${escHtml(r.label)}
+            </button>`).join('')}
+        </div>
+      </div>` : '';
+
+    // Drift / baseline timeline
+    let driftTimelineHtml = '';
+    if (a.driftDetails) {
+      const rows = [];
+      if (a.driftType === 'new_device') {
+        rows.push(`<div class="drift-timeline-row"><span class="drift-dot new"></span><span>Device first appeared — not present in previous scan baseline</span></div>`);
+        if (a.driftDetails.firstSeen) rows.push(`<div class="drift-timeline-row"><span class="drift-dot new"></span><span>First seen: ${new Date(a.driftDetails.firstSeen).toLocaleString()}</span></div>`);
+      } else if (a.driftType === 'ports_changed' || a.driftType === 'risk_increased') {
+        if (a.driftDetails.added?.length)   rows.push(`<div class="drift-timeline-row"><span class="drift-dot changed"></span><span>Ports opened since last scan: <strong>${a.driftDetails.added.map(p => PORT_NAMES[p] ? `${p} (${PORT_NAMES[p]})` : p).join(', ')}</strong></span></div>`);
+        if (a.driftDetails.removed?.length) rows.push(`<div class="drift-timeline-row"><span class="drift-dot changed"></span><span>Ports closed since last scan: ${a.driftDetails.removed.map(p => PORT_NAMES[p] ? `${p} (${PORT_NAMES[p]})` : p).join(', ')}</span></div>`);
+        if (a.driftDetails.previousPorts)   rows.push(`<div class="drift-timeline-row"><span class="drift-dot changed" style="background:var(--text-muted)"></span><span>Previous baseline: ${a.driftDetails.previousPorts.join(', ') || 'No ports'}</span></div>`);
+      } else if (a.driftType === 'persistent_risk') {
+        rows.push(`<div class="drift-timeline-row"><span class="drift-dot persistent"></span><span>Risk present across multiple consecutive scans — remediation still pending</span></div>`);
+        if (a.driftDetails.previousPorts) rows.push(`<div class="drift-timeline-row"><span class="drift-dot risk"></span><span>Risky ports confirmed in previous baseline: ${a.driftDetails.previousPorts.filter(p => RISKY_PORTS.has(p)).map(p => PORT_NAMES[p] || p).join(', ')}</span></div>`);
+      } else if (a.driftType === 'risk_increased') {
+        rows.push(`<div class="drift-timeline-row"><span class="drift-dot risk"></span><span>Risk exposure increased — new dangerous services appeared since last scan</span></div>`);
+      }
+      if (rows.length > 0) {
+        driftTimelineHtml = `
+          <div class="explain-section">
+            <h4>Baseline &amp; Drift</h4>
+            <div class="drift-timeline">${rows.join('')}</div>
+          </div>`;
+      }
+    }
+
     return `
       <div class="anomaly-card sev-${a.severity}" data-id="${escHtml(a.id)}">
         <div class="anomaly-header">
           <span class="sev-badge sev-${a.severity}">${a.severity.toUpperCase()}</span>
+          ${driftBadge}
           <div class="anomaly-summary">
             <div class="anomaly-type">${escHtml(a.type)}</div>
             <div class="anomaly-device">${escHtml(a.device)}</div>
@@ -251,17 +329,20 @@ document.addEventListener('DOMContentLoaded', () => {
               <h4>Why this matters</h4>
               <p>${escHtml(a.risk || 'Review this device carefully.')}</p>
             </div>
+            ${impactHtml}
             ${steps ? `
             <div class="explain-section">
               <h4>Recommended actions</h4>
               <ol class="explain-steps">${steps}</ol>
             </div>` : ''}
+            ${driftTimelineHtml}
+            ${runbookHtml}
             <div class="anomaly-actions">
               <button class="btn btn-danger btn-sm delete-device-data-btn" data-ip="${escHtml(a.device)}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
                 </svg>
-                Delete cloud data for ${escHtml(a.device)}
+                Request cloud delete for ${escHtml(a.device)}
               </button>
             </div>
           </div>
@@ -279,8 +360,75 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ── Enrichment modal ─────────────────────────────────────────────────────────
+  // ── Enrichment flow with data preview ────────────────────────────────────────
   async function enrichDevice(device) {
+    if (!cloudEnrichEnabled) return;
+
+    // Show preview first
+    const preview = await window.electronAPI.getCloudPreview(device);
+    showPreviewModal(device, preview);
+  }
+
+  function showPreviewModal(device, preview) {
+    const fieldsHtml = (preview.dataFields || []).map(f => {
+      const valStr = Array.isArray(f.value)
+        ? (f.value.length ? f.value.map(p => PORT_NAMES[p] ? `${p} (${PORT_NAMES[p]})` : p).join(', ') : 'None')
+        : escHtml(String(f.value));
+      return `
+        <div class="preview-field">
+          <span class="preview-field-key">${escHtml(f.field)}</span>
+          <div class="preview-field-body">
+            <div class="preview-field-val">${valStr}</div>
+            <div class="preview-cat-row"><span class="preview-cat-label">${escHtml(f.category)} — ${escHtml(f.description)}</span></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    $('previewBody').innerHTML = `
+      <div class="preview-meta-row">
+        <div class="preview-meta-item"><span class="preview-meta-key">Endpoint</span><span class="preview-meta-val" style="font-family:monospace;font-size:0.82rem">${escHtml(preview.serviceUrl || preview.endpoint)}</span></div>
+        <div class="preview-meta-item"><span class="preview-meta-key">Purpose</span><span class="preview-meta-val">${escHtml(preview.purpose)}</span></div>
+        <div class="preview-meta-item"><span class="preview-meta-key">Retention</span><span class="preview-meta-val">${escHtml(preview.retentionPolicy)}</span></div>
+        <div class="preview-meta-item"><span class="preview-meta-key">Third Parties</span><span class="preview-meta-val">${escHtml(preview.thirdParties)}</span></div>
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.6rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Data to be transmitted for ${escHtml(device.ip)}</p>
+      <div class="preview-what">${fieldsHtml}</div>
+      <div class="preview-notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        This enrichment runs on a local service (localhost). No data is sent to the internet. Every transmission is logged in the Data Ledger.
+      </div>`;
+
+    pendingEnrichDevice = device;
+    $('previewModal').classList.remove('hidden');
+  }
+
+  $('previewConfirmBtn').addEventListener('click', async () => {
+    $('previewModal').classList.add('hidden');
+    if (!pendingEnrichDevice) return;
+    const device = pendingEnrichDevice;
+    pendingEnrichDevice = null;
+    await doEnrich(device);
+  });
+
+  $('previewCancelBtn').addEventListener('click', () => {
+    $('previewModal').classList.add('hidden');
+    pendingEnrichDevice = null;
+    showToast('Cloud enrichment cancelled.', 'info');
+  });
+
+  $('previewClose').addEventListener('click', () => {
+    $('previewModal').classList.add('hidden');
+    pendingEnrichDevice = null;
+  });
+
+  $('previewModal').addEventListener('click', e => {
+    if (e.target === $('previewModal')) {
+      $('previewModal').classList.add('hidden');
+      pendingEnrichDevice = null;
+    }
+  });
+
+  async function doEnrich(device) {
     $('modalTitle').textContent = `Cloud Guidance — ${device.ip}`;
     $('modalBody').innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:2rem">Fetching guidance…</p>`;
     $('enrichModal').classList.remove('hidden');
@@ -288,10 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const result = await window.electronAPI.enrichDevice(device);
     refreshSyncCount();
 
-    const riskClass = {
-      Critical: 'crit', High: 'high', Informational: 'safe'
-    }[result.riskLevel] || 'info';
-
+    const riskClass = { Critical: 'crit', High: 'high', Informational: 'safe' }[result.riskLevel] || 'info';
     const riskColor = {
       Critical: 'var(--danger)', High: 'var(--warning)',
       Informational: 'var(--success)', Unknown: 'var(--text-muted)'
@@ -316,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <p class="modal-summary">${escHtml(result.summary || result.guidance)}</p>
       ${servicesHtml}
-      <p class="modal-note">Analysis provided by the local Transparency cloud mock service. No data was sent to external servers. All guidance is defensive in nature.</p>
+      <p class="modal-note">This transmission has been logged in the Data Ledger. Analysis is provided by the local Transparency service — no external network connections were made.</p>
     `;
   }
 
@@ -325,13 +470,32 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === $('enrichModal')) $('enrichModal').classList.add('hidden');
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') $('enrichModal').classList.add('hidden');
+    if (e.key === 'Escape') {
+      $('enrichModal').classList.add('hidden');
+      $('previewModal').classList.add('hidden');
+      pendingEnrichDevice = null;
+    }
   });
 
   // ── Data Ledger ──────────────────────────────────────────────────────────────
   async function refreshLedger() {
     const entries = await window.electronAPI.getCloudLedger();
-    const list    = $('ledgerList');
+    updateLedgerStats(entries);
+    await populateLedgerDeviceSelect();
+    renderLedgerList(entries);
+  }
+
+  function updateLedgerStats(entries) {
+    const sends   = entries.filter(e => e.action === 'SEND').length;
+    const deletes = entries.filter(e => e.action.startsWith('DELETE')).length;
+    const devices = new Set(entries.filter(e => e.deviceIp).map(e => e.deviceIp)).size;
+    $('lstatSend').textContent    = sends;
+    $('lstatDelete').textContent  = deletes;
+    $('lstatDevices').textContent = devices;
+  }
+
+  function renderLedgerList(entries) {
+    const list = $('ledgerList');
 
     if (entries.length === 0) {
       list.innerHTML = '<li class="ledger-empty">No activity recorded yet.</li>';
@@ -339,21 +503,156 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     list.innerHTML = entries.map(e => {
-      const time  = new Date(e.timestamp).toLocaleTimeString();
-      const dot   = e.action.toLowerCase().replace('_', '');
+      const time  = new Date(e.timestamp).toLocaleString();
       const label = { SEND: 'SEND', DELETE_ALL: 'DELETE ALL', DELETE_DEVICE: 'DELETE DEVICE' }[e.action] || e.action;
+      const dotClass = e.action.toLowerCase().replace(/_/g, '');
+
+      // Data categories pills
+      const catPills = (e.dataCategories || []).map(c =>
+        `<span class="category-pill">${escHtml(c)}</span>`
+      ).join('');
+
+      // Data preview summary
+      let previewSummary = '';
+      if (e.dataPreview) {
+        const parts = [];
+        if (e.dataPreview.ip)       parts.push(`ip: ${e.dataPreview.ip}`);
+        if (e.dataPreview.hostname) parts.push(`host: ${e.dataPreview.hostname}`);
+        if (e.dataPreview.ports?.length) parts.push(`ports: [${e.dataPreview.ports.join(', ')}]`);
+        previewSummary = parts.join(' · ');
+      }
+
       return `
-        <li class="ledger-entry">
-          <span class="ledger-dot ${e.action.toLowerCase()}"></span>
-          <span class="ledger-time">${time}</span>
-          <span class="ledger-detail">
-            <strong style="margin-right:.35rem">${escHtml(label)}</strong>${escHtml(e.details)}
-          </span>
+        <li class="ledger-entry" data-id="${escHtml(e.id)}">
+          <div class="ledger-entry-top">
+            <span class="ledger-dot ${dotClass}"></span>
+            <span class="ledger-time">${time}</span>
+            <span class="ledger-detail">
+              <strong style="margin-right:.35rem">${escHtml(label)}</strong>${escHtml(e.details)}
+              ${catPills ? `<span style="margin-left:.35rem">${catPills}</span>` : ''}
+            </span>
+            <span class="ledger-expand-btn">
+              Details
+              <svg class="ledger-expand-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
+          </div>
+          <div class="ledger-detail-panel">
+            <div class="ledger-detail-inner">
+              <div class="ldr-field">
+                <span class="ldr-label">Endpoint</span>
+                <span class="ldr-value"><code>${escHtml(e.endpoint || '—')}</code></span>
+              </div>
+              <div class="ldr-field">
+                <span class="ldr-label">Device IP</span>
+                <span class="ldr-value"><code>${escHtml(e.deviceIp || 'N/A')}</code></span>
+              </div>
+              <div class="ldr-field">
+                <span class="ldr-label">Data Categories</span>
+                <span class="ldr-value">${catPills || '<span style="color:var(--text-muted)">—</span>'}</span>
+              </div>
+              <div class="ldr-field">
+                <span class="ldr-label">Timestamp</span>
+                <span class="ldr-value">${escHtml(e.timestamp)}</span>
+              </div>
+              ${previewSummary ? `
+              <div class="ldr-field full">
+                <span class="ldr-label">Data Transmitted</span>
+                <span class="ldr-value"><code>${escHtml(previewSummary)}</code></span>
+              </div>` : ''}
+              <div class="ldr-field full">
+                <span class="ldr-label">Reason</span>
+                <span class="ldr-value">${escHtml(e.reason || 'No reason recorded')}</span>
+              </div>
+            </div>
+          </div>
         </li>`;
     }).join('');
+
+    // Bind expand toggles
+    list.querySelectorAll('.ledger-entry').forEach(li => {
+      li.querySelector('.ledger-entry-top').addEventListener('click', () => {
+        li.classList.toggle('open');
+      });
+    });
   }
 
   $('refreshLedgerBtn').addEventListener('click', refreshLedger);
+
+  // ── Ledger export ────────────────────────────────────────────────────────────
+  $('exportLedgerBtn').addEventListener('click', async () => {
+    const entries = await window.electronAPI.getCloudLedger();
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      format: 'transparency-ledger-export',
+      totalEntries: entries.length,
+      entries
+    };
+    downloadJSON(payload, `transparency-ledger-${dateStamp()}.json`);
+    showToast('Ledger exported as JSON.', 'success');
+  });
+
+  // ── Ledger per-device controls ────────────────────────────────────────────────
+  async function populateLedgerDeviceSelect() {
+    const localDevices = await window.electronAPI.getLocalDevices();
+    const sel = $('ledgerDeviceSelect');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Select a device…</option>';
+    localDevices.forEach(ip => {
+      const opt = document.createElement('option');
+      opt.value = ip; opt.textContent = ip;
+      sel.appendChild(opt);
+    });
+    if (prev && localDevices.includes(prev)) sel.value = prev;
+    const hasVal = !!sel.value;
+    $('deleteLocalCacheBtn').disabled = !hasVal;
+    $('requestCloudDeleteBtn').disabled = !hasVal;
+  }
+
+  $('ledgerDeviceSelect').addEventListener('change', () => {
+    const hasVal = !!$('ledgerDeviceSelect').value;
+    $('deleteLocalCacheBtn').disabled = !hasVal;
+    $('requestCloudDeleteBtn').disabled = !hasVal;
+  });
+
+  $('deleteLocalCacheBtn').addEventListener('click', async () => {
+    const ip = $('ledgerDeviceSelect').value;
+    if (!ip) return;
+    if (!confirm(`Remove ${ip} from the local scan snapshot? This clears the baseline for drift detection on this device.`)) return;
+    const res = await window.electronAPI.deleteLocalDevice(ip);
+    if (res.success) {
+      showToast(`Local cache cleared for ${ip}.`, 'success');
+      await populateLedgerDeviceSelect();
+    } else {
+      showToast('Error: ' + (res.error || 'unknown'), 'error');
+    }
+  });
+
+  $('requestCloudDeleteBtn').addEventListener('click', async () => {
+    const ip = $('ledgerDeviceSelect').value;
+    if (!ip) return;
+    if (!confirm(`Permanently delete all cloud enrichment records for ${ip}? This will be logged.`)) return;
+    const res = await window.electronAPI.deleteDeviceData(ip);
+    if (res.success) {
+      showToast(`Cloud records deleted for ${ip} (${res.deleted} record(s)).`, 'success');
+      refreshSyncCount();
+      await refreshLedger();
+    } else {
+      showToast('Error: ' + (res.error || 'unknown'), 'error');
+    }
+  });
+
+  // ── Report export ────────────────────────────────────────────────────────────
+  $('exportReportBtn').addEventListener('click', async () => {
+    const report = await window.electronAPI.exportReport();
+    if (report.error) {
+      showToast('Export failed: ' + report.error, 'error');
+      return;
+    }
+    downloadJSON(report, `transparency-report-${dateStamp()}.json`);
+    showToast('Report exported as JSON.', 'success');
+  });
 
   // ── Settings ──────────────────────────────────────────────────────────────────
   async function populateDeviceSelect() {
@@ -419,6 +718,21 @@ document.addEventListener('DOMContentLoaded', () => {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function dateStamp() {
+    return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  }
+
+  function downloadJSON(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   // ── Init: verify cloud connection ─────────────────────────────────────────────
   (async () => {
     try {
@@ -427,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
       $('cloudStatus').classList.add('online');
     } catch {
       $('cloudStatus').textContent = 'Offline';
+      $('cloudStatus').classList.remove('online');
     }
     refreshSyncCount();
   })();
