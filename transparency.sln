@@ -1,0 +1,29 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "transparency-native", "transparency-native", "{43A0312C-615B-343D-1C7D-1E055A92A0C0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TransparencyApp", "transparency-native\TransparencyApp\TransparencyApp.csproj", "{30E54A06-C754-C9AC-E523-C40A0041BF7D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{30E54A06-C754-C9AC-E523-C40A0041BF7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30E54A06-C754-C9AC-E523-C40A0041BF7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30E54A06-C754-C9AC-E523-C40A0041BF7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30E54A06-C754-C9AC-E523-C40A0041BF7D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{30E54A06-C754-C9AC-E523-C40A0041BF7D} = {43A0312C-615B-343D-1C7D-1E055A92A0C0}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4A067327-76AA-47FE-9A95-A567710966A4}
+	EndGlobalSection
+EndGlobal
