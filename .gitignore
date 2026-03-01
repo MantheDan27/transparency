@@ -6,6 +6,6 @@ build/
 .DS_Store
 *.swp
 *.swo
-.vscode
+  .vscode
 **/bin/
 **/obj/
