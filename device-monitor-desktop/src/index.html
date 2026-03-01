@@ -9,7 +9,7 @@
 <body>
 <div class="app-shell">
 
-  <!-- ── Sidebar ─────────────────────────────────────────────────────── -->
+  <!-- ── Sidebar ──────────────────────────────────────────────────────── -->
   <aside class="sidebar">
     <div class="brand">
       <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -19,80 +19,629 @@
     </div>
 
     <nav class="nav">
-      <button class="nav-item active" data-tab="dashboard">
+      <button class="nav-item active" data-tab="overview">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
         </svg>
-        Dashboard
+        Overview
       </button>
-      <button class="nav-item" data-tab="anomalies">
+      <button class="nav-item" data-tab="devices">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <polyline points="8 21 12 17 16 21"/>
         </svg>
-        Anomalies
-        <span class="nav-badge" id="navAnomalyCount" hidden>0</span>
+        Devices
+        <span class="nav-badge hidden" id="navDeviceCount">0</span>
+      </button>
+      <button class="nav-item" data-tab="map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+          <line x1="9" y1="3" x2="9" y2="18"/>
+          <line x1="15" y1="6" x2="15" y2="21"/>
+        </svg>
+        Map
+      </button>
+      <button class="nav-item" data-tab="alerts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        Alerts
+        <span class="nav-badge nav-badge-danger hidden" id="navAlertCount">0</span>
+      </button>
+      <button class="nav-item" data-tab="tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        Tools
       </button>
       <button class="nav-item" data-tab="ledger">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <ellipse cx="12" cy="5" rx="9" ry="3"/>
-          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
         </svg>
         Data Ledger
       </button>
-      <button class="nav-item" data-tab="settings">
+      <button class="nav-item" data-tab="privacy">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
-        Settings
+        Privacy
       </button>
     </nav>
 
     <div class="sidebar-footer">
       <div class="footer-row">
         <span class="footer-label">Version</span>
-        <span>1.1.0</span>
+        <span>2.0.3</span>
       </div>
       <div class="footer-row">
-        <span class="footer-label">Cloud</span>
-        <span class="status-dot online" id="cloudStatus">Connected</span>
+        <span class="footer-label">Local service</span>
+        <span class="status-dot online" id="cloudStatus">Ready</span>
       </div>
     </div>
   </aside>
 
-  <!-- ── Main content ─────────────────────────────────────────────────── -->
+  <!-- ── Main content ──────────────────────────────────────────────────── -->
   <main class="content">
 
-    <!-- DASHBOARD ──────────────────────────────────────────────────── -->
-    <section id="tab-dashboard" class="tab active">
-      <div class="page-header">
-        <div>
-          <h1>Network Dashboard</h1>
-          <p class="subtitle" id="lastScanLabel">No scan performed yet — click Start Scan to begin.</p>
-        </div>
-        <div class="header-actions">
-          <button id="exportReportBtn" class="btn btn-secondary btn-sm" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    <!-- ════════════════════════════════════════════════════════
+         OVERVIEW TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-overview" class="tab active">
+
+      <!-- Network header card -->
+      <div class="network-header-card">
+        <div class="nhc-left">
+          <div class="nhc-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+              <path d="M10.54 16.1a6 6 0 0 1 2.92 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
             </svg>
-            Export Report
-          </button>
-          <button id="scanBtn" class="btn btn-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          </div>
+          <div class="nhc-info">
+            <div class="nhc-ssid" id="nhcSSID">Detecting network…</div>
+            <div class="nhc-meta" id="nhcMeta">Loading network information…</div>
+          </div>
+        </div>
+        <div class="nhc-right">
+          <div class="nhc-scan-time" id="nhcLastScan">No scan yet</div>
+          <div class="scan-mode-row">
+            <label class="scan-mode-label">Scan mode:</label>
+            <div class="scan-mode-pills">
+              <button class="mode-pill active" data-mode="quick">Quick</button>
+              <button class="mode-pill" data-mode="standard">Standard</button>
+              <button class="mode-pill" data-mode="deep">Deep</button>
+            </div>
+          </div>
+          <div class="gentle-row">
+            <label class="toggle-switch-sm" title="Gentle mode avoids overwhelming fragile IoT devices">
+              <input type="checkbox" id="gentleToggle">
+              <span class="toggle-knob-sm"></span>
+            </label>
+            <span class="gentle-label">Gentle mode (IoT-safe)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status strip -->
+      <div class="status-strip" id="statusStrip">
+        <div class="status-strip-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="status-strip-text" id="statusStripText">Run a scan to assess your network.</div>
+        <div class="status-strip-actions">
+          <button id="quickScanBtn" class="btn btn-primary btn-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-            Start Scan
+            Scan Now
           </button>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div id="scanProgressBar" class="scan-progress hidden">
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <p id="progressText" class="progress-text">Initializing…</p>
+      </div>
+
+      <!-- KPI tiles -->
+      <div class="kpi-grid">
+        <div class="kpi-card" id="kpiOnline">
+          <div class="kpi-icon kpi-blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <polyline points="8 21 12 17 16 21"/>
+            </svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiDevices">—</div>
+            <div class="kpi-label">Devices online</div>
+            <div class="kpi-delta hidden" id="kpiDevicesDelta"></div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-card-clickable" id="kpiUnknownCard" onclick="window.switchTab('devices','unknown')">
+          <div class="kpi-icon kpi-warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiUnknown">—</div>
+            <div class="kpi-label">Unknown devices</div>
+            <div class="kpi-hint">Tap to view</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-card-clickable" id="kpiAlertsCard" onclick="window.switchTab('alerts')">
+          <div class="kpi-icon kpi-danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiAlerts">—</div>
+            <div class="kpi-label">Alerts</div>
+            <div class="kpi-hint">Tap to view</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-teal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value kpi-sm" id="kpiLatency">—</div>
+            <div class="kpi-label">Gateway latency</div>
+            <div class="kpi-delta" id="kpiDNS">DNS: —</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick actions bar -->
+      <div class="quick-actions-bar">
+        <button class="qa-btn" id="btnQuickScan" onclick="window.runScan('quick')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          Quick Scan
+        </button>
+        <button class="qa-btn" id="btnDeepScan" onclick="window.runScan('deep')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Deep Scan
+        </button>
+        <button class="qa-btn" id="btnSnapshot" onclick="window.saveSnapshot()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Save Snapshot
+        </button>
+        <button class="qa-btn" id="btnExport" onclick="window.exportReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export Report
+        </button>
+      </div>
+
+      <!-- Recent changes timeline (populated after scan) -->
+      <div class="card" id="recentChangesCard">
+        <div class="card-header">
+          <h2>Recent Changes</h2>
+          <span class="tag" id="recentChangesTag">No scan yet</span>
+        </div>
+        <div id="recentChangesBody" class="changes-list">
+          <div class="empty-state-sm">Run a scan to see what changed on your network.</div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         DEVICES TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-devices" class="tab">
+      <div class="page-header">
+        <div>
+          <h1>Device Inventory</h1>
+          <p class="subtitle" id="devicesSubtitle">No devices found yet — run a scan.</p>
+        </div>
+        <div class="header-actions">
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input type="text" id="deviceSearch" placeholder="Search devices…" class="search-input">
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-bar scrollable-filters">
+        <button class="filter-btn active" data-filter="all">All <span class="fbadge" id="fAll">0</span></button>
+        <button class="filter-btn" data-filter="online">Online <span class="fbadge fbadge-success" id="fOnline">0</span></button>
+        <button class="filter-btn" data-filter="unknown">Unknown <span class="fbadge fbadge-warning" id="fUnknown">0</span></button>
+        <button class="filter-btn" data-filter="watchlist">Watchlist <span class="fbadge" id="fWatchlist">0</span></button>
+        <button class="filter-btn" data-filter="owned">Owned <span class="fbadge fbadge-info" id="fOwned">0</span></button>
+        <button class="filter-btn" data-filter="risky">High Risk <span class="fbadge fbadge-danger" id="fRisky">0</span></button>
+        <button class="filter-btn" data-filter="changed">Changed <span class="fbadge fbadge-warning" id="fChanged">0</span></button>
+      </div>
+
+      <!-- Bulk actions bar (shown when items selected) -->
+      <div class="bulk-bar hidden" id="bulkBar">
+        <span id="bulkCount">0 selected</span>
+        <button class="btn btn-secondary btn-sm" onclick="window.bulkAction('tag')">Tag</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.bulkAction('markKnown')">Mark Known</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.bulkAction('watchlist')">Watchlist</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.bulkAction('export')">Export</button>
+        <button class="btn btn-danger btn-sm" onclick="window.bulkAction('forget')">Forget</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.clearSelection()">Clear</button>
+      </div>
+
+      <!-- Device table -->
+      <div class="card table-card">
+        <div class="table-wrap">
+          <table id="deviceTable">
+            <thead>
+              <tr>
+                <th class="col-check"><input type="checkbox" id="selectAll" title="Select all"></th>
+                <th class="col-status"></th>
+                <th class="col-name">Device</th>
+                <th class="col-ip">IP Address</th>
+                <th class="col-vendor">Vendor / Type</th>
+                <th class="col-ports">Ports</th>
+                <th class="col-trust">Trust</th>
+                <th class="col-risk">Risk</th>
+                <th class="col-seen">Last seen</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="deviceBody">
+              <tr class="empty-row">
+                <td colspan="10">Run a scan to discover devices on your network.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         MAP TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-map" class="tab">
+      <div class="page-header">
+        <div>
+          <h1>Network Map</h1>
+          <p class="subtitle">Visual topology of your network. Run a scan to populate the map.</p>
+        </div>
+        <div class="header-actions">
+          <div class="map-mode-pills">
+            <button class="mode-pill active" data-map-mode="simple">Simple</button>
+            <button class="mode-pill" data-map-mode="advanced">Advanced</button>
+          </div>
+        </div>
+      </div>
+      <div class="map-container" id="mapContainer">
+        <div class="map-empty-state" id="mapEmptyState">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="56" height="56">
+            <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+            <line x1="9" y1="3" x2="9" y2="18"/>
+            <line x1="15" y1="6" x2="15" y2="21"/>
+          </svg>
+          <p>No scan data available.<br>Run a scan from the Overview tab.</p>
+        </div>
+        <svg id="networkMap" class="network-map hidden" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <!-- Map device tooltip -->
+      <div class="map-tooltip hidden" id="mapTooltip"></div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         ALERTS TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-alerts" class="tab">
+      <div class="page-header">
+        <div>
+          <h1>Alerts</h1>
+          <p class="subtitle" id="alertsSubtitle">Monitoring your network for changes and threats.</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary btn-sm" onclick="window.clearAllAlerts()">Clear All</button>
+          <button class="btn btn-primary btn-sm" onclick="window.openRuleBuilder()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Rule
+          </button>
+        </div>
+      </div>
+
+      <!-- Alert filter tabs -->
+      <div class="filter-bar">
+        <button class="filter-btn active" data-alert-filter="all">All <span class="fbadge" id="afAll">0</span></button>
+        <button class="filter-btn" data-alert-filter="high">High <span class="fbadge fbadge-danger" id="afHigh">0</span></button>
+        <button class="filter-btn" data-alert-filter="medium">Medium <span class="fbadge fbadge-warning" id="afMedium">0</span></button>
+        <button class="filter-btn" data-alert-filter="low">Low <span class="fbadge fbadge-info" id="afLow">0</span></button>
+        <button class="filter-btn" data-alert-filter="unread">Unread <span class="fbadge fbadge-danger" id="afUnread">0</span></button>
+      </div>
+
+      <!-- Alerts inbox -->
+      <div id="alertsContainer" class="alerts-inbox">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <p>No alerts yet. Run a scan to detect changes.</p>
+        </div>
+      </div>
+
+      <!-- Alert rules section -->
+      <div class="card" style="margin-top:1.5rem">
+        <div class="card-header">
+          <h2>Alert Rules</h2>
+          <button class="btn btn-secondary btn-sm" onclick="window.openRuleBuilder()">Add Rule</button>
+        </div>
+        <div id="alertRulesList" class="alert-rules-list">
+          <div class="empty-state-sm">No rules configured.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         TOOLS TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-tools" class="tab">
+      <div class="page-header">
+        <div>
+          <h1>Diagnostics &amp; Tools</h1>
+          <p class="subtitle">Network tests, Wi-Fi info, DNS tools, and guided troubleshooting.</p>
+        </div>
+      </div>
+
+      <!-- Guided flows -->
+      <div class="guided-flows">
+        <button class="flow-card" onclick="window.startGuidedFlow('offline')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <line x1="1" y1="1" x2="23" y2="23"/>
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+            <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+          <span>Device is offline</span>
+        </button>
+        <button class="flow-card" onclick="window.startGuidedFlow('slow')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <span>Internet is slow</span>
+        </button>
+        <button class="flow-card" onclick="window.startGuidedFlow('unknown-device')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>Unknown device appeared</span>
+        </button>
+        <button class="flow-card" onclick="window.startGuidedFlow('printer')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span>Printer won't print</span>
+        </button>
+      </div>
+
+      <!-- Guided flow output -->
+      <div class="guided-output hidden" id="guidedFlowOutput">
+        <div class="card">
+          <div class="card-header">
+            <h2 id="guidedFlowTitle">Troubleshooting</h2>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('guidedFlowOutput').classList.add('hidden')">Close</button>
+          </div>
+          <div id="guidedFlowBody" class="guided-body"></div>
+        </div>
+      </div>
+
+      <div class="tools-grid">
+
+        <!-- Wi-Fi Info -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                <path d="M10.54 16.1a6 6 0 0 1 2.92 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+              </svg>
+              Wi-Fi Info
+            </h2>
+            <button class="btn btn-secondary btn-sm" onclick="window.loadWifiInfo()">Refresh</button>
+          </div>
+          <div id="wifiInfoBody" class="info-body">
+            <div class="empty-state-sm">Click Refresh to load Wi-Fi details.</div>
+          </div>
+        </div>
+
+        <!-- Gateway Tests -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Gateway &amp; DNS
+            </h2>
+            <button class="btn btn-secondary btn-sm" onclick="window.loadGatewayInfo()">Test</button>
+          </div>
+          <div id="gatewayInfoBody" class="info-body">
+            <div class="empty-state-sm">Click Test to check gateway and DNS.</div>
+          </div>
+        </div>
+
+        <!-- Ping -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              Ping
+            </h2>
+          </div>
+          <div class="tool-input-row">
+            <input type="text" id="pingTarget" class="tool-input" placeholder="hostname or IP…">
+            <button class="btn btn-primary btn-sm" onclick="window.runPing()">Ping</button>
+          </div>
+          <pre class="tool-output hidden" id="pingOutput"></pre>
+        </div>
+
+        <!-- Traceroute -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <polyline points="22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.93 3.4 2 2 0 0 1 3.9 1.24h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 14.92z"/>
+              </svg>
+              Traceroute
+            </h2>
+          </div>
+          <div class="tool-input-row">
+            <input type="text" id="traceTarget" class="tool-input" placeholder="hostname or IP…">
+            <button class="btn btn-primary btn-sm" onclick="window.runTraceroute()">Trace</button>
+          </div>
+          <pre class="tool-output hidden" id="traceOutput"></pre>
+        </div>
+
+        <!-- DNS Lookup -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              DNS Lookup
+            </h2>
+          </div>
+          <div class="tool-input-row">
+            <input type="text" id="dnsTarget" class="tool-input" placeholder="hostname or IP…">
+            <select id="dnsType" class="tool-select">
+              <option value="A">A (IPv4)</option>
+              <option value="PTR">PTR (Reverse)</option>
+              <option value="ANY">ANY</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="window.runDNSLookup()">Lookup</button>
+          </div>
+          <pre class="tool-output hidden" id="dnsOutput"></pre>
+        </div>
+
+        <!-- TCP Connect Test -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
+              </svg>
+              TCP Connect
+            </h2>
+          </div>
+          <div class="tool-input-row">
+            <input type="text" id="tcpHost" class="tool-input" placeholder="host">
+            <input type="number" id="tcpPort" class="tool-input-sm" placeholder="port" min="1" max="65535">
+            <button class="btn btn-primary btn-sm" onclick="window.runTCPTest()">Test</button>
+          </div>
+          <div class="tool-result hidden" id="tcpResult"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         DATA LEDGER TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-ledger" class="tab">
+      <div class="page-header">
+        <div>
+          <h1>Data Transparency Ledger</h1>
+          <p class="subtitle">Complete audit trail: what left this device, when, to which endpoint, and why.</p>
+        </div>
+        <div class="header-actions">
+          <button id="exportLedgerBtn" class="btn btn-secondary btn-sm">Export Ledger</button>
+          <button id="refreshLedgerBtn" class="btn btn-secondary btn-sm">Refresh</button>
+        </div>
+      </div>
+
+      <div class="ledger-stats">
+        <div class="ledger-stat"><span class="ledger-stat-value" id="lstatSend">0</span><span class="ledger-stat-label">Transmissions</span></div>
+        <div class="ledger-stat"><span class="ledger-stat-value" id="lstatDelete">0</span><span class="ledger-stat-label">Deletions</span></div>
+        <div class="ledger-stat"><span class="ledger-stat-value" id="lstatDevices">0</span><span class="ledger-stat-label">Unique Devices</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Per-Device Controls</h2>
+          <span class="tag">Compliance Actions</span>
+        </div>
+        <div class="ledger-device-actions">
+          <p class="ldact-desc">Select a device to manage its local scan cache and cloud enrichment records independently.</p>
+          <div class="ldact-row">
+            <select id="ledgerDeviceSelect" class="sel-input"><option value="">Select a device…</option></select>
+            <button id="deleteLocalCacheBtn" class="btn btn-secondary btn-sm" disabled>Delete Local Cache</button>
+            <button id="requestCloudDeleteBtn" class="btn btn-danger btn-sm" disabled>Request Cloud Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Activity Log</h2>
+          <div class="ledger-legend">
+            <span class="legend-dot send">SEND</span>
+            <span class="legend-dot delete">DELETE</span>
+          </div>
+        </div>
+        <ul id="ledgerList" class="ledger-list">
+          <li class="ledger-empty">No activity recorded yet.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         PRIVACY TAB
+    ════════════════════════════════════════════════════════════ -->
+    <section id="tab-privacy" class="tab">
+      <div class="page-header">
+        <div>
+          <h1>Privacy Center</h1>
+          <p class="subtitle">Full control over what's stored, what's synced, and how long data is retained.</p>
         </div>
       </div>
 
       <!-- Cloud enrichment toggle -->
       <div class="cloud-toggle-bar">
         <div class="cloud-toggle-info">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="color:var(--accent-light);flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
             <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
           </svg>
           <div>
@@ -109,271 +658,133 @@
         </div>
       </div>
 
-      <!-- Scan progress bar -->
-      <div id="scanProgressBar" class="scan-progress hidden">
-        <div class="progress-track"><div class="progress-fill"></div></div>
-        <p id="progressText" class="progress-text">Initializing…</p>
-      </div>
-
-      <!-- KPI cards -->
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-blue">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-              <rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/>
-            </svg>
-          </div>
-          <div class="kpi-body">
-            <div class="kpi-value" id="kpiDevices">0</div>
-            <div class="kpi-label">Total Devices</div>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-danger">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </div>
-          <div class="kpi-body">
-            <div class="kpi-value" id="kpiAnomalies">0</div>
-            <div class="kpi-label">Anomalies</div>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-teal">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-          </div>
-          <div class="kpi-body">
-            <div class="kpi-value" id="kpiSyncs">0</div>
-            <div class="kpi-label">Cloud Syncs</div>
-          </div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-icon kpi-muted">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-          </div>
-          <div class="kpi-body">
-            <div class="kpi-value kpi-sm" id="kpiLastScan">—</div>
-            <div class="kpi-label">Last Scan</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Device table -->
-      <div class="card">
+      <!-- Data Management card -->
+      <div class="card" style="margin-top:1.25rem">
         <div class="card-header">
-          <h2>Device Inventory</h2>
-          <span class="tag" id="deviceCountTag">0 devices</span>
+          <h2>Data Management</h2>
         </div>
-        <div class="table-wrap">
-          <table id="deviceTable">
-            <thead>
-              <tr>
-                <th>IP Address</th>
-                <th>MAC Address</th>
-                <th>Hostname</th>
-                <th>Open Ports</th>
-                <th>Risk</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="deviceBody">
-              <tr class="empty-row">
-                <td colspan="6">Run a scan to discover devices on your network.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+        <div class="data-mgmt-body">
+          <div class="data-stat-row">
+            <div class="data-stat-item">
+              <div class="data-stat-val" id="dmDevices">—</div>
+              <div class="data-stat-lbl">Devices tracked</div>
+            </div>
+            <div class="data-stat-item">
+              <div class="data-stat-val" id="dmSnapshots">—</div>
+              <div class="data-stat-lbl">Snapshots saved</div>
+            </div>
+            <div class="data-stat-item">
+              <div class="data-stat-val" id="dmAlerts">—</div>
+              <div class="data-stat-lbl">Alerts logged</div>
+            </div>
+            <div class="data-stat-item">
+              <div class="data-stat-val" id="dmSyncs">—</div>
+              <div class="data-stat-lbl">Cloud syncs</div>
+            </div>
+          </div>
 
-    <!-- ANOMALIES ──────────────────────────────────────────────────── -->
-    <section id="tab-anomalies" class="tab">
-      <div class="page-header">
-        <div>
-          <h1>Security Anomalies</h1>
-          <p class="subtitle" id="anomalySubtitle">Run a scan to detect anomalies on your network.</p>
-        </div>
-      </div>
-
-      <div class="filter-bar">
-        <button class="filter-btn active" data-filter="all">All <span class="fbadge" id="fAll">0</span></button>
-        <button class="filter-btn" data-filter="High">High <span class="fbadge fbadge-danger" id="fHigh">0</span></button>
-        <button class="filter-btn" data-filter="Medium">Medium <span class="fbadge fbadge-warning" id="fMedium">0</span></button>
-        <button class="filter-btn" data-filter="Low">Low <span class="fbadge fbadge-info" id="fLow">0</span></button>
-      </div>
-
-      <div id="anomaliesContainer" class="anomalies-list">
-        <div class="empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <p>No anomalies detected. Run a scan to check your network.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- DATA LEDGER ────────────────────────────────────────────────── -->
-    <section id="tab-ledger" class="tab">
-      <div class="page-header">
-        <div>
-          <h1>Data Transparency Ledger</h1>
-          <p class="subtitle">Complete audit trail: what left this device, when, to which endpoint, which data categories, and why.</p>
-        </div>
-        <div class="header-actions">
-          <button id="exportLedgerBtn" class="btn btn-secondary btn-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Export Ledger
-          </button>
-          <button id="refreshLedgerBtn" class="btn btn-secondary btn-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <!-- Ledger KPI strip -->
-      <div class="ledger-stats">
-        <div class="ledger-stat">
-          <span class="ledger-stat-value" id="lstatSend">0</span>
-          <span class="ledger-stat-label">Data Transmissions</span>
-        </div>
-        <div class="ledger-stat">
-          <span class="ledger-stat-value" id="lstatDelete">0</span>
-          <span class="ledger-stat-label">Deletion Requests</span>
-        </div>
-        <div class="ledger-stat">
-          <span class="ledger-stat-value" id="lstatDevices">0</span>
-          <span class="ledger-stat-label">Unique Devices</span>
-        </div>
-      </div>
-
-      <!-- Per-device cache controls -->
-      <div class="card">
-        <div class="card-header">
-          <h2>Per-Device Controls</h2>
-          <span class="tag">Compliance Actions</span>
-        </div>
-        <div class="ledger-device-actions">
-          <p class="ldact-desc">Select a device to manage its local scan cache and cloud enrichment records independently.</p>
-          <div class="ldact-row">
-            <select id="ledgerDeviceSelect" class="sel-input">
-              <option value="">Select a device…</option>
+          <div class="retention-row">
+            <label class="retention-label">Auto-purge history older than:</label>
+            <select id="retentionSelect" class="sel-input sel-input-sm">
+              <option value="0">Never</option>
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
             </select>
-            <button id="deleteLocalCacheBtn" class="btn btn-secondary btn-sm" disabled title="Remove this device from the local scan snapshot">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6"/><path d="M14 11v6"/>
+            <button class="btn btn-secondary btn-sm" onclick="window.applyRetention()">Apply</button>
+          </div>
+
+          <div class="data-actions">
+            <button class="btn btn-secondary" onclick="window.exportAllData()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              Delete Local Cache
+              Export Everything
             </button>
-            <button id="requestCloudDeleteBtn" class="btn btn-danger btn-sm" disabled title="Request deletion of this device's cloud enrichment records">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
-                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+            <button class="btn btn-danger" onclick="window.confirmWipeData()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
               </svg>
-              Request Cloud Delete
+              Delete All Local Data
             </button>
           </div>
-        </div>
-      </div>
-
-      <!-- Activity log -->
-      <div class="card">
-        <div class="card-header">
-          <h2>Activity Log</h2>
-          <div class="ledger-legend">
-            <span class="legend-dot send">SEND</span>
-            <span class="legend-dot delete">DELETE</span>
-          </div>
-        </div>
-        <ul id="ledgerList" class="ledger-list">
-          <li class="ledger-empty">No activity recorded yet.</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- SETTINGS ───────────────────────────────────────────────────── -->
-    <section id="tab-settings" class="tab">
-      <div class="page-header">
-        <div>
-          <h1>Privacy &amp; Settings</h1>
-          <p class="subtitle">Understand what data is collected and exercise your deletion rights.</p>
         </div>
       </div>
 
       <!-- How it works -->
       <div class="card settings-info-card">
         <h2>How Transparency Works</h2>
-        <p>Transparency scans your <strong>local network only</strong>. All scan data stays on your machine unless you explicitly use the Enrich feature on a device.</p>
+        <p>Transparency scans your <strong>local network only</strong>. All scan data stays on your machine unless you explicitly use the Enrich feature.</p>
 
-        <h3 class="settings-sub">What Enrichment sends to the cloud</h3>
+        <h3 class="settings-sub">What stays local</h3>
+        <ul class="data-list">
+          <li><strong>Device inventory</strong> — all discovered device details, history, and tags</li>
+          <li><strong>Scan history</strong> — port changes, IP changes, presence data</li>
+          <li><strong>Alert rules and logs</strong> — stored locally in your app data folder</li>
+          <li><strong>Snapshots</strong> — saved network states for comparison</li>
+        </ul>
+
+        <h3 class="settings-sub">What enrichment sends (opt-in)</h3>
         <ul class="data-list">
           <li><strong>network_metadata</strong> — Device IP address on your local network</li>
           <li><strong>device_identity</strong> — Device hostname (if DNS-resolvable)</li>
-          <li><strong>service_inventory</strong> — List of open TCP ports detected by this scanner</li>
+          <li><strong>service_inventory</strong> — List of open TCP ports detected by scanner</li>
         </ul>
-        <p>The cloud service returns <strong>defensive guidance only</strong> — no exploit instructions, no external scanning, no personal information stored beyond the session.</p>
+        <p>The enrichment service runs <strong>locally (localhost)</strong> — no data sent to the internet.</p>
 
-        <h3 class="settings-sub">Cloud enrichment mode</h3>
-        <p>When Cloud Enrichment is enabled, a <strong>data preview</strong> is shown before any information is transmitted. You can review exactly what will be sent and choose to cancel.</p>
+        <h3 class="settings-sub">Per-probe disclosure</h3>
+        <p>Deep scan uses TCP connect probes, banner grabbing, TLS certificate inspection, mDNS queries, SSDP M-SEARCH, and optional NetBIOS queries. All probes target devices on your own network.</p>
 
-        <h3 class="settings-sub">Your rights</h3>
-        <p>You may delete any or all cloud records at any time. Every deletion is permanently logged in the Data Ledger for full transparency. Use the Data Ledger tab for per-device controls.</p>
+        <h3 class="settings-sub">Deletion controls</h3>
+        <p>Use the Data Management section above or the Data Ledger tab for granular deletion controls. Deletions are permanent and logged.</p>
       </div>
 
-      <!-- Deletion controls -->
+      <!-- Danger zone -->
       <div class="card danger-zone">
-        <h2>Data Deletion</h2>
-
-        <!-- Per-device -->
+        <h2>Per-Device Deletion</h2>
         <div class="del-section">
           <div class="del-header">
-            <h3>Delete Data for a Specific Device</h3>
-            <p>Remove cloud enrichment records for a single device IP.</p>
+            <h3>Forget a Device</h3>
+            <p>Removes a device's name, tags, history, and scan results from this app. Does not affect the device itself.</p>
           </div>
           <div class="del-controls">
-            <select id="deviceSelect" class="sel-input">
-              <option value="">Select a device…</option>
-            </select>
-            <button id="deleteDeviceBtn" class="btn btn-danger" disabled>Delete Device Data</button>
+            <select id="deviceSelect" class="sel-input"><option value="">Select a device…</option></select>
+            <button id="deleteDeviceBtn" class="btn btn-danger" disabled>Forget Device</button>
+          </div>
+          <div class="del-options hidden" id="delDeviceOptions">
+            <label class="checkbox-label">
+              <input type="checkbox" id="delDeviceHistory" checked>
+              Delete all history for this device
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="delDeviceCloud">
+              Also request cloud data deletion
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="delDeviceAnonymize">
+              Anonymize instead (keep stats, remove identifiers)
+            </label>
           </div>
         </div>
 
         <div class="del-divider"></div>
 
-        <!-- Delete all -->
         <div class="del-section">
           <div class="del-header">
             <h3>Delete All Cloud Data</h3>
-            <p>Permanently removes all enrichment history. This action is irreversible and will be logged.</p>
+            <p>Permanently removes all enrichment history. Logged in the Data Ledger.</p>
           </div>
-          <button id="deleteAllBtn" class="btn btn-danger">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-            </svg>
-            Delete All Cloud Data
-          </button>
+          <button id="deleteAllBtn" class="btn btn-danger">Delete All Cloud Data</button>
         </div>
 
         <div class="del-divider"></div>
 
-        <!-- Clear snapshot -->
         <div class="del-section">
           <div class="del-header">
             <h3>Clear Local Scan Snapshot</h3>
-            <p>Resets the baseline used to detect new devices and port changes. The next scan will start fresh without comparing to previous results.</p>
+            <p>Resets the baseline for drift detection. Next scan starts fresh.</p>
           </div>
           <button id="clearSnapshotBtn" class="btn btn-secondary">Clear Local Snapshot</button>
         </div>
@@ -383,7 +794,114 @@
   </main>
 </div>
 
-<!-- ── Enrichment modal ───────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════
+     DEVICE DETAIL PANEL
+══════════════════════════════════════════════════════════════════════ -->
+<div class="detail-panel-backdrop hidden" id="detailPanelBackdrop"></div>
+<aside class="detail-panel hidden" id="deviceDetailPanel">
+  <div class="detail-panel-header">
+    <div class="detail-device-name-wrap">
+      <div class="detail-device-icon" id="detailDeviceIcon"></div>
+      <div>
+        <div class="detail-device-name" id="detailDeviceName">—</div>
+        <div class="detail-device-ip" id="detailDeviceIP">—</div>
+      </div>
+    </div>
+    <button class="panel-close" id="detailPanelClose" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="detail-panel-body" id="detailPanelBody">
+    <!-- Content injected by JS -->
+  </div>
+
+  <div class="detail-panel-actions">
+    <button class="btn btn-secondary btn-sm" onclick="window.pingCurrentDevice()">Ping</button>
+    <button class="btn btn-secondary btn-sm" onclick="window.traceCurrentDevice()">Trace</button>
+    <button class="btn btn-primary btn-sm" onclick="window.enrichCurrentDevice()">Enrich</button>
+    <button class="btn btn-secondary btn-sm" onclick="window.openAlertSettingsForDevice()">Alerts</button>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ALERT RULE BUILDER MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="ruleBuilderModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal modal-rule-builder">
+    <div class="modal-header">
+      <h2 id="ruleBuilderTitle">Create Alert Rule</h2>
+      <button class="modal-close" id="ruleBuilderClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="rule-builder-form">
+        <div class="rb-section">
+          <label class="rb-label">Rule name</label>
+          <input type="text" id="rbName" class="tool-input" placeholder="e.g. New device on guest network">
+        </div>
+        <div class="rb-section">
+          <label class="rb-label">IF — Device filter</label>
+          <select id="rbDeviceFilter" class="sel-input">
+            <option value="all">All devices</option>
+            <option value="unknown">Unknown devices only</option>
+            <option value="watchlist">Watchlist devices only</option>
+            <option value="owned">Owned devices only</option>
+            <option value="guest">Guest devices only</option>
+          </select>
+        </div>
+        <div class="rb-section">
+          <label class="rb-label">AND — Event type</label>
+          <select id="rbEventType" class="sel-input">
+            <option value="new_device">New device joined</option>
+            <option value="risky_port">Risky port exposed</option>
+            <option value="port_changed">Port profile changed</option>
+            <option value="device_offline">Important device went offline</option>
+          </select>
+        </div>
+        <div class="rb-section rb-row">
+          <div>
+            <label class="rb-label">Severity</label>
+            <select id="rbSeverity" class="sel-input">
+              <option value="high">High</option>
+              <option value="medium" selected>Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <div>
+            <label class="rb-label">Debounce (min)</label>
+            <input type="number" id="rbDebounce" class="tool-input-sm" value="5" min="0" max="1440">
+          </div>
+        </div>
+        <div class="rb-section">
+          <label class="rb-label">THEN — Webhook URL (optional)</label>
+          <input type="text" id="rbWebhook" class="tool-input" placeholder="https://hooks.slack.com/…">
+          <p class="rb-hint">Leave blank for in-app notification only. Webhooks also work with Home Assistant, Discord, and IFTTT-compatible services.</p>
+        </div>
+        <div class="rb-section">
+          <label class="toggle-switch-sm">
+            <input type="checkbox" id="rbEnabled" checked>
+            <span class="toggle-knob-sm"></span>
+          </label>
+          <span style="margin-left:0.5rem;font-size:0.85rem">Rule enabled</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="ruleBuilderCancel">Cancel</button>
+      <button class="btn btn-primary" id="ruleBuilderSave">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ENRICHMENT MODAL
+══════════════════════════════════════════════════════════════════════ -->
 <div id="enrichModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
   <div class="modal">
     <div class="modal-header">
@@ -398,7 +916,9 @@
   </div>
 </div>
 
-<!-- ── Data preview modal ─────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════
+     DATA PREVIEW MODAL
+══════════════════════════════════════════════════════════════════════ -->
 <div id="previewModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
   <div class="modal modal-preview">
     <div class="modal-header">
@@ -415,17 +935,36 @@
     <div id="previewBody" class="modal-body"></div>
     <div class="modal-footer">
       <button id="previewCancelBtn" class="btn btn-secondary">Cancel</button>
-      <button id="previewConfirmBtn" class="btn btn-primary">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-        </svg>
-        Send for Analysis
-      </button>
+      <button id="previewConfirmBtn" class="btn btn-primary">Send for Analysis</button>
     </div>
   </div>
 </div>
 
-<!-- ── Toast notification ─────────────────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════════
+     BULK TAG MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="bulkTagModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Add Tags</h2>
+      <button class="modal-close" onclick="document.getElementById('bulkTagModal').classList.add('hidden')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);margin-bottom:0.75rem">Enter comma-separated tags to add to selected device(s):</p>
+      <input type="text" id="bulkTagInput" class="tool-input" placeholder="e.g. laptop, personal, upstairs">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('bulkTagModal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" id="bulkTagConfirm">Apply Tags</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ───────────────────────────────────────────────────── -->
 <div id="toast" class="toast hidden"></div>
 
 <script src="renderer.js"></script>
