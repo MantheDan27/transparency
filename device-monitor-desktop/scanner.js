@@ -804,19 +804,26 @@ async function quickScan(progressCb) {
   const report = msg => progressCb?.(msg);
   const networks = getLocalNetworks();
   const net0 = networks[0];
+  const multiSubnet = networks.length > 1;
 
-  report(`Quick scan — subnet ${net0.cidr}`);
-  report(`Launching mDNS and SSDP discovery in parallel...`);
+  report(`Quick scan — ${multiSubnet ? networks.length + ' subnet(s)' : net0.cidr}`);
+  report(`Launching mDNS, SSDP, and IPv6 NDP discovery in parallel...`);
 
-  // Run mDNS, SSDP, and ARP ping in parallel
-  const [mdnsResults, ssdpResults] = await Promise.all([
+  // Run mDNS, SSDP, and IPv6 NDP in parallel
+  const [mdnsResults, ssdpResults, ipv6Neighbors] = await Promise.all([
     discoverMDNS(2500).catch(() => new Map()),
     discoverSSDP(2500).catch(() => new Map()),
+    discoverIPv6Neighbors().catch(() => new Map()),
   ]);
 
-  report(`Multi-cast discovery complete. Running ARP ping sweep...`);
+  if (ipv6Neighbors.size > 0) {
+    report(`IPv6 NDP: ${ipv6Neighbors.size} neighbor(s) found.`);
+  }
 
-  const ips = Array.from({ length: 254 }, (_, i) => `${net0.baseIp}.${i + 1}`);
+  report(`Multi-cast discovery complete. Running ARP ping sweep${multiSubnet ? ' across all subnets' : ''}...`);
+
+  // Multi-subnet IP list
+  const ips = buildSubnetIPs(networks);
   const alive = [];
   const BATCH = 30;
 
@@ -825,25 +832,35 @@ async function quickScan(progressCb) {
       ips.slice(i, i + BATCH).map(ip => pingHost(ip, false).then(r => r.alive ? ip : null))
     );
     alive.push(...hits.filter(Boolean));
-    report(`Ping sweep: ${Math.min(i + BATCH, 254)}/254 — ${alive.length} host(s) found`);
+    report(`Ping sweep: ${Math.min(i + BATCH, ips.length)}/${ips.length} — ${alive.length} host(s) found`);
   }
 
-  if (!alive.includes(net0.localIp)) alive.push(net0.localIp);
+  for (const net of networks) {
+    if (!alive.includes(net.localIp)) alive.push(net.localIp);
+  }
+
+  // Merge IPv6-only hosts (hosts found via NDP but not via ARP)
+  for (const [ipv6, info] of ipv6Neighbors) {
+    if (!alive.includes(ipv6)) alive.push(ipv6);
+  }
 
   report(`${alive.length} device(s) found. Resolving identities...`);
 
   const devices = await Promise.all(alive.map(async ip => {
     const [mac, hostname] = await Promise.all([getMac(ip), resolveHostname(ip)]);
-    const vendor = lookupVendor(mac);
     const mdns   = mdnsResults.get(ip);
     const ssdp   = ssdpResults.get(ip);
     const nbName = null; // skip for quick scan
+    const isIPv6 = ip.includes(':');
 
-    const fp = fingerprintDevice({ ip, mac, hostname, ports: [], mdnsServices: mdns?.services || [], ssdpInfo: ssdp || null, netbiosName: nbName });
+    // For IPv6 hosts, try to get MAC from NDP table
+    const macFinal = (isIPv6 && ipv6Neighbors.has(ip)) ? (ipv6Neighbors.get(ip).mac || mac) : mac;
+    const fp = fingerprintDevice({ ip, mac: macFinal, hostname, ports: [], mdnsServices: mdns?.services || [], ssdpInfo: ssdp || null, netbiosName: nbName });
 
-    const name = hostname || (ip === net0.localIp ? 'This Device' : `Device-${ip.split('.').pop()}`);
+    const localIp = networks.find(n => ip.startsWith(n.baseIp))?.localIp || net0.localIp;
+    const name = hostname || (ip === localIp ? 'This Device' : `Device-${ip.split('.').pop()}`);
     return {
-      ip, mac, name, hostname,
+      ip, mac: macFinal, name, hostname,
       vendor: fp.vendor,
       deviceType: fp.deviceType,
       osGuess: fp.osGuess,
@@ -854,6 +871,7 @@ async function quickScan(progressCb) {
       mdnsServices: mdns?.services || [],
       ssdpInfo: ssdp || null,
       netbiosName: nbName,
+      isIPv6,
       latencyMs: null,
     };
   }));
@@ -1056,6 +1074,53 @@ function buildServiceMap(openPorts, banners = {}, tlsCert = null) {
   return services;
 }
 
+// ── IPv6 NDP neighbor discovery ───────────────────────────────────────────────
+async function discoverIPv6Neighbors() {
+  try {
+    let output = '';
+    if (process.platform === 'win32') {
+      const { stdout } = await execPromise('netsh interface ipv6 show neighbors', { timeout: 6000 });
+      output = stdout;
+    } else if (process.platform === 'darwin') {
+      try {
+        const { stdout } = await execPromise('ndp -an 2>/dev/null', { timeout: 6000 });
+        output = stdout;
+      } catch {
+        const { stdout } = await execPromise('ip -6 neigh show 2>/dev/null', { timeout: 6000 });
+        output = stdout;
+      }
+    } else {
+      const { stdout } = await execPromise('ip -6 neigh show 2>/dev/null', { timeout: 6000 });
+      output = stdout;
+    }
+
+    const results = new Map(); // ipv6 -> { mac }
+    for (const line of output.split('\n')) {
+      // Linux: "2001:db8::1 dev eth0 lladdr aa:bb:cc:dd:ee:ff REACHABLE"
+      const m = line.match(/^(\S+)\s+dev\s+\S+(?:\s+lladdr\s+([0-9a-f:]{11,17}))?/i);
+      if (m && m[1] && !m[1].startsWith('fe80') && m[1] !== '::1') {
+        results.set(m[1], { mac: m[2] || null });
+      }
+    }
+    return results;
+  } catch {
+    return new Map();
+  }
+}
+
+// ── Multi-subnet IP range builder ─────────────────────────────────────────────
+function buildSubnetIPs(networks) {
+  const allIPs = new Set();
+  for (const net of networks) {
+    const parts = net.localIp.split('.');
+    const base = parts.slice(0, 3).join('.');
+    for (let i = 1; i <= 254; i++) {
+      allIPs.add(`${base}.${i}`);
+    }
+  }
+  return [...allIPs];
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 async function scanNetwork(progressCallback, opts = {}) {
   const { mode = 'standard', gentle = false, portProfile = 'common' } = opts;
@@ -1068,6 +1133,7 @@ module.exports = {
   scanNetwork, analyzeAnomalies,
   quickScan, standardScan, deepScan,
   discoverMDNS, discoverSSDP, lookupNetBIOS,
+  discoverIPv6Neighbors, buildSubnetIPs,
   fingerprintDevice, lookupVendor,
   grabBanner, getTLSCert,
   getLocalNetwork, getLocalNetworks,

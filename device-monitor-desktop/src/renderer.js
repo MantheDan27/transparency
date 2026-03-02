@@ -520,7 +520,7 @@ function renderDeviceTable() {
             </div>
           </div>
         </td>
-        <td class="col-ip"><span class="mono-ip">${escHtml(dev.ip)}</span>
+        <td class="col-ip"><span class="mono-ip">${escHtml(dev.ip)}</span>${dev.isIPv6 ? '<span class="ipv6-badge">IPv6</span>' : ''}
           ${dev.mac && dev.mac !== 'Unknown' ? `<div class="mac-addr">${escHtml(dev.mac)}</div>` : ''}
         </td>
         <td class="col-vendor">
@@ -761,7 +761,12 @@ function openDetailPanel(dev) {
       <div class="detail-section-title">Presence</div>
       <div class="detail-field"><span class="detail-label">First seen</span><span class="detail-val">${hist.firstSeen ? new Date(hist.firstSeen).toLocaleString() : '—'}</span></div>
       <div class="detail-field"><span class="detail-label">Last seen</span><span class="detail-val">${hist.lastSeen ? new Date(hist.lastSeen).toLocaleString() : 'Just now'}</span></div>
-      ${dev.latencyMs != null ? `<div class="detail-field"><span class="detail-label">Latency</span><span class="detail-val">${dev.latencyMs} ms</span></div>` : ''}
+      ${dev.latencyMs != null ? `<div class="detail-field"><span class="detail-label">Current latency</span><span class="detail-val">${dev.latencyMs} ms</span></div>` : ''}
+      ${hist.onlineChecks > 1 ? `<div class="detail-field"><span class="detail-label">Uptime estimate</span><span class="detail-val">${Math.round((hist.onlineCount / hist.onlineChecks) * 100)}% (${hist.onlineCount}/${hist.onlineChecks} checks)</span></div>` : ''}
+      <div class="detail-field" style="flex-direction:column;align-items:flex-start;gap:0.3rem">
+        <span class="detail-label">Latency history</span>
+        <div id="latencySparkline-${escHtml(dev.ip.replace(/[.:]/g,'-'))}">Loading…</div>
+      </div>
     </div>
 
     <!-- Network section -->
@@ -844,6 +849,10 @@ function openDetailPanel(dev) {
   // Show panel
   $('deviceDetailPanel').classList.remove('hidden');
   $('detailPanelBackdrop').classList.remove('hidden');
+
+  // Load latency sparkline after DOM is updated
+  const sparkId = `latencySparkline-${dev.ip.replace(/[.:]/g,'-')}`;
+  setTimeout(() => window.loadLatencyChart(dev.ip, sparkId), 50);
 }
 
 function closeDetailPanel() {
@@ -1146,6 +1155,8 @@ window.openRuleBuilder = function(ruleId) {
   $('rbSeverity').value     = existing?.actions?.severity || 'medium';
   $('rbDebounce').value     = existing?.actions?.debounceMinutes ?? 5;
   $('rbWebhook').value      = existing?.actions?.webhook || '';
+  $('rbQuietStart').value   = existing?.conditions?.quietHoursStart || '';
+  $('rbQuietEnd').value     = existing?.conditions?.quietHoursEnd || '';
   $('rbEnabled').checked    = existing?.enabled !== false;
   $('ruleBuilderModal').classList.remove('hidden');
 };
@@ -1168,9 +1179,11 @@ async function saveAlertRule() {
     name: $('rbName').value.trim() || 'Unnamed rule',
     enabled: $('rbEnabled').checked,
     conditions: {
-      deviceFilter: $('rbDeviceFilter').value,
-      eventType:    $('rbEventType').value,
-      timeWindow:   null,
+      deviceFilter:    $('rbDeviceFilter').value,
+      eventType:       $('rbEventType').value,
+      timeWindow:      null,
+      quietHoursStart: $('rbQuietStart').value || null,
+      quietHoursEnd:   $('rbQuietEnd').value || null,
     },
     actions: {
       notification:    true,
@@ -1598,3 +1611,150 @@ window.exportReport = async function() {
   downloadJSON(report, `transparency-report-${dateStamp()}.json`);
   showToast('Report exported.', 'success');
 };
+
+// ── Continuous monitoring UI ──────────────────────────────────────────────────
+let monitoringEnabled = false;
+
+async function loadMonitorStatus() {
+  try {
+    const s = await window.electronAPI.getMonitorStatus();
+    monitoringEnabled = s.enabled;
+    updateMonitorUI(s);
+  } catch { /* ignore */ }
+}
+
+function updateMonitorUI(s) {
+  monitoringEnabled = s.enabled;
+  const btn   = $('btnMonitorToggle');
+  const label = $('monitorBtnLabel');
+  const card  = $('monitorStatusCard');
+
+  if (btn && label) {
+    label.textContent = s.enabled ? 'Stop Monitor' : 'Start Monitor';
+    btn.classList.toggle('qa-btn-active', s.enabled);
+  }
+  if (card) {
+    card.style.display = s.enabled ? '' : 'none';
+  }
+  if (s.enabled) {
+    if ($('monitorIntervalTag'))   $('monitorIntervalTag').textContent = `Every ${s.intervalMinutes} min`;
+    if ($('monitorQuietHours'))    $('monitorQuietHours').textContent  = (s.quietHoursStart && s.quietHoursEnd) ? `${s.quietHoursStart}–${s.quietHoursEnd}` : 'Off';
+    if ($('monitorApiPort'))       $('monitorApiPort').textContent     = `port ${s.localApiPort || 7722}`;
+    updateInternetStatusUI(s.internetStatus);
+  }
+}
+
+function updateInternetStatusUI(status) {
+  const el = $('monitorInternet');
+  if (!el || !status) return;
+  if (status.online) {
+    el.textContent = status.latencyMs != null ? `Online (${Math.round(status.latencyMs)}ms)` : 'Online';
+    el.style.color = 'var(--success)';
+  } else {
+    el.textContent = 'OFFLINE';
+    el.style.color = 'var(--danger)';
+  }
+}
+
+window.toggleMonitoring = async function() {
+  if (monitoringEnabled) {
+    await window.electronAPI.stopMonitoring();
+    monitoringEnabled = false;
+    updateMonitorUI({ enabled: false });
+    showToast('Continuous monitoring stopped.', 'info');
+  } else {
+    const s = await window.electronAPI.startMonitoring({ intervalMinutes: 5 });
+    monitoringEnabled = true;
+    updateMonitorUI({ ...s.config, enabled: true });
+    showToast('Continuous monitoring started — scanning every 5 minutes.', 'success');
+  }
+};
+
+window.openMonitorConfig = async function() {
+  const s = await window.electronAPI.getMonitorStatus().catch(() => ({}));
+  if ($('mcInterval'))          $('mcInterval').value           = s.intervalMinutes || 5;
+  if ($('mcQuietStart'))        $('mcQuietStart').value         = s.quietHoursStart || '';
+  if ($('mcQuietEnd'))          $('mcQuietEnd').value           = s.quietHoursEnd   || '';
+  if ($('mcAlertOutage'))       $('mcAlertOutage').checked      = s.alertOnOutage !== false;
+  if ($('mcAlertGatewayMac'))   $('mcAlertGatewayMac').checked  = s.alertOnGatewayMacChange !== false;
+  if ($('mcAlertDns'))          $('mcAlertDns').checked         = s.alertOnDnsChange !== false;
+  if ($('mcAlertLatency'))      $('mcAlertLatency').checked     = s.alertOnHighLatency === true;
+  if ($('mcLatencyThreshold'))  $('mcLatencyThreshold').value   = s.highLatencyThresholdMs || 100;
+  $('monitorConfigModal').classList.remove('hidden');
+};
+
+window.saveMonitorConfig = async function() {
+  const cfg = {
+    intervalMinutes:        parseInt($('mcInterval').value) || 5,
+    quietHoursStart:        $('mcQuietStart').value || null,
+    quietHoursEnd:          $('mcQuietEnd').value || null,
+    alertOnOutage:          $('mcAlertOutage').checked,
+    alertOnGatewayMacChange: $('mcAlertGatewayMac').checked,
+    alertOnDnsChange:       $('mcAlertDns').checked,
+    alertOnHighLatency:     $('mcAlertLatency').checked,
+    highLatencyThresholdMs: parseInt($('mcLatencyThreshold').value) || 100,
+  };
+  const res = await window.electronAPI.updateMonitorConfig(cfg);
+  $('monitorConfigModal').classList.remove('hidden');
+  if (res.success) {
+    $('monitorConfigModal').classList.add('hidden');
+    updateMonitorUI({ ...res.config, enabled: monitoringEnabled });
+    showToast('Monitoring settings saved.', 'success');
+  }
+};
+
+// Listen for monitoring events from main process
+window.electronAPI.onMonitorScanComplete(data => {
+  allDevices   = data.devices || allDevices;
+  allAnomalies = data.anomalies || allAnomalies;
+  renderDeviceTable();
+  updateFilterCounts();
+  updateKPIs(allDevices, allAnomalies);
+  renderMap();
+  renderRecentChanges(allAnomalies);
+  updateOverviewStatus(allDevices, allAnomalies);
+  if ($('monitorLastScan')) $('monitorLastScan').textContent = relativeTime(data.scannedAt);
+  updateInternetStatusUI(data.internetStatus);
+});
+
+window.electronAPI.onMonitorStatus(s => updateMonitorUI(s));
+window.electronAPI.onInternetStatus(s => updateInternetStatusUI(s));
+
+// ── Presence / latency sparkline chart ────────────────────────────────────────
+function renderLatencySparkline(containerId, latencyData) {
+  const container = $(containerId);
+  if (!container) return;
+  if (!latencyData || latencyData.length < 2) {
+    container.innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem">No latency history yet.</span>';
+    return;
+  }
+
+  const W = 260, H = 50;
+  const vals = latencyData.slice(-40).map(d => d.ms);
+  const max  = Math.max(...vals, 1);
+  const min  = Math.min(...vals, 0);
+  const range = max - min || 1;
+  const pts  = vals.map((v, i) => {
+    const x = (i / (vals.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const last = vals[vals.length - 1];
+  const color = last < 20 ? '#22c55e' : last < 80 ? '#eab308' : '#ef4444';
+
+  container.innerHTML = `
+    <svg width="${W}" height="${H}" style="overflow:visible">
+      <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>
+      <circle cx="${(W).toFixed(1)}" cy="${(H - ((last-min)/range)*(H-4)-2).toFixed(1)}" r="3" fill="${color}"/>
+    </svg>
+    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Last ${Math.round(last)}ms · ${vals.length} sample(s)</div>
+  `;
+}
+
+window.loadLatencyChart = async function(ip, containerId) {
+  const data = await window.electronAPI.getLatencyHistory(ip).catch(() => []);
+  renderLatencySparkline(containerId, data);
+};
+
+// ── Initial monitoring state load ─────────────────────────────────────────────
+loadMonitorStatus();

@@ -28,8 +28,60 @@ jobs:
         name: native-v2
         path: transparency-native/TransparencyApp/bin/Release/net10.0-windows/win-x64/publish/
 
+  build-electron-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Install dependencies
+      run: |
+        cd device-monitor-desktop
+        npm install --legacy-peer-deps
+    - name: Build Linux AppImage
+      run: |
+        cd device-monitor-desktop
+        npm run build:linux
+    - name: Upload Linux Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: electron-linux
+        path: |
+          device-monitor-desktop/dist/*.AppImage
+          device-monitor-desktop/dist/*.snap
+
+  build-electron-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - name: Install dependencies
+      run: |
+        cd device-monitor-desktop
+        npm install --legacy-peer-deps
+    - name: Build Windows installer
+      run: |
+        cd device-monitor-desktop
+        npm run build:win
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: electron-windows
+        path: |
+          device-monitor-desktop/dist/*.exe
+          device-monitor-desktop/dist/*.zip
+
   release:
-    needs: [build-native]
+    needs: [build-native, build-electron-linux, build-electron-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -45,6 +97,10 @@ jobs:
       with:
         files: |
           TransparencyApp-Native.zip
+          electron-linux/*.AppImage
+          electron-linux/*.snap
+          electron-windows/*.exe
+          electron-windows/*.zip
         draft: false
         prerelease: false
       env:

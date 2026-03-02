@@ -12,6 +12,7 @@ const fs    = require('fs');
 
 const { scanNetwork, analyzeAnomalies, getLocalNetwork, getLocalNetworks } = require('./scanner');
 const { createCloudMockService } = require('./cloud-mock');
+const http = require('http');
 
 const execPromise = util.promisify(exec);
 const dnsLookup   = util.promisify(dns.lookup);
@@ -55,6 +56,25 @@ let alertDebounce  = {}; // ruleId+deviceKey → lastTriggeredMs
 // Snapshots
 let snapshots      = loadJSON('snapshots.json', []);
 
+// ── Monitoring state ──────────────────────────────────────────────────────────
+let monitoringTimer   = null;
+let monitoringConfig  = loadJSON('monitoring-config.json', {
+  enabled: false,
+  intervalMinutes: 5,
+  quietHoursStart: null,
+  quietHoursEnd:   null,
+  alertOnOutage:   true,
+  alertOnGatewayMacChange: true,
+  alertOnDnsChange: true,
+  alertOnHighLatency: true,
+  highLatencyThresholdMs: 100,
+});
+let internetStatus    = { online: true, lastCheck: null, latencyMs: null };
+let lastGatewayMac    = null;
+let lastDnsServers    = null;
+let localApiServer    = null;
+const LOCAL_API_PORT  = 7722;
+
 // Latency history: ip → [{ts, ms}]
 let latencyHistory = {};
 const MAX_LATENCY_ENTRIES = 100;
@@ -87,6 +107,171 @@ function getDefaultAlertRules() {
       createdAt: new Date().toISOString(),
     },
   ];
+}
+
+// ── Monitoring helpers ────────────────────────────────────────────────────────
+function isInQuietHours() {
+  const { quietHoursStart, quietHoursEnd } = monitoringConfig;
+  if (!quietHoursStart || !quietHoursEnd) return false;
+  const now = new Date();
+  const [sh, sm] = quietHoursStart.split(':').map(Number);
+  const [eh, em] = quietHoursEnd.split(':').map(Number);
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
+  const startMin = sh * 60 + sm;
+  const endMin   = eh * 60 + em;
+  return startMin <= endMin
+    ? nowMin >= startMin && nowMin < endMin
+    : nowMin >= startMin || nowMin < endMin;
+}
+
+async function checkInternetConnectivity() {
+  try {
+    const start = Date.now();
+    await axios.head('https://1.1.1.1', { timeout: 6000, validateStatus: () => true });
+    const latencyMs = Date.now() - start;
+    const wasOffline = !internetStatus.online;
+    internetStatus = { online: true, lastCheck: new Date().toISOString(), latencyMs };
+    if (wasOffline) {
+      triggerAlert('monitor-internet-restored', 'Internet Restored', 'low',
+        'Internet is back', 'Internet connectivity has been restored.', 'internet', {});
+      mainWindow?.webContents?.send('internet-status', internetStatus);
+    }
+    if (monitoringConfig.alertOnHighLatency && latencyMs > monitoringConfig.highLatencyThresholdMs) {
+      triggerAlert('monitor-high-latency', 'High Gateway Latency', 'low',
+        'High internet latency', `Internet latency is ${latencyMs}ms (threshold: ${monitoringConfig.highLatencyThresholdMs}ms).`, 'internet', { latencyMs });
+    }
+  } catch {
+    const wasOnline = internetStatus.online;
+    internetStatus = { online: false, lastCheck: new Date().toISOString(), latencyMs: null };
+    if (wasOnline && monitoringConfig.alertOnOutage) {
+      triggerAlert('monitor-outage', 'Internet Outage', 'high',
+        'Internet outage detected', 'No internet connectivity — could be ISP issue or gateway problem.', 'internet', {});
+      mainWindow?.webContents?.send('internet-status', internetStatus);
+    }
+  }
+}
+
+async function checkGatewayMacChange() {
+  if (!monitoringConfig.alertOnGatewayMacChange) return;
+  try {
+    let gwIp = null;
+    if (process.platform === 'win32') {
+      const { stdout } = await execPromise('route print 0.0.0.0', { timeout: 4000 });
+      const m = stdout.match(/0\.0\.0\.0\s+0\.0\.0\.0\s+([\d.]+)/);
+      if (m) gwIp = m[1];
+    } else if (process.platform === 'darwin') {
+      const { stdout } = await execPromise('netstat -nr | grep "^default"', { timeout: 4000 });
+      const m = stdout.match(/default\s+([\d.]+)/);
+      if (m) gwIp = m[1];
+    } else {
+      const { stdout } = await execPromise('ip route show default', { timeout: 4000 });
+      const m = stdout.match(/via\s+([\d.]+)/);
+      if (m) gwIp = m[1];
+    }
+    if (!gwIp) return;
+
+    // Get ARP entry for gateway
+    let gwMac = null;
+    try {
+      const cmd = process.platform === 'win32' ? `arp -a ${gwIp}` : `arp -n ${gwIp} 2>/dev/null`;
+      const { stdout: arpOut } = await execPromise(cmd, { timeout: 3000 });
+      const macM = arpOut.match(/([0-9a-f]{2}[:-]){5}[0-9a-f]{2}/i);
+      if (macM) gwMac = macM[0].toLowerCase().replace(/-/g, ':');
+    } catch { /* ignore */ }
+
+    if (gwMac && lastGatewayMac && gwMac !== lastGatewayMac) {
+      triggerAlert('monitor-gateway-mac', 'Gateway MAC Changed', 'high',
+        'Possible rogue access point', `Gateway ${gwIp} MAC changed from ${lastGatewayMac} to ${gwMac}. Possible evil-twin or ARP spoofing.`,
+        gwIp, { oldMac: lastGatewayMac, newMac: gwMac });
+    }
+    if (gwMac) lastGatewayMac = gwMac;
+  } catch { /* ignore */ }
+}
+
+function checkDnsServerChange() {
+  if (!monitoringConfig.alertOnDnsChange) return;
+  const currentDns = dns.getServers().sort().join(',');
+  if (lastDnsServers && currentDns !== lastDnsServers) {
+    triggerAlert('monitor-dns-changed', 'DNS Servers Changed', 'high',
+      'DNS server change detected', `DNS servers changed from [${lastDnsServers}] to [${currentDns}]. Possible DNS hijacking.`,
+      'network', { oldDns: lastDnsServers, newDns: currentDns });
+  }
+  lastDnsServers = currentDns;
+}
+
+async function runMonitorScan() {
+  if (isInQuietHours()) return;
+  try {
+    const devices   = await scanNetwork(msg => mainWindow?.webContents.send('monitor-progress', msg), { mode: 'quick', gentle: true });
+    const anomalies = analyzeAnomalies(devices, lastSnapshot);
+    lastSnapshot    = devices;
+    lastScanResult  = { devices, anomalies, scannedAt: new Date().toISOString(), mode: 'monitor' };
+    updateDeviceHistory(devices);
+    processAlertsForScan(devices, anomalies);
+
+    await Promise.allSettled([
+      checkInternetConnectivity(),
+      checkGatewayMacChange(),
+    ]);
+    checkDnsServerChange();
+
+    const devicesWithMeta = devices.map(d => ({
+      ...d,
+      meta: getMeta(getDeviceKey(d)),
+      history: deviceHistory[getDeviceKey(d)] || null,
+    }));
+
+    mainWindow?.webContents?.send('monitor-scan-complete', {
+      devices: devicesWithMeta, anomalies,
+      scannedAt: new Date().toISOString(),
+      internetStatus,
+    });
+  } catch (err) {
+    console.error('[monitor]', err);
+  }
+}
+
+function startMonitoring() {
+  if (monitoringTimer) clearInterval(monitoringTimer);
+  monitoringConfig.enabled = true;
+  saveJSON('monitoring-config.json', monitoringConfig);
+  const ms = Math.max(1, monitoringConfig.intervalMinutes) * 60 * 1000;
+  runMonitorScan(); // run immediately
+  monitoringTimer = setInterval(runMonitorScan, ms);
+  mainWindow?.webContents?.send('monitor-status', { enabled: true, intervalMinutes: monitoringConfig.intervalMinutes });
+}
+
+function stopMonitoring() {
+  if (monitoringTimer) { clearInterval(monitoringTimer); monitoringTimer = null; }
+  monitoringConfig.enabled = false;
+  saveJSON('monitoring-config.json', monitoringConfig);
+  mainWindow?.webContents?.send('monitor-status', { enabled: false });
+}
+
+// ── Local read-only API ───────────────────────────────────────────────────────
+function startLocalApi() {
+  if (localApiServer) return;
+  localApiServer = http.createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '127.0.0.1');
+    if (req.method !== 'GET') { res.writeHead(405); return res.end(JSON.stringify({ error: 'Read-only API' })); }
+
+    if (req.url === '/api/devices') {
+      res.writeHead(200);
+      return res.end(JSON.stringify(lastSnapshot.map(d => ({ ip: d.ip, mac: d.mac, name: d.name, type: d.deviceType, meta: getMeta(getDeviceKey(d)) }))));
+    }
+    if (req.url === '/api/status') {
+      res.writeHead(200);
+      return res.end(JSON.stringify({ deviceCount: lastSnapshot.length, internetStatus, monitoring: { enabled: monitoringConfig.enabled, intervalMinutes: monitoringConfig.intervalMinutes } }));
+    }
+    if (req.url === '/api/alerts') {
+      res.writeHead(200);
+      return res.end(JSON.stringify(triggeredAlerts.slice(0, 50)));
+    }
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: 'Not found', routes: ['/api/devices', '/api/status', '/api/alerts'] }));
+  });
+  localApiServer.listen(LOCAL_API_PORT, '127.0.0.1', () => console.log(`[local-api] http://127.0.0.1:${LOCAL_API_PORT}`));
 }
 
 // ── Alert helpers ─────────────────────────────────────────────────────────────
@@ -127,8 +312,13 @@ function triggerAlert(ruleId, ruleName, severity, title, message, deviceIp, data
 }
 
 function processAlertsForScan(devices, anomalies) {
+  // Check quiet hours for user-defined rules
+  const quiet = isInQuietHours();
+
   for (const rule of alertRules) {
     if (!rule.enabled) continue;
+    if (quiet && rule.conditions.quietHours !== false) continue; // respect quiet hours
+
     for (const anomaly of anomalies) {
       const meta  = getMeta(`ip:${anomaly.device}`);
       const trust = meta.trustState;
@@ -150,6 +340,12 @@ function processAlertsForScan(devices, anomalies) {
       }
       if (rule.conditions.eventType === 'port_changed' && anomaly.type === 'Ports Changed') {
         triggerAlert(rule.id, rule.name, rule.actions.severity, 'Port profile changed', `${anomaly.device}: ${anomaly.description}`, anomaly.device, { anomaly });
+      }
+      if (rule.conditions.eventType === 'device_offline' && anomaly.type === 'Device Offline') {
+        triggerAlert(rule.id, rule.name, rule.actions.severity, 'Device went offline', `${anomaly.device} is no longer reachable.`, anomaly.device, { anomaly });
+      }
+      if (rule.conditions.eventType === 'ip_changed' && anomaly.type === 'IP Changed') {
+        triggerAlert(rule.id, rule.name, rule.actions.severity, 'Device IP changed', `${anomaly.device}: ${anomaly.description}`, anomaly.device, { anomaly });
       }
     }
   }
@@ -234,14 +430,24 @@ function createWindow() {
 app.whenReady().then(() => {
   ensureDataDir();
   startCloud();
+  startLocalApi();
   createWindow();
+  // Resume monitoring if it was enabled before
+  if (monitoringConfig.enabled) {
+    // Delay slightly to let window load first
+    setTimeout(() => startMonitoring(), 3000);
+  }
+  // Initialize DNS baseline
+  lastDnsServers = dns.getServers().sort().join(',');
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
+  stopMonitoring();
   if (cloudServer) cloudServer.close();
+  if (localApiServer) localApiServer.close();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -686,6 +892,53 @@ ipcMain.handle('purge-history-older-than', async (_e, days) => {
   }
   saveJSON('device-history.json', deviceHistory);
   return { success: true, removed };
+});
+
+// ── IPC: Continuous monitoring ────────────────────────────────────────────────
+ipcMain.handle('start-monitoring', async (_e, config = {}) => {
+  monitoringConfig = { ...monitoringConfig, ...config, enabled: true };
+  saveJSON('monitoring-config.json', monitoringConfig);
+  startMonitoring();
+  return { success: true, config: monitoringConfig };
+});
+
+ipcMain.handle('stop-monitoring', async () => {
+  stopMonitoring();
+  return { success: true };
+});
+
+ipcMain.handle('get-monitor-status', async () => {
+  return {
+    enabled: monitoringConfig.enabled,
+    intervalMinutes: monitoringConfig.intervalMinutes,
+    quietHoursStart: monitoringConfig.quietHoursStart,
+    quietHoursEnd:   monitoringConfig.quietHoursEnd,
+    alertOnOutage:   monitoringConfig.alertOnOutage,
+    alertOnGatewayMacChange: monitoringConfig.alertOnGatewayMacChange,
+    alertOnDnsChange: monitoringConfig.alertOnDnsChange,
+    alertOnHighLatency: monitoringConfig.alertOnHighLatency,
+    highLatencyThresholdMs: monitoringConfig.highLatencyThresholdMs,
+    internetStatus,
+    isInQuietHours: isInQuietHours(),
+    localApiPort: LOCAL_API_PORT,
+  };
+});
+
+ipcMain.handle('update-monitor-config', async (_e, config) => {
+  monitoringConfig = { ...monitoringConfig, ...config };
+  saveJSON('monitoring-config.json', monitoringConfig);
+  if (monitoringConfig.enabled && monitoringTimer) {
+    // Restart with new interval
+    clearInterval(monitoringTimer);
+    const ms = Math.max(1, monitoringConfig.intervalMinutes) * 60 * 1000;
+    monitoringTimer = setInterval(runMonitorScan, ms);
+  }
+  return { success: true, config: monitoringConfig };
+});
+
+ipcMain.handle('get-internet-status', async () => {
+  await checkInternetConnectivity();
+  return internetStatus;
 });
 
 // ── IPC: Open URL ─────────────────────────────────────────────────────────────

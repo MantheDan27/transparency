@@ -1383,3 +1383,33 @@ tbody tr:hover { background: var(--bg-hover); }
 
 /* ── Mono helpers ─────────────────────────────────────────────────── */
 .mono-sm { font-family: monospace; font-size: 0.8rem; }
+
+/* ── Monitoring status card ──────────────────────────────────────── */
+.monitor-status-card { border-left: 3px solid var(--accent); }
+.monitor-status-body { display: flex; gap: 2rem; flex-wrap: wrap; padding: 0.5rem 0; }
+.monitor-stat { display: flex; flex-direction: column; gap: 0.1rem; }
+.monitor-stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.monitor-stat-val { font-size: 0.88rem; color: var(--text-primary); font-weight: 500; }
+
+/* ── Pulse animation for monitoring dot ─────────────────────────── */
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+.pulse-dot { animation: pulse 2s infinite; }
+
+/* ── Active monitor button state ─────────────────────────────────── */
+.qa-btn-active { background: rgba(34,197,94,0.15); border-color: var(--success); color: var(--success); }
+
+/* ── Quick action button wider variant ───────────────────────────── */
+.qa-btn { white-space: nowrap; }
+
+/* ── Latency sparkline container ─────────────────────────────────── */
+.detail-field svg { display: block; }
+
+/* ── Tag success variant ─────────────────────────────────────────── */
+.tag-success { background: rgba(34,197,94,0.15); color: var(--success); border-color: rgba(34,197,94,0.3); }
+
+/* ── IPv6 badge ──────────────────────────────────────────────────── */
+.ipv6-badge { font-size: 0.65rem; background: rgba(99,102,241,0.2); color: #818cf8; border-radius: 4px; padding: 1px 5px; vertical-align: middle; margin-left: 4px; }

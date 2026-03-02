@@ -60,6 +60,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   purgeHistoryOlderThan: (days)  => ipcRenderer.invoke('purge-history-older-than', days),
   exportReport:       ()         => ipcRenderer.invoke('export-report'),
 
+  // ── Continuous monitoring ────────────────────────────────────────────────────
+  startMonitoring:    (cfg)      => ipcRenderer.invoke('start-monitoring', cfg),
+  stopMonitoring:     ()         => ipcRenderer.invoke('stop-monitoring'),
+  getMonitorStatus:   ()         => ipcRenderer.invoke('get-monitor-status'),
+  updateMonitorConfig: (cfg)     => ipcRenderer.invoke('update-monitor-config', cfg),
+  getInternetStatus:  ()         => ipcRenderer.invoke('get-internet-status'),
+
   // ── Open external URL ────────────────────────────────────────────────────────
   openExternalUrl:    (url)      => ipcRenderer.invoke('open-external-url', url),
 
@@ -73,5 +80,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const h = (_e, alert) => cb(alert);
     ipcRenderer.on('new-alert', h);
     return () => ipcRenderer.removeListener('new-alert', h);
+  },
+  onMonitorScanComplete: cb => {
+    const h = (_e, data) => cb(data);
+    ipcRenderer.on('monitor-scan-complete', h);
+    return () => ipcRenderer.removeListener('monitor-scan-complete', h);
+  },
+  onMonitorStatus: cb => {
+    const h = (_e, data) => cb(data);
+    ipcRenderer.on('monitor-status', h);
+    return () => ipcRenderer.removeListener('monitor-status', h);
+  },
+  onInternetStatus: cb => {
+    const h = (_e, data) => cb(data);
+    ipcRenderer.on('internet-status', h);
+    return () => ipcRenderer.removeListener('internet-status', h);
   },
 });

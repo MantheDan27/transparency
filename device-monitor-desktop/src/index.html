@@ -78,7 +78,7 @@
     <div class="sidebar-footer">
       <div class="footer-row">
         <span class="footer-label">Version</span>
-        <span>2.0.3</span>
+        <span>2.1.0</span>
       </div>
       <div class="footer-row">
         <span class="footer-label">Local service</span>
@@ -237,6 +237,44 @@
           </svg>
           Export Report
         </button>
+        <button class="qa-btn" id="btnMonitorToggle" onclick="window.toggleMonitoring()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span id="monitorBtnLabel">Start Monitor</span>
+        </button>
+      </div>
+
+      <!-- Monitoring status card -->
+      <div class="card monitor-status-card" id="monitorStatusCard" style="display:none">
+        <div class="card-header">
+          <div style="display:flex;align-items:center;gap:0.6rem">
+            <span class="status-dot online pulse-dot" id="monitorDot"></span>
+            <h2>Continuous Monitoring</h2>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <span class="tag tag-success" id="monitorIntervalTag">Every 5 min</span>
+            <button class="btn btn-secondary btn-xs" onclick="window.openMonitorConfig()">Configure</button>
+          </div>
+        </div>
+        <div class="monitor-status-body">
+          <div class="monitor-stat">
+            <span class="monitor-stat-label">Internet</span>
+            <span class="monitor-stat-val" id="monitorInternet">Checking…</span>
+          </div>
+          <div class="monitor-stat">
+            <span class="monitor-stat-label">Last scan</span>
+            <span class="monitor-stat-val" id="monitorLastScan">—</span>
+          </div>
+          <div class="monitor-stat">
+            <span class="monitor-stat-label">Quiet hours</span>
+            <span class="monitor-stat-val" id="monitorQuietHours">Off</span>
+          </div>
+          <div class="monitor-stat">
+            <span class="monitor-stat-label">Local API</span>
+            <span class="monitor-stat-val" id="monitorApiPort">port 7722</span>
+          </div>
+        </div>
       </div>
 
       <!-- Recent changes timeline (populated after scan) -->
@@ -861,7 +899,12 @@
             <option value="new_device">New device joined</option>
             <option value="risky_port">Risky port exposed</option>
             <option value="port_changed">Port profile changed</option>
-            <option value="device_offline">Important device went offline</option>
+            <option value="device_offline">Device went offline</option>
+            <option value="ip_changed">Device IP changed</option>
+            <option value="internet_outage">Internet outage detected</option>
+            <option value="gateway_mac_changed">Gateway MAC changed (rogue AP)</option>
+            <option value="dns_changed">DNS server changed</option>
+            <option value="high_latency">High latency detected</option>
           </select>
         </div>
         <div class="rb-section rb-row">
@@ -880,8 +923,18 @@
         </div>
         <div class="rb-section">
           <label class="rb-label">THEN — Webhook URL (optional)</label>
-          <input type="text" id="rbWebhook" class="tool-input" placeholder="https://hooks.slack.com/…">
-          <p class="rb-hint">Leave blank for in-app notification only. Webhooks also work with Home Assistant, Discord, and IFTTT-compatible services.</p>
+          <input type="text" id="rbWebhook" class="tool-input" placeholder="https://hooks.slack.com/… or http://homeassistant:8123/api/webhook/…">
+          <p class="rb-hint">Works with Home Assistant, Slack, Discord, IFTTT, and any HTTP endpoint. POST payload is the alert object as JSON.</p>
+        </div>
+        <div class="rb-section rb-row">
+          <div>
+            <label class="rb-label">Quiet hours start</label>
+            <input type="time" id="rbQuietStart" class="tool-input-sm" placeholder="22:00">
+          </div>
+          <div>
+            <label class="rb-label">Quiet hours end</label>
+            <input type="time" id="rbQuietEnd" class="tool-input-sm" placeholder="07:00">
+          </div>
         </div>
         <div class="rb-section">
           <label class="toggle-switch-sm">
@@ -960,6 +1013,68 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="document.getElementById('bulkTagModal').classList.add('hidden')">Cancel</button>
       <button class="btn btn-primary" id="bulkTagConfirm">Apply Tags</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MONITORING CONFIG MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="monitorConfigModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Monitoring Settings</h2>
+      <button class="modal-close" onclick="document.getElementById('monitorConfigModal').classList.add('hidden')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="rb-section">
+        <label class="rb-label">Scan interval (minutes)</label>
+        <input type="number" id="mcInterval" class="tool-input-sm" value="5" min="1" max="1440">
+      </div>
+      <div class="rb-section rb-row">
+        <div>
+          <label class="rb-label">Quiet hours start</label>
+          <input type="time" id="mcQuietStart" class="tool-input-sm">
+        </div>
+        <div>
+          <label class="rb-label">Quiet hours end</label>
+          <input type="time" id="mcQuietEnd" class="tool-input-sm">
+        </div>
+      </div>
+      <div class="rb-section" style="display:flex;flex-direction:column;gap:0.5rem">
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem">
+          <input type="checkbox" id="mcAlertOutage" checked>
+          Alert on internet outage
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem">
+          <input type="checkbox" id="mcAlertGatewayMac" checked>
+          Alert on gateway MAC change (rogue AP detection)
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem">
+          <input type="checkbox" id="mcAlertDns" checked>
+          Alert on DNS server change
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem">
+          <input type="checkbox" id="mcAlertLatency">
+          Alert on high latency
+        </label>
+      </div>
+      <div class="rb-section">
+        <label class="rb-label">High latency threshold (ms)</label>
+        <input type="number" id="mcLatencyThreshold" class="tool-input-sm" value="100" min="10" max="5000">
+      </div>
+      <div class="rb-section" style="font-size:0.8rem;color:var(--text-muted);padding:0.5rem;background:var(--surface-2);border-radius:6px">
+        <strong>Local API</strong> available at <code>http://127.0.0.1:7722/api/devices</code>,
+        <code>/api/status</code>, <code>/api/alerts</code> — read-only, local only.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('monitorConfigModal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveMonitorConfig()">Save &amp; Apply</button>
     </div>
   </div>
 </div>
