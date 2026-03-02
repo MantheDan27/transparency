@@ -54,7 +54,7 @@ bool TabTools::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainW
     RegisterClassEx(&wc);
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
-        WS_CHILD | WS_CLIPCHILDREN | WS_VSCROLL,
+        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
 
     return _hwnd != nullptr;

@@ -199,6 +199,9 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     // Add welcome ledger entry
     AddLedgerEntry(L"App Started", L"Transparency v2.1.0 initialized");
 
+    // Auto-start a quick scan on launch so tabs have data immediately
+    StartQuickScan();
+
     return 0;
 }
 
@@ -416,8 +419,15 @@ void MainWindow::SwitchTab(Tab tab) {
 
 void MainWindow::ShowActivePanel() {
     auto show = [](auto& panel, bool visible) {
-        if (panel && panel->GetHwnd())
-            ShowWindow(panel->GetHwnd(), visible ? SW_SHOW : SW_HIDE);
+        if (!panel || !panel->GetHwnd()) return;
+        HWND hw = panel->GetHwnd();
+        if (visible) {
+            SetWindowPos(hw, HWND_TOP, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        } else {
+            SetWindowPos(hw, nullptr, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_HIDEWINDOW | SWP_NOZORDER);
+        }
     };
 
     show(_tabOverview, _currentTab == Tab::Overview);

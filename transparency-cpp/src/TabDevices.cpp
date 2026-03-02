@@ -36,7 +36,7 @@ bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mai
     RegisterClassEx(&wc);
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
-        WS_CHILD | WS_CLIPCHILDREN,
+        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
 
     return _hwnd != nullptr;
@@ -250,6 +250,7 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
 
     if (hdr->idFrom == IDC_LIST_DEVICES) {
         switch (hdr->code) {
+        case NM_CLICK:
         case NM_DBLCLK: {
             NMITEMACTIVATE* nm = (NMITEMACTIVATE*)hdr;
             if (nm->iItem >= 0 && nm->iItem < (int)_filteredIndices.size()) {

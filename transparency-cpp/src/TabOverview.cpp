@@ -51,7 +51,7 @@ bool TabOverview::Create(HWND parent, int x, int y, int w, int h, MainWindow* ma
     RegisterClassEx(&wc);
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
-        WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN,
+        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
 
     return _hwnd != nullptr;
