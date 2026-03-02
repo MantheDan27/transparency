@@ -71,6 +71,7 @@ target_link_libraries(Transparency PRIVATE
     shell32
     wlanapi
     ntdll
+    comdlg32
 )
 
 set_target_properties(Transparency PROPERTIES

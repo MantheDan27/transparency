@@ -610,7 +610,7 @@ std::map<wstring, std::vector<wstring>> ScanEngine::DiscoverMDNS(int timeoutMs) 
     while (GetTickCount() < deadline) {
         DWORD remaining = deadline - GetTickCount();
         if (remaining == 0) break;
-        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, min(remaining, 200u), FALSE);
+        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, std::min(remaining, 200u), FALSE);
         WSAResetEvent(evt);
 
         if (wait == WSA_WAIT_TIMEOUT) continue;
@@ -716,7 +716,7 @@ std::map<wstring, wstring> ScanEngine::DiscoverSSDP(int timeoutMs) {
     while (GetTickCount() < deadline) {
         DWORD remaining = deadline - GetTickCount();
         if (remaining == 0) break;
-        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, min(remaining, 200u), FALSE);
+        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, std::min(remaining, 200u), FALSE);
         WSAResetEvent(evt);
         if (wait == WSA_WAIT_TIMEOUT) continue;
 
@@ -1044,7 +1044,7 @@ int ScanEngine::CalcConfidence(const Device& d) {
     if (!d.netbiosName.empty()) score += 10;
     if (d.latencyMs >= 0) score += 5;
 
-    return min(score, 100);
+    return std::min(score, 100);
 }
 
 // ─── AnalyzeAnomalies ────────────────────────────────────────────────────────
@@ -1424,7 +1424,7 @@ ScanResult ScanEngine::BuildResult(
 
             int d = ++done;
             if (progressCb) {
-                int pct = 50 + (d * 45) / max(total, 1);
+                int pct = 50 + (d * 45) / std::max(total, 1);
                 progressCb(pct, L"Analyzing " + ipStr);
             }
 

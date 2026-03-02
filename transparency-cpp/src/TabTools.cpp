@@ -398,8 +398,8 @@ void TabTools::RunPing(const wstring& target, int count) {
                     success++;
                     long long ms = (long long)elapsed;
                     totalMs += ms;
-                    minMs = min(minMs, (int)ms);
-                    maxMs = max(maxMs, (int)ms);
+                    minMs = std::min(minMs, (int)ms);
+                    maxMs = std::max(maxMs, (int)ms);
                     line = L"Reply from " + wstring(ipStr) + L": bytes=" +
                            std::to_wstring(sizeof(sendData)) + L" time=" +
                            std::to_wstring(ms) + L"ms TTL=" +

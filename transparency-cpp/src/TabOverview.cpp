@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <iphlpapi.h>
 #include <string>
 #include <sstream>
@@ -267,7 +268,7 @@ void TabOverview::LayoutControls(int cx, int cy) {
     int listY = btnY + btnH + 52;
     int listH = cy - listY - 16;
 
-    if (_hChangesList) SetWindowPos(_hChangesList, nullptr, 16, listY, cx - 32, max(listH, 50), SWP_NOZORDER);
+    if (_hChangesList) SetWindowPos(_hChangesList, nullptr, 16, listY, cx - 32, std::max(listH, 50), SWP_NOZORDER);
 }
 
 LRESULT TabOverview::OnSize(HWND hwnd, int cx, int cy) {

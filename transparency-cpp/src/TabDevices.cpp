@@ -406,7 +406,7 @@ wstring TabDevices::GetPortSummary(const Device& dev) {
     if (dev.openPorts.empty()) return L"None";
 
     wstring s;
-    int count = min((int)dev.openPorts.size(), 4);
+    int count = std::min((int)dev.openPorts.size(), 4);
     for (int i = 0; i < count; i++) {
         int port = dev.openPorts[i];
         auto it = ScanEngine::PORT_NAMES.find(port);
