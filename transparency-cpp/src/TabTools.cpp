@@ -8,6 +8,8 @@
 #include <iphlpapi.h>
 #include <windns.h>
 #include <wlanapi.h>
+#include <mmsystem.h>
+#include <commdlg.h>
 #include <string>
 #include <sstream>
 #include <thread>
