@@ -1413,3 +1413,154 @@ tbody tr:hover { background: var(--bg-hover); }
 
 /* ── IPv6 badge ──────────────────────────────────────────────────── */
 .ipv6-badge { font-size: 0.65rem; background: rgba(99,102,241,0.2); color: #818cf8; border-radius: 4px; padding: 1px 5px; vertical-align: middle; margin-left: 4px; }
+
+/* ── Panel close fix ─────────────────────────────────────────────── */
+.panel-close { position: relative; z-index: 5; flex-shrink: 0; }
+.panel-close svg { pointer-events: none; }
+.detail-device-name-wrap { flex: 1; min-width: 0; overflow: hidden; }
+.detail-device-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Context menu ────────────────────────────────────────────────── */
+.ctx-menu {
+  position: fixed; z-index: 2000;
+  background: var(--bg-card-alt); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  min-width: 210px; padding: 0.35rem 0;
+  animation: ctxIn 0.1s ease;
+}
+@keyframes ctxIn { from { opacity: 0; transform: scale(0.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+.ctx-label {
+  font-size: 0.67rem; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 0.5rem 0.85rem 0.2rem; pointer-events: none;
+}
+.ctx-item {
+  display: flex; align-items: center; gap: 0.5rem;
+  width: 100%; padding: 0.42rem 0.85rem;
+  background: none; border: none;
+  color: var(--text-secondary); font-size: 0.85rem;
+  cursor: pointer; text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+.ctx-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ctx-item.ctx-danger { color: var(--danger); }
+.ctx-item.ctx-danger:hover { background: var(--danger-bg); color: var(--danger); }
+.ctx-item.ctx-checked::before { content: '✓'; margin-right: 0.3rem; color: var(--accent-light); font-size: 0.75rem; }
+.ctx-divider { height: 1px; background: var(--border-subtle); margin: 0.3rem 0; }
+
+/* ── Detail panel tab bar ────────────────────────────────────────── */
+.detail-tab-bar {
+  display: flex; border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card); flex-shrink: 0; overflow-x: auto;
+}
+.detail-tab {
+  flex: 1; min-width: 60px;
+  padding: 0.6rem 0.4rem;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-muted); font-size: 0.75rem; font-weight: 600;
+  cursor: pointer; text-align: center; transition: all 0.15s;
+  white-space: nowrap;
+}
+.detail-tab:hover { color: var(--text-secondary); background: var(--bg-hover); }
+.detail-tab.active { color: var(--accent-light); border-bottom-color: var(--accent); background: rgba(59,111,212,0.05); }
+
+/* ── Detail quick-action strip ───────────────────────────────────── */
+.detail-quick-actions {
+  display: flex; gap: 0.3rem; padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.015); flex-shrink: 0;
+}
+.detail-qa-btn {
+  flex: 1; padding: 0.45rem 0.25rem;
+  background: var(--bg-input); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); color: var(--text-muted);
+  font-size: 0.69rem; font-weight: 600; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  transition: all 0.15s; white-space: nowrap;
+}
+.detail-qa-btn:hover { background: var(--bg-hover); border-color: var(--accent); color: var(--accent-light); }
+.detail-qa-btn svg { pointer-events: none; }
+
+/* ── Policy tab ──────────────────────────────────────────────────── */
+.policy-section { padding: 1rem 1.25rem; }
+.policy-field { margin-bottom: 1.1rem; }
+.policy-field > label:first-child {
+  display: block; font-size: 0.75rem; font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 0.4rem;
+}
+.policy-ports-input {
+  width: 100%; padding: 0.45rem 0.7rem;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: 0.85rem; font-family: monospace;
+}
+.policy-ports-input:focus { border-color: var(--accent); outline: none; }
+.policy-level-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.policy-level-btn {
+  padding: 0.3rem 0.7rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-input);
+  color: var(--text-muted); font-size: 0.78rem; cursor: pointer;
+  transition: all 0.15s;
+}
+.policy-level-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-light); font-weight: 600; }
+.policy-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+/* ── Scan dropdown module ────────────────────────────────────────── */
+.scan-controls-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
+.scan-btn-group { position: relative; display: inline-flex; }
+.scan-primary-btn {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.52rem 0.9rem;
+  background: var(--accent); border: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  color: #fff; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.scan-primary-btn:hover { background: var(--accent-light); }
+.scan-primary-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.scan-primary-btn svg { pointer-events: none; }
+.scan-dropdown-btn {
+  padding: 0.52rem 0.5rem;
+  background: var(--accent); border: none;
+  border-left: 1px solid rgba(255,255,255,0.22);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: #fff; cursor: pointer; transition: background 0.15s;
+}
+.scan-dropdown-btn:hover { background: var(--accent-light); }
+.scan-dropdown-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.scan-dropdown-btn svg { pointer-events: none; display: block; }
+.scan-dropdown-menu {
+  position: absolute; top: calc(100% + 5px); left: 0;
+  background: var(--bg-card-alt); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  min-width: 200px; z-index: 500; overflow: hidden;
+  animation: ctxIn 0.1s ease;
+}
+.scan-mode-option {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 0.9rem; cursor: pointer; background: none; border: none;
+  width: 100%; color: var(--text-secondary); font-size: 0.85rem;
+  text-align: left; transition: background 0.1s; gap: 0.75rem;
+}
+.scan-mode-option:hover { background: var(--bg-hover); color: var(--text-primary); }
+.scan-mode-option.active-mode { color: var(--accent-light); font-weight: 600; }
+.scan-mode-desc { font-size: 0.72rem; color: var(--text-muted); }
+.scan-gentle-row { padding: 0.5rem 0.9rem; border-top: 1px solid var(--border-subtle); }
+.monitor-toggle-wrap { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-left: auto; }
+
+/* ── Scan progress phases ────────────────────────────────────────── */
+.scan-phases {
+  display: flex; gap: 0; margin-top: 0.6rem; border-radius: var(--radius-sm);
+  overflow: hidden; border: 1px solid var(--border-subtle);
+}
+.phase-step {
+  flex: 1; padding: 0.28rem 0.5rem; font-size: 0.7rem;
+  text-align: center; color: var(--text-muted);
+  background: rgba(255,255,255,0.03);
+  border-right: 1px solid var(--border-subtle);
+  transition: all 0.3s;
+}
+.phase-step:last-child { border-right: none; }
+.phase-step.ph-active { background: var(--accent-dim); color: var(--accent-light); font-weight: 600; }
+.phase-step.ph-done { background: rgba(34,197,94,0.1); color: var(--success); }

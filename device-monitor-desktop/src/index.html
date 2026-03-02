@@ -111,20 +111,48 @@
         </div>
         <div class="nhc-right">
           <div class="nhc-scan-time" id="nhcLastScan">No scan yet</div>
-          <div class="scan-mode-row">
-            <label class="scan-mode-label">Scan mode:</label>
-            <div class="scan-mode-pills">
-              <button class="mode-pill active" data-mode="quick">Quick</button>
-              <button class="mode-pill" data-mode="standard">Standard</button>
-              <button class="mode-pill" data-mode="deep">Deep</button>
+          <div class="scan-controls-row">
+            <!-- Split scan button -->
+            <div class="scan-btn-group" id="scanBtnGroup">
+              <button class="scan-primary-btn" id="quickScanBtnMain">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span id="scanBtnModeLabel">Scan (Quick)</span>
+              </button>
+              <button class="scan-dropdown-btn" id="scanDropdownToggle" title="Choose scan mode">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="scan-dropdown-menu hidden" id="scanDropdownMenu">
+                <button class="scan-mode-option active-mode" data-scan-mode="quick">
+                  <span>Quick</span><span class="scan-mode-desc">ARP + ping, ~10s</span>
+                </button>
+                <button class="scan-mode-option" data-scan-mode="standard">
+                  <span>Standard</span><span class="scan-mode-desc">+ services, ~30s</span>
+                </button>
+                <button class="scan-mode-option" data-scan-mode="deep">
+                  <span>Deep</span><span class="scan-mode-desc">Full probe, ~2 min</span>
+                </button>
+                <div class="scan-gentle-row">
+                  <label class="checkbox-label" style="font-size:0.8rem;cursor:pointer">
+                    <input type="checkbox" id="gentleToggle"> Gentle mode (IoT-safe)
+                  </label>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="gentle-row">
-            <label class="toggle-switch-sm" title="Gentle mode avoids overwhelming fragile IoT devices">
-              <input type="checkbox" id="gentleToggle">
-              <span class="toggle-knob-sm"></span>
+            <!-- Monitor toggle -->
+            <label class="monitor-toggle-wrap" title="Toggle continuous monitoring">
+              <label class="toggle-switch-sm">
+                <input type="checkbox" id="monitorToggleSwitch">
+                <span class="toggle-knob-sm"></span>
+              </label>
+              <span class="gentle-label">Monitor</span>
             </label>
-            <span class="gentle-label">Gentle mode (IoT-safe)</span>
+          </div>
+          <!-- Scan progress phases -->
+          <div class="scan-phases hidden" id="scanPhases">
+            <div class="phase-step" id="ph-discover">Discovering</div>
+            <div class="phase-step" id="ph-resolve">Resolving</div>
+            <div class="phase-step" id="ph-probe">Probing</div>
+            <div class="phase-step" id="ph-done">Complete</div>
           </div>
         </div>
       </div>
@@ -211,18 +239,6 @@
 
       <!-- Quick actions bar -->
       <div class="quick-actions-bar">
-        <button class="qa-btn" id="btnQuickScan" onclick="window.runScan('quick')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-          Quick Scan
-        </button>
-        <button class="qa-btn" id="btnDeepScan" onclick="window.runScan('deep')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          Deep Scan
-        </button>
         <button class="qa-btn" id="btnSnapshot" onclick="window.saveSnapshot()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -845,7 +861,7 @@
         <div class="detail-device-ip" id="detailDeviceIP">—</div>
       </div>
     </div>
-    <button class="panel-close" id="detailPanelClose" aria-label="Close">
+    <button class="panel-close" id="detailPanelClose" aria-label="Close" onclick="window.closeDetailPanel()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
@@ -1077,6 +1093,37 @@
       <button class="btn btn-primary" onclick="window.saveMonitorConfig()">Save &amp; Apply</button>
     </div>
   </div>
+</div>
+
+<!-- ── Device right-click context menu ──────────────────────────── -->
+<div id="deviceContextMenu" class="ctx-menu hidden" role="menu">
+  <button class="ctx-item" data-action="open-detail">View Details</button>
+  <button class="ctx-item" data-action="rename">✏ Rename</button>
+  <div class="ctx-divider"></div>
+  <div class="ctx-label">Set Trust</div>
+  <button class="ctx-item" data-action="trust-owned">Owned</button>
+  <button class="ctx-item" data-action="trust-known">Known</button>
+  <button class="ctx-item" data-action="trust-guest">Guest</button>
+  <button class="ctx-item" data-action="trust-unknown">Unknown</button>
+  <button class="ctx-item" data-action="trust-watchlist">Watchlist</button>
+  <button class="ctx-item" data-action="trust-blocked">Blocked</button>
+  <div class="ctx-divider"></div>
+  <div class="ctx-label">Actions</div>
+  <button class="ctx-item" data-action="ping">Ping</button>
+  <button class="ctx-item" data-action="traceroute">Traceroute</button>
+  <button class="ctx-item" data-action="open-web-http">Open Web UI (HTTP)</button>
+  <button class="ctx-item" data-action="open-web-https">Open Web UI (HTTPS)</button>
+  <button class="ctx-item" data-action="copy-ip">Copy IP</button>
+  <button class="ctx-item" data-action="copy-mac">Copy MAC</button>
+  <button class="ctx-item" data-action="copy-hostname">Copy Hostname</button>
+  <div class="ctx-divider"></div>
+  <div class="ctx-label">Controls</div>
+  <button class="ctx-item" data-action="add-tag">Add Tag</button>
+  <button class="ctx-item" data-action="wol">Wake-on-LAN</button>
+  <button class="ctx-item" data-action="monitor-closely" id="ctxMonitorItem">Monitor Closely</button>
+  <button class="ctx-item" data-action="mute-alerts" id="ctxMuteItem">Mute Alerts</button>
+  <div class="ctx-divider"></div>
+  <button class="ctx-item ctx-danger" data-action="forget">Forget Device</button>
 </div>
 
 <!-- ── Toast ───────────────────────────────────────────────────── -->

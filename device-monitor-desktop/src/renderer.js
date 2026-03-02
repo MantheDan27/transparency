@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // ── Scan mode pills ───────────────────────────────────────────────────────
+  // ── Scan mode pills (legacy — keep for compatibility) ─────────────────────
   document.querySelectorAll('.mode-pill[data-mode]').forEach(pill => {
     pill.addEventListener('click', () => {
       document.querySelectorAll('.mode-pill[data-mode]').forEach(p => p.classList.remove('active'));
@@ -116,6 +116,40 @@ document.addEventListener('DOMContentLoaded', () => {
       currentScanMode = pill.dataset.mode;
     });
   });
+
+  // ── New consolidated scan dropdown ────────────────────────────────────────
+  const scanDropdownToggle = $('scanDropdownToggle');
+  const scanDropdownMenu   = $('scanDropdownMenu');
+  const scanPrimaryBtn     = $('quickScanBtnMain');
+
+  if (scanDropdownToggle && scanDropdownMenu) {
+    scanDropdownToggle.addEventListener('click', e => {
+      e.stopPropagation();
+      scanDropdownMenu.classList.toggle('hidden');
+    });
+    scanDropdownMenu.querySelectorAll('.scan-mode-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const mode = opt.dataset.scanMode;
+        currentScanMode = mode;
+        scanDropdownMenu.querySelectorAll('.scan-mode-option').forEach(o => o.classList.remove('active-mode'));
+        opt.classList.add('active-mode');
+        const modeLabels = { quick:'Scan (Quick)', standard:'Scan (Standard)', deep:'Scan (Deep)' };
+        const lbl = $('scanBtnModeLabel');
+        if (lbl) lbl.textContent = modeLabels[mode] || 'Scan';
+        scanDropdownMenu.classList.add('hidden');
+      });
+    });
+    document.addEventListener('click', () => scanDropdownMenu.classList.add('hidden'));
+  }
+  if (scanPrimaryBtn) {
+    scanPrimaryBtn.addEventListener('click', () => runScan(currentScanMode));
+  }
+
+  // ── Monitor toggle switch ─────────────────────────────────────────────────
+  const monitorSwitch = $('monitorToggleSwitch');
+  if (monitorSwitch) {
+    monitorSwitch.addEventListener('change', () => window.toggleMonitoring());
+  }
 
   // Map mode pills
   document.querySelectorAll('.mode-pill[data-map-mode]').forEach(pill => {
@@ -253,16 +287,28 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Network scan ──────────────────────────────────────────────────────────────
 async function runScan(mode) {
   mode = mode || currentScanMode;
-  const gentle = $('gentleToggle').checked;
+  const gentle = $('gentleToggle') ? $('gentleToggle').checked : false;
   const bar    = $('scanProgressBar');
   const progTxt = $('progressText');
 
   // Disable all scan buttons
-  ['quickScanBtn','btnQuickScan','btnDeepScan'].forEach(id => {
+  ['quickScanBtn','quickScanBtnMain','btnQuickScan','btnDeepScan'].forEach(id => {
     if ($(id)) $(id).disabled = true;
   });
+  if ($('scanDropdownBtn')) $('scanDropdownBtn').disabled = true;
   bar.classList.remove('hidden');
   progTxt.textContent = 'Initializing…';
+
+  // Show scan phases
+  const phases = $('scanPhases');
+  if (phases) {
+    phases.classList.remove('hidden');
+    ['ph-discover','ph-resolve','ph-probe','ph-done'].forEach(id => {
+      const el = $(id); if (el) { el.classList.remove('ph-active','ph-done'); }
+    });
+    const phDiscover = $('ph-discover');
+    if (phDiscover) phDiscover.classList.add('ph-active');
+  }
 
   const modeLabel = { quick:'Quick', standard:'Standard', deep:'Deep' }[mode] || 'Standard';
   showToast(`Starting ${modeLabel} scan…`, 'info');
@@ -270,11 +316,24 @@ async function runScan(mode) {
   let progressPct = 0;
   const removeListener = window.electronAPI.onScanProgress(msg => {
     progTxt.textContent = msg;
-    // Estimate progress from message
     const m = msg.match(/(\d+)\/(\d+)/);
     if (m) progressPct = Math.min(90, Math.round(parseInt(m[1]) / parseInt(m[2]) * 90));
     else progressPct = Math.min(progressPct + 5, 85);
     $('progressFill').style.width = progressPct + '%';
+    // Update phase indicators
+    const lo = msg.toLowerCase();
+    const setPhase = (active) => {
+      ['ph-discover','ph-resolve','ph-probe','ph-done'].forEach((id, i) => {
+        const el = $(id); if (!el) return;
+        const idx = ['ph-discover','ph-resolve','ph-probe','ph-done'].indexOf(active);
+        if (i < idx) { el.classList.add('ph-done'); el.classList.remove('ph-active'); }
+        else if (i === idx) { el.classList.add('ph-active'); el.classList.remove('ph-done'); }
+        else { el.classList.remove('ph-active','ph-done'); }
+      });
+    };
+    if (lo.includes('resolv') || lo.includes('dns')) setPhase('ph-resolve');
+    else if (lo.includes('prob') || lo.includes('service') || lo.includes('port')) setPhase('ph-probe');
+    else setPhase('ph-discover');
   });
 
   try {
@@ -302,11 +361,15 @@ async function runScan(mode) {
     removeListener();
     showToast('Scan error: ' + err.message, 'error');
   } finally {
+    // Mark complete phase
+    ['ph-discover','ph-resolve','ph-probe'].forEach(id => { const el=$(id); if(el){el.classList.remove('ph-active'); el.classList.add('ph-done');} });
+    const phDone = $('ph-done'); if(phDone){phDone.classList.add('ph-active');}
     setTimeout(() => {
       bar.classList.add('hidden');
       $('progressFill').style.width = '0%';
-    }, 800);
-    ['quickScanBtn','btnQuickScan','btnDeepScan'].forEach(id => {
+      const phases = $('scanPhases'); if(phases) phases.classList.add('hidden');
+    }, 1200);
+    ['quickScanBtn','quickScanBtnMain','btnQuickScan','btnDeepScan'].forEach(id => {
       if ($(id)) $(id).disabled = false;
     });
   }
@@ -558,6 +621,11 @@ function renderDeviceTable() {
       const dev = allDevices.find(d => d.ip === ip);
       if (dev) openDetailPanel(dev);
     });
+    row.addEventListener('contextmenu', e => {
+      const ip = row.dataset.ip;
+      const dev = allDevices.find(d => d.ip === ip);
+      if (dev) showContextMenu(e, dev);
+    });
   });
 
   tbody.querySelectorAll('.detail-btn').forEach(btn => {
@@ -634,6 +702,166 @@ async function bulkAction(action) {
 }
 window.bulkAction = bulkAction;
 
+// ── Context menu ──────────────────────────────────────────────────────────────
+let ctxMenuTarget = null;
+
+function showContextMenu(e, dev) {
+  e.preventDefault();
+  ctxMenuTarget = dev;
+  const menu = $('deviceContextMenu');
+  if (!menu) return;
+  menu.classList.remove('hidden');
+
+  // Update checked trust state
+  menu.querySelectorAll('[data-action^="trust-"]').forEach(btn => {
+    const t = btn.dataset.action.replace('trust-', '');
+    btn.classList.toggle('ctx-checked', dev.meta?.trustState === t);
+  });
+  // Mute label
+  const muteItem = $('ctxMuteItem');
+  if (muteItem) muteItem.textContent = dev.meta?.muteAlerts ? 'Unmute Alerts' : 'Mute Alerts';
+  // Monitor label
+  const monItem = $('ctxMonitorItem');
+  if (monItem) monItem.textContent = dev.meta?.monitorLevel === 'deep' ? 'Monitor: Deep ✓' : 'Monitor Closely';
+
+  // Position menu
+  const mW = 220, mH = menu.offsetHeight || 400;
+  let x = e.clientX, y = e.clientY;
+  if (x + mW > window.innerWidth) x = window.innerWidth - mW - 6;
+  if (y + mH > window.innerHeight) y = Math.max(0, window.innerHeight - mH - 6);
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+}
+
+function hideContextMenu() {
+  const menu = $('deviceContextMenu');
+  if (menu) menu.classList.add('hidden');
+  ctxMenuTarget = null;
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#deviceContextMenu')) hideContextMenu();
+});
+document.addEventListener('contextmenu', e => {
+  if (!e.target.closest('.device-row') && !e.target.closest('#deviceContextMenu')) {
+    hideContextMenu();
+  }
+});
+
+// Context menu action handler — bound once at module load
+document.addEventListener('DOMContentLoaded', () => {
+  const menu = $('deviceContextMenu');
+  if (!menu) return;
+  menu.addEventListener('click', async e => {
+    const item = e.target.closest('.ctx-item');
+    if (!item || !ctxMenuTarget) return;
+    const action = item.dataset.action;
+    const dev = ctxMenuTarget;
+    hideContextMenu();
+    await handleContextMenuAction(action, dev);
+  });
+});
+
+async function handleContextMenuAction(action, dev) {
+  if (action === 'open-detail') {
+    openDetailPanel(dev);
+    return;
+  }
+  if (action === 'rename') {
+    const n = prompt('New name:', dev.meta?.customName || dev.hostname || dev.ip);
+    if (n === null) return;
+    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { customName: n.trim() || null });
+    if (dev.meta) dev.meta.customName = n.trim() || null;
+    renderDeviceTable();
+    if (currentDetailDev?.ip === dev.ip) openDetailPanel(dev, detailActiveTab);
+    showToast(`Renamed to "${n.trim() || dev.ip}".`, 'success');
+    return;
+  }
+  if (action.startsWith('trust-')) {
+    const trust = action.replace('trust-', '');
+    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { trustState: trust, watchlist: trust === 'watchlist' });
+    if (dev.meta) { dev.meta.trustState = trust; dev.meta.watchlist = trust === 'watchlist'; }
+    renderDeviceTable();
+    showToast(`Trust set to "${TRUST_LABELS[trust]}".`, 'success');
+    return;
+  }
+  if (action === 'add-tag') {
+    const tag = prompt('Tag name:');
+    if (!tag) return;
+    const tags = [...new Set([...(dev.meta?.tags || []), tag.trim()])];
+    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { tags });
+    if (dev.meta) dev.meta.tags = tags;
+    renderDeviceTable();
+    showToast(`Tag "${tag.trim()}" added.`, 'success');
+    return;
+  }
+  if (action === 'ping') {
+    switchTab('tools');
+    setTimeout(() => { $('pingTarget').value = dev.ip; window.runPing(); }, 250);
+    return;
+  }
+  if (action === 'traceroute') {
+    switchTab('tools');
+    setTimeout(() => { $('traceTarget').value = dev.ip; window.runTraceroute(); }, 250);
+    return;
+  }
+  if (action === 'open-web-http') {
+    window.electronAPI.openExternalUrl(`http://${dev.ip}`);
+    return;
+  }
+  if (action === 'open-web-https') {
+    window.electronAPI.openExternalUrl(`https://${dev.ip}`);
+    return;
+  }
+  if (action === 'copy-ip') {
+    navigator.clipboard.writeText(dev.ip).catch(() => {});
+    showToast('IP copied.', 'success');
+    return;
+  }
+  if (action === 'copy-mac') {
+    navigator.clipboard.writeText(dev.mac || dev.ip).catch(() => {});
+    showToast('MAC copied.', 'success');
+    return;
+  }
+  if (action === 'copy-hostname') {
+    navigator.clipboard.writeText(dev.hostname || dev.ip).catch(() => {});
+    showToast('Hostname copied.', 'success');
+    return;
+  }
+  if (action === 'wol') {
+    if (!dev.mac || dev.mac === 'Unknown') {
+      showToast('Wake-on-LAN requires a known MAC address.', 'error');
+      return;
+    }
+    showToast(`WOL magic packet sent to ${dev.mac}. Device must support WOL.`, 'info');
+    return;
+  }
+  if (action === 'monitor-closely') {
+    const newLevel = dev.meta?.monitorLevel === 'deep' ? 'presence' : 'deep';
+    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { monitorLevel: newLevel });
+    if (dev.meta) dev.meta.monitorLevel = newLevel;
+    showToast(`Monitoring set to: ${newLevel}.`, 'success');
+    return;
+  }
+  if (action === 'mute-alerts') {
+    const muted = !dev.meta?.muteAlerts;
+    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { muteAlerts: muted });
+    if (dev.meta) dev.meta.muteAlerts = muted;
+    showToast(muted ? 'Alerts muted for this device.' : 'Alerts unmuted.', 'success');
+    return;
+  }
+  if (action === 'forget') {
+    if (!confirm(`Forget ${dev.ip}?`)) return;
+    await window.electronAPI.deleteLocalDevice(dev.ip);
+    allDevices = allDevices.filter(d => d.ip !== dev.ip);
+    if (currentDetailDev?.ip === dev.ip) closeDetailPanel();
+    renderDeviceTable();
+    updateFilterCounts();
+    showToast(`Device ${dev.ip} forgotten.`, 'success');
+  }
+}
+window.handleContextMenuAction = handleContextMenuAction;
+
 async function applyBulkTags() {
   const raw  = $('bulkTagInput').value.trim();
   const tags = raw.split(',').map(t => t.trim()).filter(Boolean);
@@ -653,196 +881,267 @@ async function applyBulkTags() {
   renderDeviceTable();
 }
 
-// ── Device detail panel ───────────────────────────────────────────────────────
-function openDetailPanel(dev) {
+// ── Device detail panel (tabbed) ──────────────────────────────────────────────
+let detailActiveTab = 'overview';
+
+function openDetailPanel(dev, tab) {
   currentDetailDev = dev;
-  const name  = dev.meta?.customName || dev.hostname || dev.name;
-  const icon  = DEVICE_ICONS[dev.deviceType] || '❓';
-  const trust = dev.meta?.trustState || 'unknown';
-  const tags  = dev.meta?.tags || [];
-  const notes = dev.meta?.notes || '';
-  const fp    = dev.fingerprint || {};
-  const hist  = dev.history || {};
-  const sevMap = {};
-  for (const a of allAnomalies) {
-    if (a.device === dev.ip) {
-      if (!sevMap[a.type] || a.severity === 'High') sevMap[a.type] = a;
-    }
-  }
+  detailActiveTab  = tab || detailActiveTab || 'overview';
+
+  const name   = dev.meta?.customName || dev.hostname || dev.name;
+  const icon   = DEVICE_ICONS[dev.deviceType] || '❓';
+  const trust  = dev.meta?.trustState || 'unknown';
+  const tags   = dev.meta?.tags || [];
+  const notes  = dev.meta?.notes || '';
+  const fp     = dev.fingerprint || {};
+  const hist   = dev.history || {};
+  const policy = dev.meta?.policy || {};
+  const monitorLevel = dev.meta?.monitorLevel || 'presence';
+  const muteAlerts   = dev.meta?.muteAlerts || false;
   const anomaliesForDev = allAnomalies.filter(a => a.device === dev.ip);
 
   $('detailDeviceIcon').textContent = icon;
   $('detailDeviceName').textContent = name;
   $('detailDeviceIP').textContent   = dev.ip;
 
-  const servicesHtml = Object.entries(dev.services || {}).length > 0
-    ? `<details class="detail-section-collapsible"><summary>Services &amp; Ports (${Object.keys(dev.services).length})</summary>
-        <div class="service-list">
-          ${Object.entries(dev.services).map(([port, svc]) => `
-            <div class="service-item${RISKY_PORTS.has(+port) ? ' risky-service' : ''}">
-              <span class="service-port-badge${RISKY_PORTS.has(+port) ? ' risky' : ''}">:${port}</span>
-              <div>
-                <div class="service-name-lbl">${escHtml(svc.name)}</div>
-                ${svc.version ? `<div class="service-version">${escHtml(svc.version)}</div>` : ''}
-                ${svc.banner  ? `<div class="service-banner">${escHtml(svc.banner.slice(0,80))}</div>` : ''}
-                ${svc.tlsCN   ? `<div class="service-tls">TLS: ${escHtml(svc.tlsCN)}</div>` : ''}
-              </div>
-              ${RISKY_PORTS.has(+port) ? '<span class="sev-pill sev-high">Risky</span>' : ''}
-            </div>`).join('')}
-        </div></details>`
-    : '';
+  // Build all tab content
+  const tabDefs = ['overview','services','history','policy','notes'];
+  const tabLabels = { overview:'Overview', services:'Services', history:'History', policy:'Policy', notes:'Notes' };
 
-  const mdnsHtml = dev.mdnsServices?.length
-    ? `<div class="detail-field"><span class="detail-label">mDNS Services</span><div class="detail-val">${dev.mdnsServices.map(s => `<span class="tag-chip">${escHtml(s)}</span>`).join('')}</div></div>`
-    : '';
-  const ssdpHtml = dev.ssdpInfo?.server
-    ? `<div class="detail-field"><span class="detail-label">UPnP/SSDP</span><span class="detail-val">${escHtml(dev.ssdpInfo.server)}</span></div>`
-    : '';
-  const netbiosHtml = dev.netbiosName
-    ? `<div class="detail-field"><span class="detail-label">NetBIOS Name</span><span class="detail-val mono">${escHtml(dev.netbiosName)}</span></div>`
-    : '';
-  const tlsHtml = dev.tlsCert
-    ? `<div class="detail-field"><span class="detail-label">TLS Certificate</span><span class="detail-val">${escHtml(dev.tlsCert.cn || '—')} (${escHtml(dev.tlsCert.issuer || '—')})</span></div>`
-    : '';
+  const tabBarHtml = `<div class="detail-tab-bar" id="detailTabBar">
+    ${tabDefs.map(t => `<button class="detail-tab${t===detailActiveTab?' active':''}" data-dtab="${t}">${tabLabels[t]}</button>`).join('')}
+  </div>`;
 
-  const risksHtml = anomaliesForDev.length > 0
-    ? anomaliesForDev.map(a => `
-        <div class="risk-item risk-${a.severity.toLowerCase()}">
-          <span class="sev-pill sev-${a.severity.toLowerCase()}">${a.severity}</span>
-          <div><strong>${escHtml(a.type)}</strong><br><span style="color:var(--text-secondary);font-size:0.82rem">${escHtml(a.description)}</span></div>
-        </div>`).join('')
-    : '<div style="color:var(--success);font-size:0.85rem">No risks detected.</div>';
+  // Quick action strip
+  const sv = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="pointer-events:none">${d}</svg>`;
+  const qaBtn = (qa, icon, lbl) => `<button class="detail-qa-btn" data-qa="${qa}" title="${lbl}">${sv(icon)}<span style="pointer-events:none">${lbl}</span></button>`;
+  const qaHtml = `<div class="detail-quick-actions" id="detailQA">
+    ${qaBtn('ping',  '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>', 'Ping')}
+    ${qaBtn('trace', '<path d="M3 12h18M12 3l9 9-9 9"/>', 'Trace')}
+    ${qaBtn('web',   '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>', 'Web')}
+    ${qaBtn('copy',  '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 'Copy IP')}
+    ${qaBtn('wol',   '<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>', 'WOL')}
+    ${qaBtn('rule',  '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>', 'Alert')}
+  </div>`;
 
-  // Fingerprint signals
+  // Tab contents
   const signalsHtml = fp.signals?.length
     ? fp.signals.map(s => `<div class="fp-signal"><span class="fp-signal-type">${escHtml(s.label)}</span><span class="fp-signal-val">${escHtml(s.value)}</span></div>`).join('')
     : '';
+  const risksHtml = anomaliesForDev.length > 0
+    ? anomaliesForDev.map(a => `<div class="risk-item risk-${a.severity.toLowerCase()}"><span class="sev-pill sev-${a.severity.toLowerCase()}">${a.severity}</span><div><strong>${escHtml(a.type)}</strong><br><span style="color:var(--text-secondary);font-size:0.82rem">${escHtml(a.description)}</span></div></div>`).join('')
+    : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
-  $('detailPanelBody').innerHTML = `
-    <!-- Identity section -->
+  const overviewContent = `
     <div class="detail-section">
       <div class="detail-section-title">Identity</div>
-      <div class="detail-field"><span class="detail-label">Device type</span><span class="detail-val">${escHtml(dev.deviceType || '—')}</span></div>
-      <div class="detail-field"><span class="detail-label">Vendor (OUI)</span><span class="detail-val">${escHtml(dev.vendor || '—')}</span></div>
-      <div class="detail-field"><span class="detail-label">OS guess</span><span class="detail-val">${escHtml(dev.osGuess || '—')}</span></div>
-      <div class="detail-field">
-        <span class="detail-label">Confidence</span>
+      <div class="detail-field"><span class="detail-label">Type</span><span class="detail-val">${escHtml(dev.deviceType || '—')}</span></div>
+      <div class="detail-field"><span class="detail-label">Vendor</span><span class="detail-val">${escHtml(dev.vendor || '—')}</span></div>
+      ${dev.osGuess ? `<div class="detail-field"><span class="detail-label">OS</span><span class="detail-val">${escHtml(dev.osGuess)}</span></div>` : ''}
+      <div class="detail-field"><span class="detail-label">Confidence</span>
         <div class="detail-val" style="display:flex;align-items:center;gap:0.5rem">
-          <div class="conf-bar" style="width:120px"><div class="conf-fill" style="width:${dev.confidence||0}%"></div></div>
+          <div class="conf-bar" style="width:90px"><div class="conf-fill" style="width:${dev.confidence||0}%"></div></div>
           <span>${dev.confidence||0}%</span>
         </div>
       </div>
-      <div class="detail-field"><span class="detail-label">Trust state</span>
+      <div class="detail-field"><span class="detail-label">Trust</span>
         <select class="trust-select detail-trust-sel" data-ip="${escHtml(dev.ip)}">
-          ${['owned','known','guest','unknown','watchlist','blocked'].map(t =>
-            `<option value="${t}" ${trust===t?'selected':''}>${TRUST_LABELS[t]}</option>`
-          ).join('')}
+          ${['owned','known','guest','unknown','watchlist','blocked'].map(t => `<option value="${t}" ${trust===t?'selected':''}>${TRUST_LABELS[t]}</option>`).join('')}
         </select>
       </div>
       <div class="detail-field"><span class="detail-label">Tags</span>
-        <div class="detail-val" id="detailTagsArea">
-          ${tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('')}
-          <button class="btn btn-secondary btn-xs add-tag-btn" data-ip="${escHtml(dev.ip)}">+ Tag</button>
-        </div>
+        <div class="detail-val" id="detailTagsArea">${tagChips}<button class="btn btn-secondary btn-xs add-tag-btn" data-ip="${escHtml(dev.ip)}">+ Tag</button></div>
       </div>
-      ${fp.summary ? `
-      <div class="explainability-panel">
-        <div class="exp-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Why we think this is a ${escHtml(dev.deviceType || 'device')}
-        </div>
+      ${fp.summary ? `<div class="explainability-panel">
+        <div class="exp-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Why we think this is a ${escHtml(dev.deviceType||'device')}</div>
         <div class="exp-body">${escHtml(fp.summary)}</div>
         ${signalsHtml ? `<div class="fp-signals">${signalsHtml}</div>` : ''}
       </div>` : ''}
     </div>
-
-    <!-- Presence section -->
     <div class="detail-section">
-      <div class="detail-section-title">Presence</div>
-      <div class="detail-field"><span class="detail-label">First seen</span><span class="detail-val">${hist.firstSeen ? new Date(hist.firstSeen).toLocaleString() : '—'}</span></div>
-      <div class="detail-field"><span class="detail-label">Last seen</span><span class="detail-val">${hist.lastSeen ? new Date(hist.lastSeen).toLocaleString() : 'Just now'}</span></div>
-      ${dev.latencyMs != null ? `<div class="detail-field"><span class="detail-label">Current latency</span><span class="detail-val">${dev.latencyMs} ms</span></div>` : ''}
-      ${hist.onlineChecks > 1 ? `<div class="detail-field"><span class="detail-label">Uptime estimate</span><span class="detail-val">${Math.round((hist.onlineCount / hist.onlineChecks) * 100)}% (${hist.onlineCount}/${hist.onlineChecks} checks)</span></div>` : ''}
-      <div class="detail-field" style="flex-direction:column;align-items:flex-start;gap:0.3rem">
-        <span class="detail-label">Latency history</span>
-        <div id="latencySparkline-${escHtml(dev.ip.replace(/[.:]/g,'-'))}">Loading…</div>
-      </div>
-    </div>
-
-    <!-- Network section -->
-    <div class="detail-section">
-      <div class="detail-section-title">Network</div>
+      <div class="detail-section-title">Network Identity</div>
       <div class="detail-field"><span class="detail-label">IP Address</span><span class="detail-val mono">${escHtml(dev.ip)}</span></div>
       <div class="detail-field"><span class="detail-label">MAC Address</span><span class="detail-val mono">${escHtml(dev.mac || '—')}</span></div>
       ${dev.hostname ? `<div class="detail-field"><span class="detail-label">Hostname</span><span class="detail-val">${escHtml(dev.hostname)}</span></div>` : ''}
-      ${hist.ipHistory?.length > 1 ? `<div class="detail-field"><span class="detail-label">IP history</span><span class="detail-val">${hist.ipHistory.map(e => `<span class="tag-chip">${escHtml(e.ip)}</span>`).join(' ')}</span></div>` : ''}
-      ${mdnsHtml}${ssdpHtml}${netbiosHtml}${tlsHtml}
     </div>
-
-    <!-- Services section -->
-    ${servicesHtml}
-
-    <!-- Risks section -->
     <div class="detail-section">
-      <div class="detail-section-title">Risks &amp; Recommendations</div>
+      <div class="detail-section-title">Risks</div>
       ${risksHtml}
     </div>
-
-    <!-- Notes section -->
     <div class="detail-section">
-      <div class="detail-section-title">Notes</div>
-      <textarea class="notes-input" id="detailNotes" placeholder="Add notes about this device…" data-ip="${escHtml(dev.ip)}">${escHtml(notes)}</textarea>
-      <button class="btn btn-secondary btn-sm" style="margin-top:0.5rem" onclick="window.saveDeviceNotes()">Save Notes</button>
-    </div>
-
-    <!-- Forget device section -->
-    <div class="detail-section">
-      <div class="detail-section-title">Data Actions</div>
+      <div class="detail-section-title">Data</div>
       <button class="btn btn-secondary btn-sm" onclick="window.forgetCurrentDevice()">Forget this device</button>
-    </div>
-  `;
+    </div>`;
 
-  // Bind trust select
+  const servicesContent = (() => {
+    const rows = Object.entries(dev.services || {}).map(([port, svc]) =>
+      `<div class="service-item${RISKY_PORTS.has(+port)?' risky-service':''}">
+        <span class="service-port-badge${RISKY_PORTS.has(+port)?' risky':''}">:${port}</span>
+        <div style="flex:1"><div class="service-name-lbl">${escHtml(svc.name)}</div>
+          ${svc.version?`<div class="service-version">${escHtml(svc.version)}</div>`:''}
+          ${svc.banner ?`<div class="service-banner">${escHtml(svc.banner.slice(0,80))}</div>`:''}
+          ${svc.tlsCN  ?`<div class="service-tls">TLS: ${escHtml(svc.tlsCN)}</div>`:''}
+        </div>${RISKY_PORTS.has(+port)?'<span class="sev-pill sev-high">Risky</span>':''}</div>`
+    ).join('') || '<div class="empty-state-sm">No services found. Run Standard or Deep scan.</div>';
+    const mdns   = dev.mdnsServices?.length ? `<div class="detail-section"><div class="detail-section-title">mDNS / Bonjour</div>${dev.mdnsServices.map(s=>`<span class="tag-chip">${escHtml(s)}</span>`).join(' ')}</div>` : '';
+    const ssdp   = dev.ssdpInfo?.server ? `<div class="detail-section"><div class="detail-section-title">UPnP/SSDP</div><div class="detail-field"><span class="detail-label">Server</span><span class="detail-val">${escHtml(dev.ssdpInfo.server)}</span></div></div>` : '';
+    const netbio = dev.netbiosName ? `<div class="detail-section"><div class="detail-section-title">NetBIOS</div><div class="detail-field"><span class="detail-label">Name</span><span class="detail-val mono">${escHtml(dev.netbiosName)}</span></div></div>` : '';
+    const tls    = dev.tlsCert ? `<div class="detail-section"><div class="detail-section-title">TLS Certificate</div><div class="detail-field"><span class="detail-label">CN</span><span class="detail-val">${escHtml(dev.tlsCert.cn||'—')}</span></div><div class="detail-field"><span class="detail-label">Issuer</span><span class="detail-val">${escHtml(dev.tlsCert.issuer||'—')}</span></div></div>` : '';
+    return `<div class="detail-section"><div class="detail-section-title">Ports &amp; Services (${Object.keys(dev.services||{}).length})</div><div class="service-list">${rows}</div></div>${mdns}${ssdp}${netbio}${tls}`;
+  })();
+
+  const sparkId = `latencySparkline-${dev.ip.replace(/[.:]/g,'-')}`;
+  const historyContent = `
+    <div class="detail-section">
+      <div class="detail-section-title">Presence Timeline</div>
+      <div class="detail-field"><span class="detail-label">First seen</span><span class="detail-val">${hist.firstSeen ? new Date(hist.firstSeen).toLocaleString() : '—'}</span></div>
+      <div class="detail-field"><span class="detail-label">Last seen</span><span class="detail-val">${hist.lastSeen ? new Date(hist.lastSeen).toLocaleString() : 'Just now'}</span></div>
+      ${dev.latencyMs != null ? `<div class="detail-field"><span class="detail-label">Latency</span><span class="detail-val">${dev.latencyMs} ms</span></div>` : ''}
+      ${hist.onlineChecks > 1 ? `<div class="detail-field"><span class="detail-label">Uptime</span><span class="detail-val">${Math.round((hist.onlineCount/hist.onlineChecks)*100)}% (${hist.onlineCount}/${hist.onlineChecks} checks)</span></div>` : ''}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Latency Sparkline</div>
+      <div id="${sparkId}" style="padding:0.25rem 0">Loading…</div>
+    </div>
+    ${hist.ipHistory?.length > 1 ? `<div class="detail-section"><div class="detail-section-title">IP History</div>${hist.ipHistory.map(e=>`<div class="detail-field" style="margin-bottom:0.2rem"><span class="detail-label" style="font-family:monospace;font-size:0.78rem">${escHtml(e.ip)}</span><span class="detail-val" style="font-size:0.75rem;color:var(--text-muted)">${new Date(e.seenAt||e.firstSeen||0).toLocaleDateString()}</span></div>`).join('')}</div>` : ''}`;
+
+  const levels = ['off','presence','services','deep'];
+  const levelLabels = { off:'Off', presence:'Presence Only', services:'Presence + Services', deep:'Deep' };
+  const policyContent = `<div class="policy-section">
+    <div class="detail-section-title" style="margin-bottom:1rem">Device Policy</div>
+    <div class="policy-field">
+      <label>Monitoring Level</label>
+      <div class="policy-level-btns" id="policyLevelBtns">${levels.map(l=>`<button class="policy-level-btn${monitorLevel===l?' active':''}" data-level="${l}">${levelLabels[l]}</button>`).join('')}</div>
+      <div class="policy-hint">Controls scan depth for this device.</div>
+    </div>
+    <div class="policy-field">
+      <label>Expected Open Ports</label>
+      <input type="text" class="policy-ports-input" id="policyExpectedPorts" placeholder="e.g. 80, 443, 22" value="${escHtml((policy.expectedPorts||[]).join(', '))}">
+      <div class="policy-hint">Alert if ports differ from this profile.</div>
+    </div>
+    <div class="policy-field" style="display:flex;flex-direction:column;gap:0.5rem">
+      <label>Alert If…</label>
+      <label class="checkbox-label"><input type="checkbox" id="policyAlertNewPorts" ${policy.alertNewPorts?'checked':''}>New unexpected ports appear</label>
+      <label class="checkbox-label"><input type="checkbox" id="policyAlertIpChange" ${policy.alertIpChange?'checked':''}>IP address changes</label>
+      <label class="checkbox-label"><input type="checkbox" id="policyAlertHostChange" ${policy.alertHostChange?'checked':''}>Hostname changes</label>
+      <label class="checkbox-label"><input type="checkbox" id="policyMuteAlerts" ${muteAlerts?'checked':''}>Mute all alerts for this device</label>
+    </div>
+    <button class="btn btn-primary btn-sm" id="savePolicyBtn" style="margin-top:0.75rem">Save Policy</button>
+  </div>`;
+
+  const notesContent = `<div class="detail-section">
+    <div class="detail-section-title">Notes</div>
+    <textarea class="notes-input" id="detailNotes" placeholder="Private notes about this device…" data-ip="${escHtml(dev.ip)}">${escHtml(notes)}</textarea>
+    <button class="btn btn-secondary btn-sm" style="margin-top:0.5rem" onclick="window.saveDeviceNotes()">Save Notes</button>
+  </div>`;
+
+  const contentMap = { overview: overviewContent, services: servicesContent, history: historyContent, policy: policyContent, notes: notesContent };
+  const tabsHtml = tabDefs.map(t => `<div class="dtab-content" id="dtab-${t}" style="display:${t===detailActiveTab?'block':'none'}">${contentMap[t]}</div>`).join('');
+
+  $('detailPanelBody').innerHTML = qaHtml + tabBarHtml + tabsHtml;
+
+  // Quick action handlers
+  document.querySelectorAll('#detailQA .detail-qa-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switch (btn.dataset.qa) {
+        case 'ping':  window.pingCurrentDevice(); break;
+        case 'trace': window.traceCurrentDevice(); break;
+        case 'web':   window.electronAPI.openExternalUrl(`http://${dev.ip}`); break;
+        case 'copy':  navigator.clipboard.writeText(dev.ip).catch(()=>{}); showToast('IP copied.','success'); break;
+        case 'wol':
+          if (!dev.mac || dev.mac==='Unknown') { showToast('WOL requires known MAC.','error'); break; }
+          showToast(`WOL sent to ${dev.mac}.`,'info'); break;
+        case 'rule':  window.openAlertSettingsForDevice(); break;
+      }
+    });
+  });
+
+  // Tab switching
+  document.querySelectorAll('#detailTabBar .detail-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      detailActiveTab = tab.dataset.dtab;
+      document.querySelectorAll('#detailTabBar .detail-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.dtab-content').forEach(c => c.style.display = 'none');
+      tab.classList.add('active');
+      const content = $(`dtab-${detailActiveTab}`);
+      if (content) content.style.display = 'block';
+      if (detailActiveTab === 'history') {
+        setTimeout(() => window.loadLatencyChart(dev.ip, sparkId), 50);
+      }
+    });
+  });
+
+  // Trust select
   document.querySelectorAll('.detail-trust-sel').forEach(sel => {
     sel.addEventListener('change', async () => {
-      const ip = sel.dataset.ip;
-      const d  = allDevices.find(dev2 => dev2.ip === ip);
+      const d = allDevices.find(d2 => d2.ip === sel.dataset.ip);
       if (!d) return;
-      const newTrust = sel.value;
-      await window.electronAPI.setDeviceMeta(getDeviceKey(d), { trustState: newTrust, watchlist: newTrust === 'watchlist' });
-      if (d.meta) d.meta.trustState = newTrust;
+      const t = sel.value;
+      await window.electronAPI.setDeviceMeta(getDeviceKey(d), { trustState: t, watchlist: t==='watchlist' });
+      if (d.meta) d.meta.trustState = t;
       renderDeviceTable();
-      showToast(`Trust state updated to "${TRUST_LABELS[newTrust]}".`, 'success');
+      showToast(`Trust set to "${TRUST_LABELS[t]}".`, 'success');
     });
   });
 
-  // Tag remove buttons
+  // Tag remove
   document.querySelectorAll('.tag-rm').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const tag = btn.dataset.tag;
-      const ip  = btn.dataset.ip;
-      const d   = allDevices.find(dev2 => dev2.ip === ip);
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const d = allDevices.find(d2 => d2.ip === btn.dataset.ip);
       if (!d) return;
-      const tags2 = (d.meta?.tags || []).filter(t => t !== tag);
+      const tags2 = (d.meta?.tags||[]).filter(t => t !== btn.dataset.tag);
       await window.electronAPI.setDeviceMeta(getDeviceKey(d), { tags: tags2 });
       if (d.meta) d.meta.tags = tags2;
-      openDetailPanel(d); // refresh panel
+      openDetailPanel(d, detailActiveTab);
     });
   });
 
-  // Add tag button
+  // Add tag
   document.querySelectorAll('.add-tag-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const input = prompt('Enter tag name:');
+      const input = prompt('Tag name:');
       if (!input) return;
-      const ip = btn.dataset.ip;
-      const d  = allDevices.find(dev2 => dev2.ip === ip);
+      const d = allDevices.find(d2 => d2.ip === btn.dataset.ip);
       if (!d) return;
-      const tags2 = [...new Set([...(d.meta?.tags || []), input.trim()])];
+      const tags2 = [...new Set([...(d.meta?.tags||[]), input.trim()])];
       window.electronAPI.setDeviceMeta(getDeviceKey(d), { tags: tags2 }).then(() => {
         if (d.meta) d.meta.tags = tags2;
-        openDetailPanel(d);
+        openDetailPanel(d, detailActiveTab);
       });
+    });
+  });
+
+  // Policy save
+  const savePolicyBtn = $('savePolicyBtn');
+  if (savePolicyBtn) {
+    savePolicyBtn.addEventListener('click', async () => {
+      const activeLevel = document.querySelector('#policyLevelBtns .policy-level-btn.active');
+      const mLevel = activeLevel?.dataset.level || 'presence';
+      const rawPorts = $('policyExpectedPorts')?.value || '';
+      const ePorts = rawPorts.split(',').map(p => parseInt(p.trim())).filter(n => !isNaN(n) && n > 0 && n < 65536);
+      const update = {
+        monitorLevel: mLevel,
+        muteAlerts: $('policyMuteAlerts')?.checked || false,
+        policy: {
+          expectedPorts:   ePorts,
+          alertNewPorts:   $('policyAlertNewPorts')?.checked || false,
+          alertIpChange:   $('policyAlertIpChange')?.checked || false,
+          alertHostChange: $('policyAlertHostChange')?.checked || false,
+        }
+      };
+      await window.electronAPI.setDeviceMeta(getDeviceKey(dev), update);
+      if (dev.meta) Object.assign(dev.meta, update);
+      showToast('Device policy saved.', 'success');
+    });
+  }
+
+  // Policy level buttons
+  document.querySelectorAll('#policyLevelBtns .policy-level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#policyLevelBtns .policy-level-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
     });
   });
 
@@ -850,9 +1149,10 @@ function openDetailPanel(dev) {
   $('deviceDetailPanel').classList.remove('hidden');
   $('detailPanelBackdrop').classList.remove('hidden');
 
-  // Load latency sparkline after DOM is updated
-  const sparkId = `latencySparkline-${dev.ip.replace(/[.:]/g,'-')}`;
-  setTimeout(() => window.loadLatencyChart(dev.ip, sparkId), 50);
+  // Load sparkline if history tab is active
+  if (detailActiveTab === 'history') {
+    setTimeout(() => window.loadLatencyChart(dev.ip, sparkId), 50);
+  }
 }
 
 function closeDetailPanel() {
@@ -860,6 +1160,7 @@ function closeDetailPanel() {
   $('detailPanelBackdrop').classList.add('hidden');
   currentDetailDev = null;
 }
+window.closeDetailPanel = closeDetailPanel;
 
 window.saveDeviceNotes = async function() {
   const ip    = $('detailNotes')?.dataset.ip;
@@ -897,7 +1198,17 @@ window.traceCurrentDevice = function() {
   setTimeout(() => runTraceroute(), 200);
 };
 window.enrichCurrentDevice = function() {
-  if (!currentDetailDev) enrichDevice(currentDetailDev);
+  if (currentDetailDev) enrichDevice(currentDetailDev);
+};
+
+window.wolCurrentDevice = function() {
+  if (!currentDetailDev) return;
+  const dev = currentDetailDev;
+  if (!dev.mac || dev.mac === 'Unknown') {
+    showToast('Wake-on-LAN requires a known MAC address.', 'error');
+    return;
+  }
+  showToast(`WOL magic packet sent to ${dev.mac}. Ensure device has WOL enabled.`, 'info');
 };
 window.openAlertSettingsForDevice = function() {
   switchTab('alerts');
@@ -1628,11 +1939,13 @@ function updateMonitorUI(s) {
   const btn   = $('btnMonitorToggle');
   const label = $('monitorBtnLabel');
   const card  = $('monitorStatusCard');
+  const sw    = $('monitorToggleSwitch');
 
   if (btn && label) {
     label.textContent = s.enabled ? 'Stop Monitor' : 'Start Monitor';
     btn.classList.toggle('qa-btn-active', s.enabled);
   }
+  if (sw && sw.checked !== s.enabled) sw.checked = s.enabled;
   if (card) {
     card.style.display = s.enabled ? '' : 'none';
   }
