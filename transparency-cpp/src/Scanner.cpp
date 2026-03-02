@@ -45,7 +45,6 @@ private:
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
-#pragma comment(lib, "icmp.lib")
 #pragma comment(lib, "dnsapi.lib")
 
 #include "Scanner.h"
