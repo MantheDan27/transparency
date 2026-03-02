@@ -60,7 +60,6 @@ target_compile_options(Transparency PRIVATE
 target_link_libraries(Transparency PRIVATE
     ws2_32
     iphlpapi
-    icmp
     comctl32
     uxtheme
     dwmapi
