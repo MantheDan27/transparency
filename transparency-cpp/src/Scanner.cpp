@@ -610,7 +610,7 @@ std::map<wstring, std::vector<wstring>> ScanEngine::DiscoverMDNS(int timeoutMs) 
     while (GetTickCount() < deadline) {
         DWORD remaining = deadline - GetTickCount();
         if (remaining == 0) break;
-        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, std::min(remaining, 200u), FALSE);
+        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, std::min(remaining, (DWORD)200), FALSE);
         WSAResetEvent(evt);
 
         if (wait == WSA_WAIT_TIMEOUT) continue;
@@ -716,7 +716,7 @@ std::map<wstring, wstring> ScanEngine::DiscoverSSDP(int timeoutMs) {
     while (GetTickCount() < deadline) {
         DWORD remaining = deadline - GetTickCount();
         if (remaining == 0) break;
-        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, std::min(remaining, 200u), FALSE);
+        DWORD wait = WSAWaitForMultipleEvents(1, &evt, FALSE, std::min(remaining, (DWORD)200), FALSE);
         WSAResetEvent(evt);
         if (wait == WSA_WAIT_TIMEOUT) continue;
 
