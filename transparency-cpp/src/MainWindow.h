@@ -65,12 +65,6 @@ private:
     HWND _hwnd = nullptr;
     HINSTANCE _hInstance = nullptr;
 
-    // Child windows
-    HWND _hSidebar = nullptr;
-
-    // Sidebar nav buttons
-    HWND _hNavBtns[(int)Tab::COUNT] = {};
-
     // Tab panels (child windows)
     std::unique_ptr<TabOverview> _tabOverview;
     std::unique_ptr<TabDevices>  _tabDevices;
@@ -79,8 +73,9 @@ private:
     std::unique_ptr<TabLedger>   _tabLedger;
     std::unique_ptr<TabPrivacy>  _tabPrivacy;
 
-    // Status bar
-    HWND _hStatus = nullptr;
+    // Hover tracking
+    int  _hoverNav       = -1;
+    bool _trackingMouse  = false;
 
     // Message handlers
     LRESULT OnCreate(HWND hwnd, LPCREATESTRUCT cs);
@@ -88,20 +83,19 @@ private:
     LRESULT OnPaint(HWND hwnd);
     LRESULT OnDestroy(HWND hwnd);
     LRESULT OnCommand(HWND hwnd, WPARAM wp, LPARAM lp);
-    LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
+    LRESULT OnLButtonDown(HWND hwnd, int x, int y);
+    LRESULT OnMouseMove(HWND hwnd, int x, int y);
     LRESULT OnScanComplete(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnScanProgress(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnMonitorTick(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnInternetStatus(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnGatewayChanged(HWND hwnd, WPARAM wp, LPARAM lp);
 
-    void CreateSidebar(HWND parent, int width, int height);
     void LayoutChildren(int cx, int cy);
     void ShowActivePanel();
-    void SetNavButtonFont();
-    static void ApplyDarkTheme(HWND hwnd);
+    void DrawNavSidebar(HDC hdc, const RECT& rc);
 
-    static const int SIDEBAR_WIDTH = 210;
+    static const int SIDEBAR_WIDTH  = 210;
     static const int NAV_BTN_HEIGHT = 46;
-    static const int NAV_BTN_TOP = 70;
+    static const int NAV_BTN_TOP    = 70;
 };
