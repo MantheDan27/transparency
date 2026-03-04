@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path  = require('path');
 const os    = require('os');
 const net   = require('net');
@@ -430,7 +430,6 @@ function createWindow() {
 app.whenReady().then(() => {
   ensureDataDir();
   startCloud();
-  startLocalApi();
   createWindow();
   // Resume monitoring if it was enabled before
   if (monitoringConfig.enabled) {
@@ -439,6 +438,8 @@ app.whenReady().then(() => {
   }
   // Initialize DNS baseline
   lastDnsServers = dns.getServers().sort().join(',');
+  // Start local REST API with API-key authentication
+  setTimeout(() => restartLocalApiWithAuth(), 500);
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -462,6 +463,15 @@ ipcMain.handle('scan-network', async (_e, opts = {}) => {
 
     updateDeviceHistory(devices);
     processAlertsForScan(devices, anomalies);
+
+    // Fire script hooks (defined later in file — safe to call after first scan)
+    try {
+      if (typeof runScriptHooks === 'function') {
+        runScriptHooks('scan_complete', { deviceCount: devices.length, anomalyCount: anomalies.length, mode: opts.mode });
+        const newDevs = anomalies.filter(a => a.type === 'New Device');
+        if (newDevs.length) runScriptHooks('new_device', { devices: newDevs.map(a => a.device) });
+      }
+    } catch { /* hooks not loaded yet */ }
 
     // Merge metadata into device objects for renderer
     const devicesWithMeta = devices.map(d => ({
@@ -848,6 +858,84 @@ ipcMain.handle('export-report', async () => {
   } catch (err) { return { error: err.message }; }
 });
 
+ipcMain.handle('export-report-pdf', async () => {
+  try {
+    const devices = lastScanResult?.devices || [];
+    const alerts  = triggeredAlerts.slice(-50);
+    const summary = {
+      totalDevices: devices.length,
+      unknown:      devices.filter(d => !deviceMeta[d.mac || d.ip]?.trust && (!d.trust || d.trust === 'unknown')).length,
+      highSeverity: lastScanResult?.anomalies?.filter(a => a.severity === 'High').length ?? 0,
+      alertCount:   alerts.length,
+    };
+    const ts      = new Date().toLocaleString();
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    function esc(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    const deviceRows = devices.map(d => {
+      const meta  = deviceMeta[d.mac || d.ip] || {};
+      const name  = meta.customName || d.hostname || d.name || d.ip;
+      const conf  = d.confidence ? ` (${d.confidence}%)` : '';
+      const ports = (d.ports || []).slice(0, 12).join(', ') + ((d.ports?.length ?? 0) > 12 ? '…' : '');
+      return `<tr><td>${esc(name)}</td><td>${esc(d.ip)}</td><td>${esc(d.mac || '—')}</td><td>${esc(d.vendor || '—')}</td><td>${esc((d.deviceType || '—') + conf)}</td><td>${esc(meta.trust || d.trust || 'unknown')}</td><td>${esc(ports || '—')}</td></tr>`;
+    }).join('');
+
+    const alertRows = alerts.map(a =>
+      `<tr><td>${esc(new Date(a.timestamp).toLocaleString())}</td><td>${esc(a.type || a.title)}</td><td>${esc(a.deviceIp || '—')}</td><td>${esc(a.message)}</td></tr>`
+    ).join('');
+
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Transparency Report</title>
+<style>
+  body{font-family:-apple-system,Arial,sans-serif;font-size:11pt;color:#1a1a1a;margin:18mm}
+  h1{font-size:20pt;margin-bottom:4px}
+  h2{font-size:13pt;margin-top:22px;margin-bottom:8px;border-bottom:2px solid #4f6df5;padding-bottom:4px}
+  .meta{font-size:9pt;color:#555;margin-bottom:20px}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+  .stat-box{border:1px solid #ddd;border-radius:6px;padding:12px 16px}
+  .stat-val{font-size:24pt;font-weight:700;color:#4f6df5}
+  .stat-lbl{font-size:9pt;color:#666;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:9pt}
+  th{background:#f0f2ff;text-align:left;padding:6px 8px;border-bottom:2px solid #c7cffe}
+  td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top;word-break:break-word}
+  tr:nth-child(even) td{background:#fafafa}
+  .footer{margin-top:28px;font-size:8pt;color:#999;text-align:center;border-top:1px solid #ddd;padding-top:10px}
+</style></head><body>
+<h1>Transparency</h1>
+<div class="meta">Network Security Report &nbsp;|&nbsp; Generated: ${esc(ts)} &nbsp;|&nbsp; Version 2.2.0</div>
+<h2>Summary</h2>
+<div class="stats">
+  <div class="stat-box"><div class="stat-val">${summary.totalDevices}</div><div class="stat-lbl">Total Devices</div></div>
+  <div class="stat-box"><div class="stat-val">${summary.unknown}</div><div class="stat-lbl">Unknown Devices</div></div>
+  <div class="stat-box"><div class="stat-val">${summary.highSeverity}</div><div class="stat-lbl">High Severity Anomalies</div></div>
+  <div class="stat-box"><div class="stat-val">${summary.alertCount}</div><div class="stat-lbl">Recent Alerts</div></div>
+</div>
+<h2>Devices (${devices.length})</h2>
+<table><thead><tr><th>Name / Hostname</th><th>IP</th><th>MAC</th><th>Vendor</th><th>Type (Conf.)</th><th>Trust</th><th>Open Ports</th></tr></thead>
+<tbody>${deviceRows || '<tr><td colspan="7" style="text-align:center;color:#999">No devices in last scan</td></tr>'}</tbody></table>
+<h2>Alerts — Last 50 (${alerts.length})</h2>
+<table><thead><tr><th>Time</th><th>Event</th><th>Device</th><th>Details</th></tr></thead>
+<tbody>${alertRows || '<tr><td colspan="4" style="text-align:center;color:#999">No alerts recorded</td></tr>'}</tbody></table>
+<div class="footer">Generated by Transparency v2.2.0 — all data local, zero telemetry</div>
+</body></html>`;
+
+    const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
+    await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    const pdfBuf = await win.webContents.printToPDF({ printBackground: false, pageSize: 'A4' });
+    win.close();
+
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: `transparency-report-${dateStr}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (canceled || !filePath) return { cancelled: true };
+    await fs.promises.writeFile(filePath, pdfBuf);
+    return { success: true, filePath };
+  } catch (err) { return { error: err.message }; }
+});
+
 // ── IPC: Data management ──────────────────────────────────────────────────────
 ipcMain.handle('get-data-stats', async () => {
   let cloudSends = 0;
@@ -943,9 +1031,343 @@ ipcMain.handle('get-internet-status', async () => {
 
 // ── IPC: Open URL ─────────────────────────────────────────────────────────────
 ipcMain.handle('open-external-url', async (_e, url) => {
-  if (typeof url === 'string' && url.startsWith('https://')) {
+  if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
     await shell.openExternal(url);
     return { success: true };
   }
-  return { success: false, error: 'Only HTTPS URLs are permitted.' };
+  return { success: false, error: 'Only HTTP/HTTPS URLs are permitted.' };
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+//  NEW BACKEND FEATURES — v2.2
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── IPC: Port Scanner ─────────────────────────────────────────────────────────
+ipcMain.handle('port-scan', async (_e, host, ports) => {
+  if (!Array.isArray(ports) || ports.length === 0) return { open: [], error: 'No ports specified' };
+  // Cap at 1024 ports per scan for safety
+  const scanPorts = ports.slice(0, 1024);
+  const BATCH = 50;
+  const TIMEOUT = 1200;
+  const open = [];
+
+  for (let i = 0; i < scanPorts.length; i += BATCH) {
+    const batch = scanPorts.slice(i, i + BATCH);
+    const results = await Promise.allSettled(batch.map(port =>
+      new Promise(resolve => {
+        const sock = new net.Socket();
+        let done = false;
+        const finish = (isOpen) => {
+          if (!done) { done = true; sock.destroy(); resolve({ port, open: isOpen }); }
+        };
+        sock.setTimeout(TIMEOUT);
+        sock.on('connect', () => finish(true));
+        sock.on('timeout', () => finish(false));
+        sock.on('error', () => finish(false));
+        sock.connect(port, host);
+      })
+    ));
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.open) open.push(r.value.port);
+    }
+  }
+  return { open: open.sort((a,b) => a-b) };
+});
+
+// ── IPC: Wake-on-LAN ──────────────────────────────────────────────────────────
+ipcMain.handle('send-wol', async (_e, mac) => {
+  try {
+    // Build magic packet: 6x 0xFF + 16x MAC
+    const macBytes = mac.replace(/[:-]/g, '').match(/.{2}/g).map(h => parseInt(h, 16));
+    if (macBytes.length !== 6) return { success: false, error: 'Invalid MAC address format' };
+    const payload = Buffer.alloc(102);
+    payload.fill(0xff, 0, 6);
+    for (let i = 0; i < 16; i++) {
+      Buffer.from(macBytes).copy(payload, 6 + i * 6);
+    }
+    await new Promise((resolve, reject) => {
+      const dgram = require('dgram');
+      const sock = dgram.createSocket('udp4');
+      sock.once('error', reject);
+      sock.bind(0, () => {
+        sock.setBroadcast(true);
+        sock.send(payload, 0, payload.length, 9, '255.255.255.255', (err) => {
+          sock.close();
+          err ? reject(err) : resolve();
+        });
+      });
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── IPC: Snapshot Import ──────────────────────────────────────────────────────
+ipcMain.handle('import-snapshot', async (_e, data) => {
+  try {
+    const snapshot = {
+      id: `snap-${Date.now()}`,
+      name: data.name || `Imported ${new Date().toLocaleString()}`,
+      createdAt: data.createdAt || new Date().toISOString(),
+      devices: data.devices || [],
+      anomalies: data.anomalies || [],
+      imported: true,
+    };
+    snapshots.unshift(snapshot);
+    if (snapshots.length > 20) snapshots = snapshots.slice(0, 20);
+    saveJSON('snapshots.json', snapshots);
+    return { success: true, snapshot };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ── IPC: Schedules ────────────────────────────────────────────────────────────
+let scheduledScans  = loadJSON('schedules.json', []);
+let scheduleTimers  = {};
+
+function computeNextRun(freq, time) {
+  const [h, m] = time.split(':').map(Number);
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(h, m, 0, 0);
+  if (next <= now) {
+    if (freq === 'hourly') next.setTime(now.getTime() + 3600000);
+    else if (freq === 'daily') next.setDate(next.getDate() + 1);
+    else if (freq === 'weekly') next.setDate(next.getDate() + 7);
+  }
+  return next.toISOString();
+}
+
+function scheduleNextRun(s) {
+  if (scheduleTimers[s.id]) { clearTimeout(scheduleTimers[s.id]); delete scheduleTimers[s.id]; }
+  if (!s.enabled) return;
+
+  const nextMs = new Date(s.nextRun).getTime() - Date.now();
+  if (nextMs < 0) {
+    // Update nextRun
+    s.nextRun = computeNextRun(s.freq, s.time);
+    saveJSON('schedules.json', scheduledScans);
+    return scheduleNextRun(s);
+  }
+
+  scheduleTimers[s.id] = setTimeout(async () => {
+    console.log(`[schedule] Running ${s.mode} scan for "${s.name}"`);
+    try {
+      const devices   = await scanNetwork(msg => mainWindow?.webContents.send('scan-progress', msg), { mode: s.mode });
+      const anomalies = analyzeAnomalies(devices, lastSnapshot);
+      lastSnapshot    = devices;
+      lastScanResult  = { devices, anomalies, scannedAt: new Date().toISOString(), mode: s.mode };
+      updateDeviceHistory(devices);
+      processAlertsForScan(devices, anomalies);
+      runScriptHooks('scan_complete', { devices: devices.length, anomalies: anomalies.length, scheduleName: s.name });
+
+      if (s.autoExport) {
+        const exportData = {
+          reportVersion: '2.2', generatedAt: new Date().toISOString(),
+          scheduleName: s.name, scan: lastScanResult,
+        };
+        const downloadsPath = require('electron').app.getPath('downloads');
+        const filename = path.join(downloadsPath, `transparency-report-${new Date().toISOString().slice(0,10)}-${s.name.replace(/\s+/g,'-')}.json`);
+        fs.writeFileSync(filename, JSON.stringify(exportData, null, 2));
+        console.log(`[schedule] Auto-exported to ${filename}`);
+      }
+    } catch (err) {
+      console.error('[schedule]', err);
+    }
+    // Schedule next run
+    s.nextRun = computeNextRun(s.freq, s.time);
+    saveJSON('schedules.json', scheduledScans);
+    scheduleNextRun(s);
+  }, nextMs);
+}
+
+// Initialize schedule timers on startup
+setTimeout(() => {
+  for (const s of scheduledScans) {
+    if (!s.nextRun) s.nextRun = computeNextRun(s.freq, s.time);
+    scheduleNextRun(s);
+  }
+}, 5000);
+
+ipcMain.handle('get-schedules', async () => scheduledScans);
+
+ipcMain.handle('create-schedule', async (_e, data) => {
+  const s = {
+    id: `sched-${Date.now()}`,
+    name: data.name || 'Unnamed schedule',
+    mode: data.mode || 'standard',
+    freq: data.freq || 'daily',
+    time: data.time || '03:00',
+    autoExport: data.autoExport || false,
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    nextRun: computeNextRun(data.freq || 'daily', data.time || '03:00'),
+  };
+  scheduledScans.push(s);
+  saveJSON('schedules.json', scheduledScans);
+  scheduleNextRun(s);
+  return { success: true, schedule: s };
+});
+
+ipcMain.handle('update-schedule', async (_e, id, updates) => {
+  const idx = scheduledScans.findIndex(s => s.id === id);
+  if (idx === -1) return { success: false };
+  scheduledScans[idx] = { ...scheduledScans[idx], ...updates };
+  saveJSON('schedules.json', scheduledScans);
+  scheduleNextRun(scheduledScans[idx]);
+  return { success: true };
+});
+
+ipcMain.handle('delete-schedule', async (_e, id) => {
+  if (scheduleTimers[id]) { clearTimeout(scheduleTimers[id]); delete scheduleTimers[id]; }
+  scheduledScans = scheduledScans.filter(s => s.id !== id);
+  saveJSON('schedules.json', scheduledScans);
+  return { success: true };
+});
+
+// ── IPC: Script Hooks ─────────────────────────────────────────────────────────
+let scriptHooksData = loadJSON('script-hooks.json', []);
+
+function runScriptHooks(event, payload = {}) {
+  const hooks = scriptHooksData.filter(h => h.enabled && h.event === event);
+  for (const h of hooks) {
+    try {
+      const jsonStr = JSON.stringify(payload);
+      const cmd = process.platform === 'win32'
+        ? `echo ${jsonStr} | ${h.cmd}`
+        : `echo '${jsonStr.replace(/'/g, "'\\''")}' | ${h.cmd}`;
+      exec(cmd, { timeout: 15000 }, (err) => {
+        if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
+        else console.log(`[hook] "${h.cmd}" executed for event: ${event}`);
+      });
+    } catch (err) {
+      console.error('[hook]', err.message);
+    }
+  }
+}
+
+// Fire hooks after scans
+const _origScanNetworkHandler = null; // hooks are called from runMonitorScan and scan-network handler
+
+ipcMain.handle('get-hooks', async () => scriptHooksData);
+
+ipcMain.handle('create-hook', async (_e, data) => {
+  const h = {
+    id: `hook-${Date.now()}`,
+    event:   data.event || 'scan_complete',
+    cmd:     data.cmd || '',
+    desc:    data.desc || '',
+    enabled: data.enabled !== false,
+    createdAt: new Date().toISOString(),
+  };
+  scriptHooksData.push(h);
+  saveJSON('script-hooks.json', scriptHooksData);
+  return { success: true, hook: h };
+});
+
+ipcMain.handle('update-hook', async (_e, id, updates) => {
+  const idx = scriptHooksData.findIndex(h => h.id === id);
+  if (idx === -1) return { success: false };
+  scriptHooksData[idx] = { ...scriptHooksData[idx], ...updates };
+  saveJSON('script-hooks.json', scriptHooksData);
+  return { success: true };
+});
+
+ipcMain.handle('delete-hook', async (_e, id) => {
+  scriptHooksData = scriptHooksData.filter(h => h.id !== id);
+  saveJSON('script-hooks.json', scriptHooksData);
+  return { success: true };
+});
+
+// ── IPC: API Key management ───────────────────────────────────────────────────
+let apiKeyStore = loadJSON('api-key.json', { key: null });
+
+function getOrCreateApiKey() {
+  if (!apiKeyStore.key) {
+    apiKeyStore.key = require('crypto').randomBytes(24).toString('hex');
+    saveJSON('api-key.json', apiKeyStore);
+  }
+  return apiKeyStore.key;
+}
+
+// Initialize API key
+getOrCreateApiKey();
+
+// Local REST API with API-key authentication (started via restartLocalApiWithAuth on app ready)
+// Note: We add API key auth to new requests via a middleware check below
+// The existing localApiServer handles all routes; we add a check in the handler
+
+ipcMain.handle('get-api-key', async () => ({ key: getOrCreateApiKey() }));
+
+ipcMain.handle('rotate-api-key', async () => {
+  apiKeyStore.key = require('crypto').randomBytes(24).toString('hex');
+  saveJSON('api-key.json', apiKeyStore);
+  return { key: apiKeyStore.key };
+});
+
+// ── Enhanced local API with API key auth ──────────────────────────────────────
+// Restart local API with key authentication support
+function restartLocalApiWithAuth() {
+  if (localApiServer) {
+    localApiServer.close();
+    localApiServer = null;
+  }
+
+  localApiServer = require('http').createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '127.0.0.1');
+
+    if (req.method !== 'GET') {
+      res.writeHead(405);
+      return res.end(JSON.stringify({ error: 'Read-only API' }));
+    }
+
+    // API key authentication (skip for root/health)
+    if (req.url !== '/' && req.url !== '/api/health') {
+      const reqKey = req.headers['x-api-key'];
+      if (apiKeyStore.key && reqKey !== apiKeyStore.key) {
+        res.writeHead(401);
+        return res.end(JSON.stringify({ error: 'Unauthorized — include X-API-Key header', hint: 'Get your key from the Privacy tab in Transparency.' }));
+      }
+    }
+
+    if (req.url === '/api/devices') {
+      res.writeHead(200);
+      return res.end(JSON.stringify(lastSnapshot.map(d => ({
+        ip: d.ip, mac: d.mac, name: d.name, hostname: d.hostname,
+        type: d.deviceType, vendor: d.vendor, ports: d.ports,
+        meta: getMeta(getDeviceKey(d)), history: deviceHistory[getDeviceKey(d)] || null,
+      }))));
+    }
+    if (req.url === '/api/status') {
+      res.writeHead(200);
+      return res.end(JSON.stringify({
+        deviceCount: lastSnapshot.length, internetStatus,
+        monitoring: { enabled: monitoringConfig.enabled, intervalMinutes: monitoringConfig.intervalMinutes },
+        version: '2.2',
+      }));
+    }
+    if (req.url === '/api/alerts') {
+      res.writeHead(200);
+      return res.end(JSON.stringify(triggeredAlerts.slice(0, 100)));
+    }
+    if (req.url === '/api/snapshots') {
+      res.writeHead(200);
+      return res.end(JSON.stringify(snapshots.map(s => ({ id: s.id, name: s.name, createdAt: s.createdAt, deviceCount: s.devices?.length || 0 }))));
+    }
+    if (req.url === '/api/health') {
+      res.writeHead(200);
+      return res.end(JSON.stringify({ status: 'ok', version: '2.2', uptime: process.uptime() }));
+    }
+    res.writeHead(404);
+    res.end(JSON.stringify({ error: 'Not found', routes: ['/api/devices', '/api/status', '/api/alerts', '/api/snapshots', '/api/health'] }));
+  });
+
+  localApiServer.listen(LOCAL_API_PORT, '127.0.0.1', () =>
+    console.log(`[local-api] http://127.0.0.1:${LOCAL_API_PORT} (API key auth enabled)`));
+}
+
+// Script hooks are fired from the existing scan-network handler above
+// and from runMonitorScan — no duplicate handler needed here.

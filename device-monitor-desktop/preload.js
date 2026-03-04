@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   wipeLocalData:      ()         => ipcRenderer.invoke('wipe-local-data'),
   purgeHistoryOlderThan: (days)  => ipcRenderer.invoke('purge-history-older-than', days),
   exportReport:       ()         => ipcRenderer.invoke('export-report'),
+  exportReportPDF:    ()         => ipcRenderer.invoke('export-report-pdf'),
 
   // ── Continuous monitoring ────────────────────────────────────────────────────
   startMonitoring:    (cfg)      => ipcRenderer.invoke('start-monitoring', cfg),
@@ -69,6 +70,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── Open external URL ────────────────────────────────────────────────────────
   openExternalUrl:    (url)      => ipcRenderer.invoke('open-external-url', url),
+
+  // ── Port scanner & WOL ───────────────────────────────────────────────────────
+  portScan:           (h, ports) => ipcRenderer.invoke('port-scan', h, ports),
+  sendWOL:            (mac)      => ipcRenderer.invoke('send-wol', mac),
+
+  // ── Snapshot import ──────────────────────────────────────────────────────────
+  importSnapshot:     (data)     => ipcRenderer.invoke('import-snapshot', data),
+
+  // ── Scheduled scans ──────────────────────────────────────────────────────────
+  getSchedules:       ()         => ipcRenderer.invoke('get-schedules'),
+  createSchedule:     (data)     => ipcRenderer.invoke('create-schedule', data),
+  updateSchedule:     (id, upd)  => ipcRenderer.invoke('update-schedule', id, upd),
+  deleteSchedule:     (id)       => ipcRenderer.invoke('delete-schedule', id),
+
+  // ── Script hooks ─────────────────────────────────────────────────────────────
+  getHooks:           ()         => ipcRenderer.invoke('get-hooks'),
+  createHook:         (data)     => ipcRenderer.invoke('create-hook', data),
+  updateHook:         (id, upd)  => ipcRenderer.invoke('update-hook', id, upd),
+  deleteHook:         (id)       => ipcRenderer.invoke('delete-hook', id),
+
+  // ── API key management ────────────────────────────────────────────────────────
+  getApiKey:          ()         => ipcRenderer.invoke('get-api-key'),
+  rotateApiKey:       ()         => ipcRenderer.invoke('rotate-api-key'),
 
   // ── Events (renderer ← main) ─────────────────────────────────────────────────
   onScanProgress: cb => {

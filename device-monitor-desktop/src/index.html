@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Transparency — Network Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -233,7 +235,16 @@
             <div class="kpi-value kpi-sm" id="kpiLatency">—</div>
             <div class="kpi-label">Gateway latency</div>
             <div class="kpi-delta" id="kpiDNS">DNS: —</div>
+            <div class="kpi-sparkline" id="latencySparklineKpi"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- Per-interface subnet breakdown -->
+      <div class="subnet-breakdown-card">
+        <div class="subnet-breakdown-header">BY INTERFACE</div>
+        <div id="subnetBreakdown" class="subnet-breakdown-section">
+          <div class="empty-state-sm">Run a scan to see per-interface breakdown.</div>
         </div>
       </div>
 
@@ -253,11 +264,26 @@
           </svg>
           Export Report
         </button>
+        <button class="qa-btn" id="btnExportPDF" onclick="window.exportReportPDF()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
+          </svg>
+          Export PDF
+        </button>
         <button class="qa-btn" id="btnMonitorToggle" onclick="window.toggleMonitoring()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
           <span id="monitorBtnLabel">Start Monitor</span>
+        </button>
+        <button class="qa-btn" onclick="window.openSnapshotDiff()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          Compare Snapshots
         </button>
       </div>
 
@@ -290,6 +316,17 @@
             <span class="monitor-stat-label">Local API</span>
             <span class="monitor-stat-val" id="monitorApiPort">port 7722</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Devices-online history chart -->
+      <div class="card" id="onlineHistoryCard">
+        <div class="card-header">
+          <h2>Devices Online — History</h2>
+          <span class="tag" id="onlineHistoryTag">No data yet</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:3px;height:60px;padding:0.5rem 0" id="onlineHistoryBars">
+          <div style="color:var(--text-muted);font-size:0.8rem;align-self:center">Run scans to build device count history.</div>
         </div>
       </div>
 
@@ -389,6 +426,13 @@
             <button class="mode-pill active" data-map-mode="simple">Simple</button>
             <button class="mode-pill" data-map-mode="advanced">Advanced</button>
           </div>
+          <button class="btn btn-secondary btn-sm map-export-btn-top" onclick="window.exportMapPNG()" title="Export map as PNG">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export PNG
+          </button>
         </div>
       </div>
       <div class="map-container" id="mapContainer">
@@ -628,6 +672,48 @@
           <div class="tool-result hidden" id="tcpResult"></div>
         </div>
 
+        <!-- Port Scanner -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+              Port Scanner
+            </h2>
+          </div>
+          <div class="tool-input-row">
+            <input type="text" id="portScanHost" class="tool-input" placeholder="host or IP…">
+            <button class="btn btn-primary btn-sm" onclick="window.runPortScan()">Scan</button>
+          </div>
+          <div class="port-scan-presets">
+            <button class="port-preset-btn active" data-preset="common" onclick="window.setPortPreset(this)">Common</button>
+            <button class="port-preset-btn" data-preset="top100" onclick="window.setPortPreset(this)">Top 100</button>
+            <button class="port-preset-btn" data-preset="custom" onclick="window.setPortPreset(this)">Custom</button>
+          </div>
+          <input type="text" id="portScanRange" class="tool-input hidden" placeholder="e.g. 22,80,443 or 1-1024" style="margin-bottom:0.4rem">
+          <div class="tool-result hidden" id="portScanStatus" style="margin-bottom:0.4rem"></div>
+          <div class="port-results-grid" id="portScanResults"></div>
+        </div>
+
+        <!-- Wake-on-LAN -->
+        <div class="card tool-card">
+          <div class="card-header">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Wake-on-LAN
+            </h2>
+          </div>
+          <div class="tool-input-row">
+            <input type="text" id="wolMac" class="tool-input" placeholder="MAC address (xx:xx:xx:xx:xx:xx)">
+            <button class="btn btn-primary btn-sm" onclick="window.runWOL()">Wake</button>
+          </div>
+          <div class="tool-result hidden" id="wolResult"></div>
+        </div>
+
       </div>
     </section>
 
@@ -756,6 +842,14 @@
               </svg>
               Export Everything
             </button>
+            <button class="btn btn-secondary" onclick="window.exportReportPDF()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="9" y1="13" x2="15" y2="13"/>
+              </svg>
+              Export PDF Report
+            </button>
             <button class="btn btn-danger" onclick="window.confirmWipeData()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                 <polyline points="3 6 5 6 21 6"/>
@@ -764,6 +858,71 @@
               Delete All Local Data
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Scheduled Scans -->
+      <div class="card" style="margin-top:1.25rem">
+        <div class="card-header">
+          <h2>Scheduled Scans</h2>
+          <button class="btn btn-primary btn-sm" onclick="window.openScheduleBuilder()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Schedule
+          </button>
+        </div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">
+          Automatically run scans and export reports on a schedule. Exports save to your Downloads folder.
+        </p>
+        <div class="schedule-list" id="scheduleList">
+          <div class="empty-state-sm">No scheduled scans. Click "Add Schedule" to create one.</div>
+        </div>
+      </div>
+
+      <!-- Plugin / Script Hooks -->
+      <div class="card" style="margin-top:1.25rem">
+        <div class="card-header">
+          <h2>Post-Scan Script Hooks</h2>
+          <button class="btn btn-primary btn-sm" onclick="window.openHookBuilder()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Hook
+          </button>
+        </div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">
+          Run a custom script or executable when certain events occur. Enables integration with Home Assistant, Node-RED, or custom automation.
+        </p>
+        <div id="hookList">
+          <div class="empty-state-sm">No hooks configured. Add a hook to run scripts on scan events.</div>
+        </div>
+      </div>
+
+      <!-- Local REST API -->
+      <div class="card" style="margin-top:1.25rem">
+        <div class="card-header">
+          <h2>Local REST API</h2>
+          <span class="tag tag-info" id="apiStatusTag">Active · port 7722</span>
+        </div>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">
+          Read-only local API. Use with Home Assistant, Grafana, Node-RED, or custom dashboards.
+          No external connections — <code>127.0.0.1</code> only.
+        </p>
+        <div class="info-grid" style="margin-bottom:0.75rem">
+          <div class="info-row"><span class="info-lbl">Endpoints</span>
+            <span class="info-val mono" style="font-size:0.75rem">GET /api/devices · /api/status · /api/alerts</span>
+          </div>
+          <div class="info-row"><span class="info-lbl">API Key</span>
+            <div class="api-key-field" id="apiKeyField">
+              <span class="api-key-value" id="apiKeyDisplay">—</span>
+              <button class="btn btn-secondary btn-sm" onclick="window.copyApiKey()">Copy</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.rotateApiKey()">Rotate</button>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-muted);background:var(--bg-output);padding:0.5rem 0.75rem;border-radius:var(--radius-sm);font-family:'IBM Plex Mono',monospace">
+          curl -H "X-API-Key: YOUR_KEY" http://127.0.0.1:7722/api/devices
         </div>
       </div>
 
@@ -1128,6 +1287,132 @@
 
 <!-- ── Toast ───────────────────────────────────────────────────── -->
 <div id="toast" class="toast hidden"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SNAPSHOT DIFF MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="snapshotDiffModal" class="modal-backdrop hidden diff-modal" role="dialog" aria-modal="true">
+  <div class="modal" style="max-width:900px;width:95vw">
+    <div class="modal-header">
+      <h2>Snapshot Comparison — Diff View</h2>
+      <button class="modal-close" onclick="document.getElementById('snapshotDiffModal').classList.add('hidden')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="diff-controls">
+        <div style="flex:1">
+          <label class="rb-label">Baseline snapshot (A)</label>
+          <select id="diffSnapshotA" class="sel-input"></select>
+        </div>
+        <div style="flex:1">
+          <label class="rb-label">Compare snapshot (B)</label>
+          <select id="diffSnapshotB" class="sel-input"></select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="window.runSnapshotDiff()">Compare</button>
+      </div>
+      <div id="diffSummary" class="diff-summary" style="display:none"></div>
+      <div id="diffResults"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCHEDULE BUILDER MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="scheduleBuilderModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Create Scheduled Scan</h2>
+      <button class="modal-close" onclick="document.getElementById('scheduleBuilderModal').classList.add('hidden')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="rb-section">
+        <label class="rb-label">Schedule name</label>
+        <input type="text" id="schedName" class="tool-input" placeholder="e.g. Weekly deep scan">
+      </div>
+      <div class="rb-section">
+        <label class="rb-label">Scan mode</label>
+        <select id="schedMode" class="sel-input">
+          <option value="quick">Quick</option>
+          <option value="standard" selected>Standard</option>
+          <option value="deep">Deep</option>
+        </select>
+      </div>
+      <div class="rb-section rb-row">
+        <div>
+          <label class="rb-label">Frequency</label>
+          <select id="schedFreq" class="sel-input">
+            <option value="hourly">Every hour</option>
+            <option value="daily" selected>Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+        <div>
+          <label class="rb-label">At time</label>
+          <input type="time" id="schedTime" class="tool-input-sm" value="03:00">
+        </div>
+      </div>
+      <div class="rb-section">
+        <label class="checkbox-label"><input type="checkbox" id="schedExport"> Auto-export report after scan</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('scheduleBuilderModal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveSchedule()">Save Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     HOOK BUILDER MODAL
+══════════════════════════════════════════════════════════════════════ -->
+<div id="hookBuilderModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Create Script Hook</h2>
+      <button class="modal-close" onclick="document.getElementById('hookBuilderModal').classList.add('hidden')" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="rb-section">
+        <label class="rb-label">Trigger event</label>
+        <select id="hookEvent" class="sel-input">
+          <option value="scan_complete">After any scan completes</option>
+          <option value="new_device">When a new device is detected</option>
+          <option value="device_offline">When a device goes offline</option>
+          <option value="alert_triggered">When any alert triggers</option>
+          <option value="high_severity">When a high-severity alert triggers</option>
+        </select>
+      </div>
+      <div class="rb-section">
+        <label class="rb-label">Script / executable path</label>
+        <input type="text" id="hookCmd" class="tool-input" placeholder="/path/to/script.sh or C:\scripts\notify.bat">
+        <p class="rb-hint">The script receives event data as JSON via stdin.</p>
+      </div>
+      <div class="rb-section">
+        <label class="rb-label">Description (optional)</label>
+        <input type="text" id="hookDesc" class="tool-input" placeholder="What does this hook do?">
+      </div>
+      <div class="rb-section">
+        <label class="checkbox-label"><input type="checkbox" id="hookEnabled" checked> Hook enabled</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('hookBuilderModal').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveHook()">Save Hook</button>
+    </div>
+  </div>
+</div>
 
 <script src="renderer.js"></script>
 </body>

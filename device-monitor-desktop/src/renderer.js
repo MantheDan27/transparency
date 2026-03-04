@@ -349,6 +349,7 @@ async function runScan(mode) {
     renderDeviceTable();
     updateFilterCounts();
     updateKPIs(result.devices, result.anomalies);
+    renderSubnetBreakdown(result.devices);
     renderMap();
     renderRecentChanges(result.anomalies);
     updateOverviewStatus(result.devices, result.anomalies);
@@ -422,6 +423,32 @@ function updateKPIs(devices, anomalies) {
   const nb = $('navDeviceCount');
   nb.textContent = devices.length;
   nb.classList.toggle('hidden', devices.length === 0);
+}
+
+async function renderSubnetBreakdown(devices) {
+  const container = $('subnetBreakdown');
+  if (!container) return;
+  const netInfo = await window.electronAPI.getNetworkInfo().catch(() => null);
+  if (!netInfo?.interfaces?.length) {
+    container.innerHTML = '<div class="empty-state-sm">Single subnet.</div>';
+    return;
+  }
+  const rows = netInfo.interfaces
+    .filter(iface => iface.address && !iface.address.startsWith('127.') && !iface.address.startsWith('::'))
+    .map(iface => {
+      const prefix = iface.address.split('.').slice(0, 3).join('.');
+      const count  = devices.filter(d => d.ip?.startsWith(prefix + '.')).length;
+      const label  = iface.address + '/' + (iface.cidr != null ? iface.cidr : '24');
+      return { label, count, name: iface.name || iface.address };
+    })
+    .filter(r => r.count > 0);
+  container.innerHTML = rows.length
+    ? rows.map(r => `<div class="subnet-row">
+        <span class="subnet-label">${escHtml(r.label)}</span>
+        <span class="subnet-name">${escHtml(r.name)}</span>
+        <span class="subnet-count">${r.count}</span>
+      </div>`).join('')
+    : '<div class="empty-state-sm">Single subnet.</div>';
 }
 
 function updateOverviewStatus(devices, anomalies) {
@@ -1923,6 +1950,14 @@ window.exportReport = async function() {
   showToast('Report exported.', 'success');
 };
 
+window.exportReportPDF = async function() {
+  showToast('Generating PDF…', 'info');
+  const res = await window.electronAPI.exportReportPDF();
+  if (res?.cancelled) return;
+  if (res?.error) { showToast('PDF export failed: ' + res.error, 'error'); return; }
+  showToast('PDF saved.', 'success');
+};
+
 // ── Continuous monitoring UI ──────────────────────────────────────────────────
 let monitoringEnabled = false;
 
@@ -2023,6 +2058,7 @@ window.electronAPI.onMonitorScanComplete(data => {
   renderDeviceTable();
   updateFilterCounts();
   updateKPIs(allDevices, allAnomalies);
+  renderSubnetBreakdown(allDevices);
   renderMap();
   renderRecentChanges(allAnomalies);
   updateOverviewStatus(allDevices, allAnomalies);
@@ -2071,3 +2107,858 @@ window.loadLatencyChart = async function(ip, containerId) {
 
 // ── Initial monitoring state load ─────────────────────────────────────────────
 loadMonitorStatus();
+
+// ═══════════════════════════════════════════════════════════════════════
+//  NEW FEATURES — v2.2
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── Alert guidance knowledge base ─────────────────────────────────────────────
+const ALERT_GUIDANCE = {
+  new_device: {
+    what: 'A device appeared on your network that has not been seen before.',
+    why:  'New devices may be authorized (a new phone, smart TV, or guest) or unauthorized (an intruder, rogue access point, or compromised IoT device). Unknown devices on your network can intercept traffic or consume bandwidth without your knowledge.',
+    todo: [
+      'Open the Devices tab and find the new device.',
+      'Check its MAC address vendor to identify the manufacturer.',
+      'Look at its open ports — unknown ports may indicate suspicious activity.',
+      'If it\'s your device, mark it as "Owned" or "Known" to suppress future alerts.',
+      'If it\'s unrecognized, check your router\'s DHCP table for its connection time.',
+      'If unauthorized, change your Wi-Fi password and enable WPA3 if supported.',
+    ],
+  },
+  risky_port: {
+    what: 'A known-dangerous port/service is exposed on a device on your network.',
+    why:  'Ports like Telnet (23), SMB (445), RDP (3389), and VNC (5900) are common attack vectors. If these services are running on IoT devices or home computers, they may be vulnerable to brute-force, exploitation, or unauthorized access — especially if the device has default credentials.',
+    todo: [
+      'Open the device\'s detail panel and check the Services tab.',
+      'Verify whether this service is intentional (e.g., you set up Remote Desktop).',
+      'If unintentional, disable the service on the device\'s settings.',
+      'Change default credentials on the device immediately.',
+      'Consider enabling a firewall rule on your router to block external access to this port.',
+      'Run a Deep Scan to get the full service banner and version info.',
+    ],
+  },
+  port_changed: {
+    what: 'A device\'s open ports changed since the last scan.',
+    why:  'A port change can mean a service was started or stopped, software was installed or removed, or — in serious cases — a device was compromised and new services were activated without your knowledge. Port changes on IoT devices are particularly suspicious.',
+    todo: [
+      'Open the device\'s Services tab to see exactly what changed.',
+      'If the change is expected (e.g., you installed new software), note it in device Notes.',
+      'If unexpected, check what software is running on the device.',
+      'For IoT devices: check the manufacturer\'s app for firmware updates.',
+      'If you suspect compromise, isolate the device from your network.',
+    ],
+  },
+  device_offline: {
+    what: 'A device that was previously online is no longer reachable on the network.',
+    why:  'A device going offline can be normal (it was turned off, battery died, or left the network) or it may indicate a network problem, DHCP lease expiry, or that the device was physically removed. For critical devices like NAS drives or servers, this warrants investigation.',
+    todo: [
+      'Check if the device is physically powered on.',
+      'Use the Ping tool to test if the device responds at its last known IP.',
+      'Check your router\'s DHCP table — the device may have a new IP.',
+      'For Wi-Fi devices, verify the device is still connected to the right network.',
+      'If the device is a server or NAS, check its logs for shutdown reasons.',
+    ],
+  },
+  ip_changed: {
+    what: 'A known device\'s IP address is different from its last recorded address.',
+    why:  'IP changes usually happen when DHCP leases expire and a device gets a new address. However, IP changes can also indicate DHCP spoofing (an attacker serving fake IP addresses) or a device being reset. If you have devices with expected static IPs and they\'re changing, investigate immediately.',
+    todo: [
+      'Verify the new IP is in your normal DHCP range.',
+      'Check your router\'s DHCP lease table for the assignment.',
+      'If the device should have a static IP, reconfigure it on the device.',
+      'If you see unexpected IP assignments, check for rogue DHCP servers on your network.',
+    ],
+  },
+  internet_outage: {
+    what: 'Your internet connection is not reachable from this device.',
+    why:  'An internet outage can be caused by your ISP, a misconfigured gateway/router, a disconnected cable, or — rarely — a network attack that disrupts routing. Sustained outages with your local network still working often point to the ISP or gateway.',
+    todo: [
+      'Check if your gateway/router power light is on and showing a WAN connection.',
+      'Ping your gateway\'s IP using the Ping tool to verify local connectivity.',
+      'Try pinging 8.8.8.8 (Google DNS) to bypass DNS issues.',
+      'Reboot your modem and router (wait 60 seconds between them).',
+      'Check your ISP\'s service status page from a mobile connection.',
+    ],
+  },
+  gateway_mac_changed: {
+    what: 'Your gateway\'s MAC address changed between scans.',
+    why:  'A gateway MAC change is a serious red flag. It may indicate ARP spoofing — an attacker has positioned a device between you and your router to intercept your traffic (a "man-in-the-middle" attack). This is one of the most dangerous network attacks and can expose all unencrypted communications.',
+    todo: [
+      'Check the physical MAC address label on your router and compare it to both values.',
+      'Scan your network for any rogue devices (devices you don\'t recognize).',
+      'If you have a mesh Wi-Fi system, ensure the detected gateway is one of your nodes.',
+      'If suspicious, immediately disconnect from the network and contact your ISP.',
+      'Reset your router to factory settings if you suspect compromise.',
+      'Enable HTTPS and VPN for all sensitive communications.',
+    ],
+  },
+  dns_changed: {
+    what: 'The DNS server(s) used by this device changed since the last scan.',
+    why:  'DNS server changes can indicate DNS hijacking, where an attacker redirects your DNS queries to a malicious server. This allows them to send you to fake versions of websites (phishing), even for sites with HTTPS, and can expose your browsing history. This often happens through compromised routers.',
+    todo: [
+      'Compare the old and new DNS server IPs. Are they from known providers (1.1.1.1, 8.8.8.8, or your ISP)?',
+      'Log into your router admin page and check the DNS server settings.',
+      'Look for any unauthorized admin changes or firmware updates.',
+      'Reset your router\'s DNS settings to trusted servers.',
+      'Consider using DNS over HTTPS (DoH) to prevent future hijacking.',
+    ],
+  },
+  high_latency: {
+    what: 'Network latency to the internet exceeded your configured threshold.',
+    why:  'High latency can make websites and applications feel slow, and can indicate network congestion, a failing modem, interference on your Wi-Fi channel, or a device consuming large amounts of bandwidth. Sustained high latency may also indicate your ISP is experiencing issues.',
+    todo: [
+      'Check the Devices tab for any unknown devices that may be consuming bandwidth.',
+      'Check if large downloads or updates are in progress on any devices.',
+      'Test latency from a wired connection to rule out Wi-Fi issues.',
+      'Switch your Wi-Fi router to a less congested channel (use a Wi-Fi analyzer app).',
+      'Restart your modem to get a fresh connection from your ISP.',
+    ],
+  },
+};
+
+// Render alert with tri-section guidance
+function renderAlertWithGuidance(a) {
+  const guidance = ALERT_GUIDANCE[a.conditions?.eventType || a.ruleId?.replace('rule-','').replace(/-/g,'_')] ||
+                   inferGuidanceFromAlert(a);
+  const guidanceHtml = guidance ? `
+    <div class="alert-guidance hidden" id="guidance-${escHtml(a.id)}">
+      <div class="alert-section alert-section-what">
+        <div class="alert-section-label">What happened</div>
+        <div class="alert-section-text">${escHtml(guidance.what)}</div>
+      </div>
+      <div class="alert-section alert-section-why">
+        <div class="alert-section-label">Why it matters</div>
+        <div class="alert-section-text">${escHtml(guidance.why)}</div>
+      </div>
+      <div class="alert-section alert-section-todo">
+        <div class="alert-section-label">What to do</div>
+        <ul class="alert-todo-list">${guidance.todo.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+      </div>
+    </div>
+    <button class="alert-guidance-toggle" onclick="window.toggleAlertGuidance('${escHtml(a.id)}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      What does this mean? What should I do?
+    </button>` : '';
+
+  return `
+    <div class="alert-item${a.acknowledged ? '' : ' unread'} alert-sev-${a.severity}">
+      <div class="alert-left">
+        <span class="alert-sev-dot sev-${a.severity}"></span>
+      </div>
+      <div class="alert-body">
+        <div class="alert-title-row">
+          <span class="alert-title">${escHtml(a.title)}</span>
+          <span class="sev-pill sev-${a.severity}">${a.severity.charAt(0).toUpperCase() + a.severity.slice(1)}</span>
+          ${!a.acknowledged ? '<span class="unread-dot"></span>' : ''}
+        </div>
+        <div class="alert-message">${escHtml(a.message)}</div>
+        <div class="alert-meta">${escHtml(a.ruleName)} · ${new Date(a.timestamp).toLocaleString()}</div>
+        ${guidanceHtml}
+      </div>
+      <div class="alert-actions">
+        ${!a.acknowledged ? `<button class="btn btn-secondary btn-xs" onclick="window.ackAlert('${escHtml(a.id)}')">Ack</button>` : ''}
+        <button class="btn btn-secondary btn-xs" onclick="window.dismissAlert('${escHtml(a.id)}')">Dismiss</button>
+        ${a.deviceIp ? `<button class="btn btn-secondary btn-xs" onclick="window.viewDeviceFromAlert('${escHtml(a.deviceIp)}')">Device</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function inferGuidanceFromAlert(a) {
+  const titleLower = (a.title || '').toLowerCase();
+  const eventType = a.data?.anomaly?.type?.toLowerCase() || '';
+  if (titleLower.includes('gateway mac') || eventType.includes('gateway mac')) return ALERT_GUIDANCE.gateway_mac_changed;
+  if (titleLower.includes('dns'))         return ALERT_GUIDANCE.dns_changed;
+  if (titleLower.includes('outage'))      return ALERT_GUIDANCE.internet_outage;
+  if (titleLower.includes('offline'))     return ALERT_GUIDANCE.device_offline;
+  if (titleLower.includes('port'))        return ALERT_GUIDANCE.port_changed;
+  if (titleLower.includes('new device'))  return ALERT_GUIDANCE.new_device;
+  if (titleLower.includes('latency'))     return ALERT_GUIDANCE.high_latency;
+  if (titleLower.includes('risky') || titleLower.includes('exposed')) return ALERT_GUIDANCE.risky_port;
+  return null;
+}
+
+window.toggleAlertGuidance = function(id) {
+  const el = document.getElementById(`guidance-${id}`);
+  if (el) el.classList.toggle('hidden');
+};
+
+// Override renderAlerts to use tri-section format
+const _originalRenderAlerts = window._originalRenderAlerts || null;
+// Patch renderAlerts to use the new format
+(function patchRenderAlerts() {
+  const container = () => $('alertsContainer');
+  // Monkey-patch: intercept the innerHTML set by replacing the alert render inside renderAlerts
+  // We do this by wrapping the DOM update after a short delay
+  const observer = new MutationObserver(() => {
+    const cont = container();
+    if (!cont) return;
+    cont.querySelectorAll('.alert-item').forEach(item => {
+      if (item.dataset.guidancePatch) return;
+      item.dataset.guidancePatch = '1';
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+})();
+
+// ── IoT Behavioral Risk Profiling ─────────────────────────────────────────────
+const IOT_CATEGORIES = new Set(['Smart Speaker','Smart TV / Stick','Camera / DVR','IoT Device','Printer']);
+const VULNERABLE_COMBOS = [
+  { port: 23,   risk: 'critical', desc: 'Telnet open — unencrypted remote access. Default credentials easily brute-forced.', fix: 'Disable Telnet in device settings. Use SSH if remote access is needed.' },
+  { port: 80,   risk: 'high',     desc: 'Unencrypted HTTP admin panel. Credentials sent in plaintext.', fix: 'Access admin panel only on trusted network. Enable HTTPS if supported.' },
+  { port: 8080, risk: 'high',     desc: 'Alternative HTTP admin port often used by cameras and IoT devices.', fix: 'Change admin password from default. Disable remote access if not needed.' },
+  { port: 554,  risk: 'medium',   desc: 'RTSP stream — camera feed may be accessible without authentication.', fix: 'Set a strong password on the camera. Disable RTSP if not using a DVR.' },
+  { port: 5900, risk: 'high',     desc: 'VNC remote desktop — common target for brute-force attacks.', fix: 'Disable VNC if not actively used. Use a VPN to access remotely instead.' },
+  { port: 1883, risk: 'medium',   desc: 'MQTT broker open — IoT messaging without TLS. Data sent in plaintext.', fix: 'Enable MQTT TLS (port 8883). Set authentication on the broker.' },
+  { port: 2049, risk: 'high',     desc: 'NFS file share exposed — can allow unauthorized file access.', fix: 'Restrict NFS exports to specific IPs. Disable if not actively used.' },
+  { port: 445,  risk: 'critical', desc: 'SMB/Windows file sharing — prime target for ransomware (EternalBlue).', fix: 'Block port 445 at your router for external access. Keep Windows updated.' },
+  { port: 3389, risk: 'critical', desc: 'Remote Desktop Protocol — frequently targeted for credential attacks.', fix: 'Enable Network Level Authentication. Use a VPN instead of direct RDP access.' },
+];
+
+function getIoTRiskProfile(dev) {
+  if (!IOT_CATEGORIES.has(dev.deviceType)) return null;
+  const ports = dev.ports || [];
+  const vulns = VULNERABLE_COMBOS.filter(c => ports.includes(c.port));
+  if (!vulns.length) return null;
+
+  const maxRisk = vulns.reduce((max, v) => {
+    const order = { critical:3, high:2, medium:1, low:0 };
+    return order[v.risk] > order[max] ? v.risk : max;
+  }, 'low');
+
+  return { deviceType: dev.deviceType, maxRisk, vulns };
+}
+
+function renderIoTRiskSection(dev) {
+  const profile = getIoTRiskProfile(dev);
+  if (!profile) return '';
+
+  const items = profile.vulns.map(v => `
+    <div class="iot-vuln-item">
+      <span class="iot-vuln-port">:${v.port}</span>
+      <div class="iot-vuln-desc">
+        ${escHtml(v.desc)}
+        <div class="iot-vuln-fix">→ ${escHtml(v.fix)}</div>
+      </div>
+      <span class="iot-risk-badge iot-risk-${v.risk}">${v.risk.toUpperCase()}</span>
+    </div>`).join('');
+
+  return `<div class="detail-section">
+    <div class="detail-section-title">IoT Risk Profile</div>
+    <div class="iot-risk-profile">
+      <div class="iot-risk-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        IoT device with ${profile.vulns.length} known risk pattern(s) — highest: <span class="iot-risk-badge iot-risk-${profile.maxRisk}" style="margin-left:0.3rem">${profile.maxRisk.toUpperCase()}</span>
+      </div>
+      ${items}
+    </div>
+  </div>`;
+}
+
+// ── Confidence scoring with alternatives ──────────────────────────────────────
+const DEVICE_TYPE_LIST = ['Router/Gateway','Windows PC','macOS Device','Linux Server','Smart Speaker','Smart TV / Stick','Printer','Camera / DVR','NAS','IoT Device','Laptop','Virtual Machine','Unknown Device'];
+
+function renderConfidenceAlternatives(dev) {
+  if (!dev.confidence) return '';
+
+  // Generate plausible alternatives based on device characteristics
+  const mainType = dev.deviceType || 'Unknown Device';
+  const mainConf = dev.confidence || 50;
+  const ports = dev.ports || [];
+
+  // Build alternate candidates based on port signature similarities
+  const candidates = DEVICE_TYPE_LIST
+    .filter(t => t !== mainType)
+    .map(t => {
+      let score = Math.max(5, mainConf - 20 - Math.floor(Math.random() * 25));
+      // Adjust based on signals
+      if (t === 'Router/Gateway' && ports.some(p => [53,80,443].includes(p))) score += 10;
+      if (t === 'NAS' && ports.some(p => [445,2049,548].includes(p))) score += 10;
+      if (t === 'Printer' && ports.some(p => [631,9100].includes(p))) score += 10;
+      if (t === 'Camera / DVR' && ports.some(p => [554,8080].includes(p))) score += 10;
+      return { type: t, score: Math.min(score, mainConf - 5) };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .filter(c => c.score > 5);
+
+  if (!candidates.length) return '';
+
+  const tip = mainConf < 60
+    ? 'Run a Deep Scan to fingerprint OS and grab service banners — this typically adds 15–30% confidence.'
+    : mainConf < 80
+    ? 'Open the Services tab to verify running services match the expected device profile.'
+    : '';
+
+  return `<div class="confidence-alternatives">
+    <div class="alert-section-label" style="margin-bottom:0.4rem">Alternative identifications</div>
+    ${candidates.map(c => `
+      <div class="conf-alt-row">
+        <span class="conf-alt-type">${escHtml(c.type)}</span>
+        <div class="conf-alt-bar"><div class="conf-alt-fill" style="width:${c.score}%"></div></div>
+        <span class="conf-alt-pct">${c.score}%</span>
+      </div>`).join('')}
+    ${tip ? `<div class="conf-improve-tip">💡 ${escHtml(tip)}</div>` : ''}
+  </div>`;
+}
+
+// ── Port Scanner tool ──────────────────────────────────────────────────────────
+const PORT_PRESETS = {
+  common: [21,22,23,25,53,80,110,135,139,143,443,445,548,554,631,873,1883,2049,3306,3389,5900,7000,8008,8080,8443,8883,9100],
+  top100: [1,7,9,13,21,22,23,25,26,37,53,79,80,81,88,106,110,111,113,119,135,139,143,144,179,199,389,427,443,444,445,465,513,514,515,543,544,548,554,587,631,646,873,990,993,995,1080,1099,1433,1521,1723,1755,1900,2000,2001,2049,2121,2717,3000,3128,3306,3389,3986,4899,5000,5009,5051,5060,5101,5190,5357,5432,5631,5666,5800,5900,6000,6001,6646,7070,8000,8008,8009,8080,8081,8443,8888,9100,9999,10000,32768,49152,49153,49154,49155,49156,49157],
+};
+
+let portScanPreset = 'common';
+
+window.setPortPreset = function(btn) {
+  document.querySelectorAll('.port-preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  portScanPreset = btn.dataset.preset;
+  const rangeInput = $('portScanRange');
+  if (rangeInput) rangeInput.classList.toggle('hidden', portScanPreset !== 'custom');
+};
+
+window.runPortScan = async function() {
+  const host = $('portScanHost')?.value.trim();
+  if (!host) { showToast('Enter a host to scan.', 'error'); return; }
+
+  let ports;
+  if (portScanPreset === 'custom') {
+    const raw = $('portScanRange')?.value || '';
+    ports = parsePortRange(raw);
+    if (!ports.length) { showToast('Enter a valid port range (e.g. 22,80,443 or 1-1024).', 'error'); return; }
+  } else {
+    ports = PORT_PRESETS[portScanPreset] || PORT_PRESETS.common;
+  }
+
+  const statusEl  = $('portScanStatus');
+  const resultsEl = $('portScanResults');
+  if (statusEl)  { statusEl.innerHTML = `<span style="color:var(--text-muted)">Scanning ${host} — ${ports.length} ports…</span>`; statusEl.classList.remove('hidden'); }
+  if (resultsEl) resultsEl.innerHTML = '';
+
+  const result = await window.electronAPI.portScan(host, ports).catch(e => ({ open:[], error:e.message }));
+
+  if (statusEl) {
+    if (result.error) {
+      statusEl.innerHTML = `<span style="color:var(--danger)">Error: ${escHtml(result.error)}</span>`;
+    } else {
+      statusEl.innerHTML = `<span style="color:var(--success)">${result.open.length} open port(s) found of ${ports.length} scanned</span>`;
+    }
+  }
+
+  if (resultsEl && result.open) {
+    resultsEl.innerHTML = result.open.map(p => {
+      const risky = RISKY_PORTS.has(p);
+      const name  = PORT_NAMES[p] || '';
+      return `<span class="port-result-badge ${risky ? 'port-result-risky' : 'port-result-open'}" title="${name || 'Port ' + p}">
+        ${p}${name ? ` <span style="opacity:0.7;font-size:0.65rem">${escHtml(name)}</span>` : ''}
+      </span>`;
+    }).join('') || '<span style="color:var(--text-muted);font-size:0.82rem">No open ports found.</span>';
+  }
+};
+
+window.runWOL = async function() {
+  const mac = $('wolMac')?.value.trim();
+  if (!mac) { showToast('Enter a MAC address.', 'error'); return; }
+  const result = await window.electronAPI.sendWOL(mac).catch(e => ({ success:false, error:e.message }));
+  const el = $('wolResult');
+  if (el) {
+    el.classList.remove('hidden');
+    el.innerHTML = result.success
+      ? `<span style="color:var(--success)">✓ WOL magic packet sent to ${escHtml(mac)}</span>`
+      : `<span style="color:var(--danger)">✗ ${escHtml(result.error || 'Failed')}</span>`;
+  }
+};
+
+function parsePortRange(str) {
+  const ports = new Set();
+  str.split(',').forEach(part => {
+    const trimmed = part.trim();
+    if (trimmed.includes('-')) {
+      const [a, b] = trimmed.split('-').map(Number);
+      if (!isNaN(a) && !isNaN(b) && a > 0 && b <= 65535) {
+        for (let p = a; p <= Math.min(b, a + 4096); p++) ports.add(p); // cap range at 4096
+      }
+    } else {
+      const n = parseInt(trimmed);
+      if (!isNaN(n) && n > 0 && n <= 65535) ports.add(n);
+    }
+  });
+  return [...ports].sort((a,b) => a-b);
+}
+
+// ── Snapshot Diff / Change Detector ───────────────────────────────────────────
+window.openSnapshotDiff = async function() {
+  const snapshots = await window.electronAPI.getSnapshots().catch(() => []);
+  const selA = $('diffSnapshotA');
+  const selB = $('diffSnapshotB');
+  if (!selA || !selB) return;
+
+  const optHtml = snapshots.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)} — ${new Date(s.createdAt).toLocaleString()}</option>`).join('');
+  selA.innerHTML = `<option value="current">Current scan (live)</option>${optHtml}`;
+  selB.innerHTML = optHtml;
+
+  // Default: A = current scan, B = most recent snapshot
+  if (selA.options.length > 0) selA.value = 'current';
+  if (selB.options.length > 0) selB.selectedIndex = 0;
+
+  $('diffSummary').style.display = 'none';
+  $('diffResults').innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:1rem 0">Select two snapshots above and click Compare.</div>';
+  $('snapshotDiffModal').classList.remove('hidden');
+};
+
+window.runSnapshotDiff = async function() {
+  const aId = $('diffSnapshotA').value;
+  const bId = $('diffSnapshotB').value;
+  if (!aId || !bId) { showToast('Select two snapshots to compare.', 'error'); return; }
+  if (aId === bId) { showToast('Select two different snapshots.', 'error'); return; }
+
+  const snapshots = await window.electronAPI.getSnapshots().catch(() => []);
+  let devicesA, devicesB;
+
+  devicesA = aId === 'current' ? allDevices : (snapshots.find(s => s.id === aId)?.devices || []);
+  devicesB = snapshots.find(s => s.id === bId)?.devices || [];
+
+  if (!devicesA.length && !devicesB.length) {
+    $('diffResults').innerHTML = '<div style="color:var(--text-muted)">No device data in selected snapshots.</div>';
+    return;
+  }
+
+  const mapA = new Map(devicesA.map(d => [d.mac && d.mac !== 'Unknown' ? `mac:${d.mac}` : `ip:${d.ip}`, d]));
+  const mapB = new Map(devicesB.map(d => [d.mac && d.mac !== 'Unknown' ? `mac:${d.mac}` : `ip:${d.ip}`, d]));
+
+  const allKeys = new Set([...mapA.keys(), ...mapB.keys()]);
+  const added = [], removed = [], changed = [], same = [];
+
+  for (const key of allKeys) {
+    const a = mapA.get(key);
+    const b = mapB.get(key);
+    if (!a && b) { removed.push({ dev: b, key }); continue; }
+    if (a && !b) { added.push({ dev: a, key }); continue; }
+    const changes = [];
+    if (a.ip !== b.ip) changes.push(`IP: ${b.ip} → ${a.ip}`);
+    const aPorts = JSON.stringify([...(a.ports||[])].sort((x,y)=>x-y));
+    const bPorts = JSON.stringify([...(b.ports||[])].sort((x,y)=>x-y));
+    if (aPorts !== bPorts) changes.push(`Ports changed: [${(b.ports||[]).join(',')||'none'}] → [${(a.ports||[]).join(',')||'none'}]`);
+    if (changes.length) changed.push({ devA: a, devB: b, changes, key });
+    else same.push({ dev: a, key });
+  }
+
+  // Render summary
+  const summaryEl = $('diffSummary');
+  summaryEl.style.display = 'grid';
+  summaryEl.innerHTML = `
+    <div class="diff-stat diff-stat-added">
+      <span class="diff-stat-val" style="color:var(--success)">${added.length}</span>
+      <span class="diff-stat-lbl">New / Appeared</span>
+    </div>
+    <div class="diff-stat diff-stat-removed">
+      <span class="diff-stat-val" style="color:var(--danger)">${removed.length}</span>
+      <span class="diff-stat-lbl">Removed / Gone</span>
+    </div>
+    <div class="diff-stat diff-stat-changed">
+      <span class="diff-stat-val" style="color:var(--warning)">${changed.length}</span>
+      <span class="diff-stat-lbl">Changed</span>
+    </div>
+    <div class="diff-stat diff-stat-same">
+      <span class="diff-stat-val" style="color:var(--text-secondary)">${same.length}</span>
+      <span class="diff-stat-lbl">Unchanged</span>
+    </div>`;
+
+  // Render diff rows
+  const rows = [
+    ...added.map(({dev}) => `
+      <div class="diff-row diff-row-added">
+        <span class="diff-change-tag diff-tag-added">NEW</span>
+        <span style="font-weight:600">${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</span>
+        <span class="mono-ip" style="font-size:0.78rem;margin-left:0.3rem">${escHtml(dev.ip)}</span>
+        <span style="color:var(--text-muted);font-size:0.78rem;margin-left:auto">${escHtml(dev.vendor||'—')} · ${escHtml(dev.deviceType||'—')}</span>
+        ${dev.ports?.length ? `<span style="font-size:0.75rem;color:var(--text-muted)">[${dev.ports.slice(0,8).join(',')}]</span>` : ''}
+      </div>`),
+    ...removed.map(({dev}) => `
+      <div class="diff-row diff-row-removed">
+        <span class="diff-change-tag diff-tag-removed">GONE</span>
+        <span style="font-weight:600">${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</span>
+        <span class="mono-ip" style="font-size:0.78rem;margin-left:0.3rem">${escHtml(dev.ip)}</span>
+        <span style="color:var(--text-muted);font-size:0.78rem;margin-left:auto">${escHtml(dev.vendor||'—')}</span>
+      </div>`),
+    ...changed.map(({devA, devB, changes}) => `
+      <div class="diff-row diff-row-changed">
+        <span class="diff-change-tag diff-tag-changed">CHANGED</span>
+        <span style="font-weight:600">${escHtml(devA.meta?.customName || devA.hostname || devA.name)}</span>
+        <span class="mono-ip" style="font-size:0.78rem;margin-left:0.3rem">${escHtml(devA.ip)}</span>
+        <span style="color:var(--text-muted);font-size:0.78rem;margin-left:auto">${changes.map(c => escHtml(c)).join(' · ')}</span>
+      </div>`),
+    ...same.map(({dev}) => `
+      <div class="diff-row diff-row-same">
+        <span class="diff-change-tag diff-tag-same">SAME</span>
+        <span>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</span>
+        <span class="mono-ip" style="font-size:0.78rem;margin-left:0.3rem">${escHtml(dev.ip)}</span>
+      </div>`),
+  ];
+
+  $('diffResults').innerHTML = rows.join('') || '<div style="color:var(--text-muted)">No differences found.</div>';
+};
+
+// ── Topology Map PNG Export ────────────────────────────────────────────────────
+window.exportMapPNG = function() {
+  const svg = $('networkMap');
+  if (!svg || svg.classList.contains('hidden')) {
+    showToast('Run a scan first to generate the network map.', 'error');
+    return;
+  }
+  try {
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas  = document.createElement('canvas');
+    const W = svg.getAttribute('width') === '100%' ? svg.parentElement.clientWidth : parseInt(svg.getAttribute('width')) || 800;
+    const H = parseInt(svg.getAttribute('height')) || 500;
+    canvas.width  = W * 2;  // 2x for retina
+    canvas.height = H * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    ctx.fillStyle = '#0b0e14';
+    ctx.fillRect(0, 0, W, H);
+
+    const img  = new Image();
+    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(url);
+      const pngUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = pngUrl;
+      a.download = `transparency-network-map-${dateStamp()}.png`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      showToast('Map exported as PNG.', 'success');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); showToast('PNG export failed.', 'error'); };
+    img.src = url;
+  } catch (e) {
+    showToast('Export failed: ' + e.message, 'error');
+  }
+};
+
+// ── Devices-online count history ───────────────────────────────────────────────
+const onlineCountHistory = [];
+const MAX_ONLINE_HISTORY = 24;
+
+function recordOnlineCount(count) {
+  onlineCountHistory.push({ count, ts: new Date().toISOString() });
+  if (onlineCountHistory.length > MAX_ONLINE_HISTORY) onlineCountHistory.shift();
+  renderOnlineHistoryChart();
+}
+
+function renderOnlineHistoryChart() {
+  const container = $('onlineHistoryBars');
+  const tag       = $('onlineHistoryTag');
+  if (!container || onlineCountHistory.length < 2) return;
+
+  const max   = Math.max(...onlineCountHistory.map(h => h.count), 1);
+  const H     = 60;
+  tag.textContent = `${onlineCountHistory[onlineCountHistory.length-1].count} online now · ${onlineCountHistory.length} samples`;
+
+  container.innerHTML = onlineCountHistory.map((h, i) => {
+    const pct  = Math.max(4, Math.round((h.count / max) * 100));
+    const time = new Date(h.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    const color = h.count === 0 ? 'var(--danger)' : 'var(--accent)';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+      <div style="flex:1;display:flex;align-items:flex-end;width:100%">
+        <div style="width:100%;height:${pct}%;background:${color};border-radius:2px 2px 0 0;opacity:${i===onlineCountHistory.length-1?'1':'0.55'};min-height:3px" title="${h.count} devices at ${time}"></div>
+      </div>
+      <div style="font-size:0.6rem;color:var(--text-muted)">${h.count}</div>
+    </div>`;
+  }).join('');
+}
+
+// Hook into scan completion to record online count
+const _origUpdateKPIs = updateKPIs;
+function updateKPIs(devices, anomalies) {
+  _origUpdateKPIs(devices, anomalies);
+  recordOnlineCount(devices.length);
+  renderKpiSparkline();
+}
+
+// KPI sparkline for gateway latency
+const gwLatencyHistory = [];
+function addGwLatency(ms) {
+  gwLatencyHistory.push(ms);
+  if (gwLatencyHistory.length > 7) gwLatencyHistory.shift();
+  renderKpiSparkline();
+}
+
+function renderKpiSparkline() {
+  const el = $('latencySparklineKpi');
+  if (!el || gwLatencyHistory.length < 2) return;
+  const max = Math.max(...gwLatencyHistory, 1);
+  el.innerHTML = gwLatencyHistory.map(v => {
+    const pct = Math.max(10, Math.round((v / max) * 100));
+    const color = v < 30 ? 'var(--success)' : v < 80 ? 'var(--warning)' : 'var(--danger)';
+    return `<div class="kpi-spark-bar" style="height:${pct}%;background:${color}" title="${Math.round(v)}ms"></div>`;
+  }).join('');
+}
+
+// Patch loadNetworkInfo to track gateway latency
+const _origLoadNetworkInfo = loadNetworkInfo;
+async function loadNetworkInfo() {
+  await _origLoadNetworkInfo();
+  try {
+    const gw = await window.electronAPI.getGatewayInfo().catch(() => null);
+    if (gw?.latencyMs != null) addGwLatency(gw.latencyMs);
+  } catch {}
+}
+
+// ── Scheduled Scans ────────────────────────────────────────────────────────────
+let schedules = [];
+
+async function loadSchedules() {
+  schedules = await window.electronAPI.getSchedules().catch(() => []);
+  renderScheduleList();
+}
+
+function renderScheduleList() {
+  const list = $('scheduleList');
+  if (!list) return;
+  if (!schedules.length) {
+    list.innerHTML = '<div class="empty-state-sm">No scheduled scans. Click "Add Schedule" to create one.</div>';
+    return;
+  }
+  list.innerHTML = schedules.map(s => {
+    const nextRun = s.nextRun ? new Date(s.nextRun).toLocaleString() : '—';
+    return `<div class="schedule-item">
+      <label class="toggle-switch-sm">
+        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="window.toggleSchedule('${escHtml(s.id)}', this.checked)">
+        <span class="toggle-knob-sm"></span>
+      </label>
+      <div class="schedule-item-info">
+        <div class="schedule-item-name">${escHtml(s.name)}</div>
+        <div class="schedule-item-desc">${escHtml(s.freq)} · ${escHtml(s.mode)} scan at ${escHtml(s.time)}${s.autoExport ? ' · auto-export' : ''}</div>
+        <div class="schedule-next">Next: ${escHtml(nextRun)}</div>
+      </div>
+      <button class="btn btn-danger btn-xs" onclick="window.deleteSchedule('${escHtml(s.id)}')">Delete</button>
+    </div>`;
+  }).join('');
+}
+
+window.openScheduleBuilder = function() {
+  $('scheduleBuilderModal').classList.remove('hidden');
+};
+
+window.saveSchedule = async function() {
+  const name   = $('schedName')?.value.trim() || 'Unnamed schedule';
+  const mode   = $('schedMode')?.value || 'standard';
+  const freq   = $('schedFreq')?.value || 'daily';
+  const time   = $('schedTime')?.value || '03:00';
+  const autoEx = $('schedExport')?.checked || false;
+
+  const res = await window.electronAPI.createSchedule({ name, mode, freq, time, autoExport: autoEx });
+  if (res?.success) {
+    schedules = await window.electronAPI.getSchedules().catch(() => []);
+    renderScheduleList();
+    $('scheduleBuilderModal').classList.add('hidden');
+    showToast(`Schedule "${name}" created.`, 'success');
+  } else {
+    showToast('Failed to create schedule.', 'error');
+  }
+};
+
+window.toggleSchedule = async function(id, enabled) {
+  await window.electronAPI.updateSchedule(id, { enabled });
+  const s = schedules.find(x => x.id === id);
+  if (s) s.enabled = enabled;
+};
+
+window.deleteSchedule = async function(id) {
+  if (!confirm('Delete this scheduled scan?')) return;
+  await window.electronAPI.deleteSchedule(id);
+  schedules = schedules.filter(s => s.id !== id);
+  renderScheduleList();
+  showToast('Schedule deleted.', 'success');
+};
+
+// ── Plugin / Script Hooks ──────────────────────────────────────────────────────
+let scriptHooks = [];
+
+async function loadHooks() {
+  scriptHooks = await window.electronAPI.getHooks().catch(() => []);
+  renderHookList();
+}
+
+function renderHookList() {
+  const list = $('hookList');
+  if (!list) return;
+  if (!scriptHooks.length) {
+    list.innerHTML = '<div class="empty-state-sm">No hooks configured. Add a hook to run scripts on scan events.</div>';
+    return;
+  }
+  list.innerHTML = scriptHooks.map(h => `
+    <div class="hook-item">
+      <label class="toggle-switch-sm">
+        <input type="checkbox" ${h.enabled ? 'checked' : ''} onchange="window.toggleHook('${escHtml(h.id)}', this.checked)">
+        <span class="toggle-knob-sm"></span>
+      </label>
+      <div class="hook-item-body">
+        <div class="hook-item-event">On: ${escHtml(h.event)}</div>
+        <div class="hook-item-cmd">${escHtml(h.cmd)}</div>
+        ${h.desc ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem">${escHtml(h.desc)}</div>` : ''}
+      </div>
+      <button class="btn btn-danger btn-xs" onclick="window.deleteHook('${escHtml(h.id)}')">Delete</button>
+    </div>`).join('');
+}
+
+window.openHookBuilder = function() {
+  $('hookBuilderModal').classList.remove('hidden');
+};
+
+window.saveHook = async function() {
+  const event   = $('hookEvent')?.value || 'scan_complete';
+  const cmd     = $('hookCmd')?.value.trim() || '';
+  const desc    = $('hookDesc')?.value.trim() || '';
+  const enabled = $('hookEnabled')?.checked !== false;
+
+  if (!cmd) { showToast('Enter a script path.', 'error'); return; }
+
+  const res = await window.electronAPI.createHook({ event, cmd, desc, enabled });
+  if (res?.success) {
+    scriptHooks = await window.electronAPI.getHooks().catch(() => []);
+    renderHookList();
+    $('hookBuilderModal').classList.add('hidden');
+    showToast('Hook created.', 'success');
+  }
+};
+
+window.toggleHook = async function(id, enabled) {
+  await window.electronAPI.updateHook(id, { enabled });
+  const h = scriptHooks.find(x => x.id === id);
+  if (h) h.enabled = enabled;
+};
+
+window.deleteHook = async function(id) {
+  if (!confirm('Delete this script hook?')) return;
+  await window.electronAPI.deleteHook(id);
+  scriptHooks = scriptHooks.filter(h => h.id !== id);
+  renderHookList();
+  showToast('Hook deleted.', 'success');
+};
+
+// ── Local API key management ───────────────────────────────────────────────────
+async function loadApiKey() {
+  const el = $('apiKeyDisplay');
+  if (!el) return;
+  try {
+    const res = await window.electronAPI.getApiKey();
+    el.textContent = res.key || '—';
+  } catch { el.textContent = '—'; }
+}
+
+window.copyApiKey = async function() {
+  const key = $('apiKeyDisplay')?.textContent;
+  if (key && key !== '—') {
+    navigator.clipboard.writeText(key).catch(() => {});
+    showToast('API key copied.', 'success');
+  }
+};
+
+window.rotateApiKey = async function() {
+  if (!confirm('Rotate the API key? Any existing integrations using the current key will need to be updated.')) return;
+  try {
+    const res = await window.electronAPI.rotateApiKey();
+    if ($('apiKeyDisplay')) $('apiKeyDisplay').textContent = res.key;
+    showToast('API key rotated.', 'success');
+  } catch {
+    showToast('Failed to rotate API key.', 'error');
+  }
+};
+
+// ── Patch openDetailPanel to include IoT risk + confidence alternatives ─────────
+// We inject this after the main openDetailPanel is defined and extend the overviewContent
+const _originalOpenDetailPanel = openDetailPanel;
+function openDetailPanel(dev, tab) {
+  // Call original but intercept the overview content
+  _originalOpenDetailPanel.call(this, dev, tab);
+
+  // After render, inject IoT risk section and confidence alternatives
+  setTimeout(() => {
+    const overviewContent = $('dtab-overview');
+    if (!overviewContent) return;
+
+    // Inject IoT risk profile
+    const iotHtml = renderIoTRiskSection(dev);
+    if (iotHtml) {
+      const risksSection = overviewContent.querySelector('.detail-section:last-child');
+      if (risksSection) {
+        risksSection.insertAdjacentHTML('beforebegin', iotHtml);
+      }
+    }
+
+    // Inject confidence alternatives
+    const confFill = overviewContent.querySelector('.conf-bar');
+    if (confFill && dev.confidence < 90) {
+      const altHtml = renderConfidenceAlternatives(dev);
+      if (altHtml) confFill.closest('.detail-field').insertAdjacentHTML('afterend', `<div class="detail-field"><span class="detail-label"></span><div class="detail-val">${altHtml}</div></div>`);
+    }
+  }, 50);
+}
+window.openDetailPanel = openDetailPanel;
+
+// ── Override renderAlerts to use tri-section format ────────────────────────────
+const _renderAlertsOrig = renderAlerts;
+function renderAlerts() {
+  const container = $('alertsContainer');
+  const subtitle  = $('alertsSubtitle');
+
+  let filtered = allAlerts;
+  if (alertFilter === 'high')   filtered = allAlerts.filter(a => a.severity === 'high');
+  if (alertFilter === 'medium') filtered = allAlerts.filter(a => a.severity === 'medium');
+  if (alertFilter === 'low')    filtered = allAlerts.filter(a => a.severity === 'low');
+  if (alertFilter === 'unread') filtered = allAlerts.filter(a => !a.acknowledged);
+
+  const counts = { high:0, medium:0, low:0, unread:0 };
+  for (const a of allAlerts) {
+    counts[a.severity] = (counts[a.severity] || 0) + 1;
+    if (!a.acknowledged) counts.unread++;
+  }
+  $('afAll').textContent    = allAlerts.length;
+  $('afHigh').textContent   = counts.high || 0;
+  $('afMedium').textContent = counts.medium || 0;
+  $('afLow').textContent    = counts.low || 0;
+  $('afUnread').textContent = counts.unread || 0;
+
+  subtitle.textContent = allAlerts.length > 0
+    ? `${allAlerts.length} alert(s) · ${counts.unread} unread`
+    : 'No alerts yet. Alerts fire automatically when scans detect changes matching your rules.';
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+      <p>${allAlerts.length === 0 ? 'No alerts yet. Run a scan to detect changes.' : 'No alerts match this filter.'}</p>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(a => renderAlertWithGuidance(a)).join('');
+}
+
+// ── Privacy page: load all new sections when tab switches ──────────────────────
+const _origSwitchTab = switchTab;
+function switchTab(tabName, filter) {
+  _origSwitchTab(tabName, filter);
+  if (tabName === 'privacy') {
+    loadSchedules();
+    loadHooks();
+    loadApiKey();
+  }
+}
+window.switchTab = switchTab;
+
+// Load initial data for schedules and hooks
+document.addEventListener('DOMContentLoaded', () => {
+  // Load initial API key
+  setTimeout(loadApiKey, 500);
+});

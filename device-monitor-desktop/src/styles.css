@@ -1,62 +1,75 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Transparency — Charcoal + Navy Blue Design System
+   Transparency — Industrial Minimal Dark Design System v2.2
    ═══════════════════════════════════════════════════════════════════════ */
 
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 :root {
-  /* Backgrounds */
-  --bg-body:       #13161d;
-  --bg-sidebar:    #0b1524;
-  --bg-card:       #1a1f2e;
-  --bg-card-alt:   #1e2438;
-  --bg-input:      #131827;
-  --bg-hover:      rgba(59, 111, 212, 0.07);
-  --bg-active:     rgba(59, 111, 212, 0.14);
+  /* Backgrounds — spec exact */
+  --bg-body:       #0b0e14;
+  --bg-sidebar:    #111520;
+  --bg-card:       #111520;
+  --bg-card-alt:   #181d2e;
+  --bg-input:      #181d2e;
+  --bg-hover:      rgba(61, 127, 255, 0.07);
+  --bg-active:     rgba(61, 127, 255, 0.14);
+  --bg-output:     #07090f;
 
-  /* Accent / brand */
-  --accent:        #3b6fd4;
-  --accent-light:  #5b8dee;
-  --accent-dim:    rgba(59, 111, 212, 0.18);
-  --accent-glow:   rgba(59, 111, 212, 0.35);
+  /* Accent / brand — spec exact */
+  --accent:        #3d7fff;
+  --accent-light:  #6099ff;
+  --accent-dim:    rgba(61, 127, 255, 0.18);
+  --accent-glow:   rgba(0, 229, 255, 0.35);
+  --glow:          #00e5ff;
 
-  /* Status colours */
-  --danger:        #e85555;
-  --danger-bg:     rgba(232, 85,  85,  0.1);
-  --danger-border: rgba(232, 85,  85,  0.3);
-  --warning:       #e8a535;
-  --warning-bg:    rgba(232, 165, 53,  0.1);
-  --warning-border:rgba(232, 165, 53,  0.3);
-  --info:          #35a8e8;
-  --info-bg:       rgba(53,  168, 232, 0.1);
-  --info-border:   rgba(53,  168, 232, 0.3);
-  --success:       #35c875;
-  --success-bg:    rgba(53,  200, 117, 0.1);
+  /* Status colours — spec exact */
+  --danger:        #ff4060;
+  --danger-bg:     rgba(255, 64,  96,  0.1);
+  --danger-border: rgba(255, 64,  96,  0.3);
+  --warning:       #ffc832;
+  --warning-bg:    rgba(255, 200, 50,  0.1);
+  --warning-border:rgba(255, 200, 50,  0.3);
+  --info:          #3d7fff;
+  --info-bg:       rgba(61,  127, 255, 0.1);
+  --info-border:   rgba(61,  127, 255, 0.3);
+  --success:       #00e57a;
+  --success-bg:    rgba(0,   229, 122, 0.1);
+  --watchlist:     #a855f7;
+  --watchlist-bg:  rgba(168, 85,  247, 0.1);
 
-  /* Text */
-  --text-primary:   #dde4f0;
-  --text-secondary: #8b96b0;
-  --text-muted:     #566080;
+  /* Text — spec exact */
+  --text-primary:   #c8d4f0;
+  --text-secondary: #6a7a9e;
+  --text-muted:     #4e5f85;
 
-  /* Borders */
-  --border:        rgba(59, 111, 212, 0.18);
-  --border-subtle: rgba(255, 255, 255, 0.06);
+  /* Borders — spec exact */
+  --border:        #1f2740;
+  --border-subtle: rgba(255, 255, 255, 0.05);
 
   /* Layout */
-  --sidebar-w: 240px;
-  --radius:    10px;
-  --radius-sm: 6px;
+  --sidebar-w: 210px;
+  --radius:    8px;
+  --radius-sm: 5px;
 }
 
 /* ── Reset ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  font-family: 'Syne', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg-body);
   color: var(--text-primary);
   line-height: 1.6;
-  font-size: 14px;
+  font-size: 13px;
   overflow: hidden;
   height: 100vh;
+}
+
+/* Monospace: reserved for machine-readable data */
+code, pre, .mono, .mono-ip, .mac-addr, .service-port-badge,
+.tool-output, .port-badge, .detail-val.mono, .info-val.mono,
+.ldr-value code, .mono-sm {
+  font-family: 'IBM Plex Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
 /* ── Shell layout ──────────────────────────────────────────────────────── */
@@ -73,7 +86,7 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 1rem;
+  padding: 1.25rem 0.75rem;
   gap: 0;
 }
 
@@ -81,10 +94,11 @@ body {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   color: var(--accent-light);
-  padding: 0.25rem 0.5rem 1.75rem;
+  padding: 0.25rem 0.5rem 1.5rem;
+  letter-spacing: -0.01em;
 }
 .brand-icon {
   width: 24px; height: 24px;
@@ -1564,3 +1578,320 @@ tbody tr:hover { background: var(--bg-hover); }
 .phase-step:last-child { border-right: none; }
 .phase-step.ph-active { background: var(--accent-dim); color: var(--accent-light); font-weight: 600; }
 .phase-step.ph-done { background: rgba(34,197,94,0.1); color: var(--success); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NEW COMPONENT STYLES — v2.2
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Typography system ───────────────────────────────────────────── */
+.section-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+h1 { font-weight: 800; font-size: 1.15rem; }
+h2 { font-weight: 700; font-size: 0.95rem; }
+h3 { font-weight: 600; font-size: 0.85rem; }
+.nav-item { font-weight: 600; font-size: 0.78rem; }
+
+/* ── Status dots (spec-exact) ────────────────────────────────────── */
+.status-dot-online {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success); box-shadow: 0 0 6px rgba(0,229,122,0.6);
+}
+.status-dot-offline {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--danger);
+}
+.status-dot-unknown {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--warning);
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(0,229,122,0.5); }
+  50% { box-shadow: 0 0 10px rgba(0,229,122,0.9); }
+}
+.status-dot-online { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* ── Event pills ─────────────────────────────────────────────────── */
+.event-pill {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.15rem 0.5rem; border-radius: 3px;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em;
+  font-family: 'IBM Plex Mono', monospace;
+  border: 1px solid;
+}
+.event-pill-online   { color: var(--success);  background: var(--success-bg);  border-color: rgba(0,229,122,0.25); }
+.event-pill-offline  { color: var(--danger);   background: var(--danger-bg);   border-color: rgba(255,64,96,0.25); }
+.event-pill-new      { color: var(--warning);  background: var(--warning-bg);  border-color: rgba(255,200,50,0.25); }
+.event-pill-changed  { color: var(--watchlist); background: var(--watchlist-bg); border-color: rgba(168,85,247,0.25); }
+.event-pill-info     { color: var(--accent);   background: var(--accent-dim);  border-color: rgba(61,127,255,0.25); }
+
+/* ── Alert tri-section (What / Why / What to do) ─────────────────── */
+.alert-item { border-radius: var(--radius); overflow: hidden; }
+.alert-guidance { margin-top: 0.75rem; border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; }
+.alert-guidance.hidden { display: none; }
+.alert-guidance-toggle {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.75rem; color: var(--accent); cursor: pointer;
+  background: none; border: none; padding: 0; margin-top: 0.5rem;
+}
+.alert-guidance-toggle:hover { color: var(--accent-light); }
+.alert-section {
+  margin-bottom: 0.75rem; padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-sm); border-left: 3px solid;
+}
+.alert-section-what  { background: var(--bg-card-alt); border-color: var(--accent); }
+.alert-section-why   { background: var(--warning-bg);  border-color: var(--warning); }
+.alert-section-todo  { background: var(--success-bg);  border-color: var(--success); }
+.alert-section-label {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.3rem;
+}
+.alert-section-text { font-size: 0.82rem; color: var(--text-primary); line-height: 1.5; }
+.alert-todo-list { margin: 0; padding-left: 1.1rem; }
+.alert-todo-list li { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem; line-height: 1.4; }
+
+/* ── IoT behavioral risk profile ────────────────────────────────── */
+.iot-risk-profile {
+  margin-top: 0.75rem; padding: 0.75rem;
+  background: var(--warning-bg); border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+}
+.iot-risk-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.8rem; font-weight: 700; color: var(--warning);
+  margin-bottom: 0.5rem;
+}
+.iot-risk-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.68rem;
+  font-weight: 700; letter-spacing: 0.04em;
+}
+.iot-risk-critical { background: rgba(255,64,96,0.15);  color: var(--danger);  border: 1px solid rgba(255,64,96,0.3); }
+.iot-risk-high     { background: var(--warning-bg);     color: var(--warning); border: 1px solid var(--warning-border); }
+.iot-risk-medium   { background: var(--info-bg);        color: var(--info);    border: 1px solid var(--info-border); }
+.iot-risk-low      { background: var(--success-bg);     color: var(--success); border: 1px solid rgba(0,229,122,0.25); }
+.iot-vuln-item {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  padding: 0.4rem 0; border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.79rem;
+}
+.iot-vuln-item:last-child { border-bottom: none; }
+.iot-vuln-port { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--danger); font-weight: 600; min-width: 40px; }
+.iot-vuln-desc { flex: 1; color: var(--text-secondary); line-height: 1.4; }
+.iot-vuln-fix  { font-size: 0.74rem; color: var(--success); margin-top: 0.2rem; }
+
+/* ── Confidence scoring alternatives ────────────────────────────── */
+.confidence-alternatives {
+  margin-top: 0.6rem; padding: 0.6rem;
+  background: var(--bg-card-alt); border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+.conf-alt-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.25rem 0; font-size: 0.8rem;
+}
+.conf-alt-type { flex: 1; color: var(--text-secondary); }
+.conf-alt-bar { flex: 0 0 80px; height: 4px; background: var(--bg-hover); border-radius: 2px; overflow: hidden; }
+.conf-alt-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+.conf-alt-pct  { width: 36px; text-align: right; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; }
+.conf-improve-tip {
+  margin-top: 0.5rem; padding: 0.4rem 0.6rem;
+  background: var(--accent-dim); border-radius: var(--radius-sm);
+  font-size: 0.76rem; color: var(--accent-light);
+}
+
+/* ── Snapshot diff view ──────────────────────────────────────────── */
+.diff-modal .modal { max-width: 860px; width: 95vw; }
+.diff-controls {
+  display: flex; gap: 0.75rem; align-items: center;
+  padding: 0.75rem; background: var(--bg-card-alt);
+  border-radius: var(--radius-sm); margin-bottom: 1rem;
+}
+.diff-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.diff-stat {
+  padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
+  text-align: center; border: 1px solid;
+}
+.diff-stat-added   { background: var(--success-bg);  border-color: rgba(0,229,122,0.25); }
+.diff-stat-removed { background: var(--danger-bg);   border-color: rgba(255,64,96,0.25); }
+.diff-stat-changed { background: var(--warning-bg);  border-color: var(--warning-border); }
+.diff-stat-same    { background: var(--bg-card-alt); border-color: var(--border-subtle); }
+.diff-stat-val  { font-size: 1.4rem; font-weight: 800; display: block; }
+.diff-stat-lbl  { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.diff-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
+  margin-bottom: 0.3rem; font-size: 0.82rem;
+}
+.diff-row-added   { background: var(--success-bg);  border-left: 3px solid var(--success); }
+.diff-row-removed { background: var(--danger-bg);   border-left: 3px solid var(--danger); }
+.diff-row-changed { background: var(--warning-bg);  border-left: 3px solid var(--warning); }
+.diff-row-same    { background: var(--bg-card-alt); border-left: 3px solid var(--border); opacity: 0.7; }
+.diff-change-tag {
+  font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.4rem;
+  border-radius: 3px; text-transform: uppercase; letter-spacing: 0.05em;
+  min-width: 55px; text-align: center;
+}
+.diff-tag-added   { background: var(--success);  color: #000; }
+.diff-tag-removed { background: var(--danger);   color: #fff; }
+.diff-tag-changed { background: var(--warning);  color: #000; }
+.diff-tag-same    { background: var(--border);   color: var(--text-muted); }
+
+/* ── Port scanner tool ───────────────────────────────────────────── */
+.port-scan-presets {
+  display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem;
+}
+.port-preset-btn {
+  padding: 0.2rem 0.6rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-card-alt);
+  color: var(--text-secondary); font-size: 0.75rem; cursor: pointer;
+}
+.port-preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+.port-preset-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.port-results-grid {
+  display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem;
+}
+.port-result-badge {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.72rem;
+  font-family: 'IBM Plex Mono', monospace; border: 1px solid;
+}
+.port-result-open   { background: var(--success-bg); color: var(--success);  border-color: rgba(0,229,122,0.3); }
+.port-result-risky  { background: var(--danger-bg);  color: var(--danger);   border-color: rgba(255,64,96,0.3); }
+.port-result-closed { background: var(--bg-card-alt); color: var(--text-muted); border-color: var(--border-subtle); }
+
+/* ── Devices-online history graph ────────────────────────────────── */
+.online-history-chart {
+  width: 100%; height: 60px; position: relative;
+  margin-top: 0.5rem;
+}
+.online-history-bar {
+  position: absolute; bottom: 0; background: var(--accent);
+  border-radius: 2px 2px 0 0; opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.online-history-bar:hover { opacity: 1; }
+.online-history-label {
+  font-size: 0.68rem; color: var(--text-muted); text-align: center;
+  margin-top: 0.25rem;
+}
+
+/* ── Map export button ───────────────────────────────────────────── */
+.map-export-btn {
+  position: absolute; top: 1rem; right: 1rem; z-index: 10;
+  padding: 0.35rem 0.75rem;
+}
+.map-container { position: relative; }
+
+/* ── Scheduled scans ─────────────────────────────────────────────── */
+.schedule-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+.schedule-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.6rem 0.75rem; background: var(--bg-card-alt);
+  border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);
+}
+.schedule-item-info { flex: 1; }
+.schedule-item-name { font-size: 0.85rem; font-weight: 600; }
+.schedule-item-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+.schedule-next      { font-size: 0.72rem; color: var(--accent); }
+
+/* ── Plugin / Script hooks ───────────────────────────────────────── */
+.hook-item {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  padding: 0.75rem; background: var(--bg-card-alt);
+  border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);
+  margin-bottom: 0.5rem;
+}
+.hook-item-body { flex: 1; }
+.hook-item-event { font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem; }
+.hook-item-cmd   { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; color: var(--text-secondary); word-break: break-all; }
+
+/* ── Tool output windows (spec: dark monospace) ──────────────────── */
+.tool-output, pre.tool-output {
+  background: var(--bg-output) !important;
+  font-family: 'IBM Plex Mono', 'Fira Code', monospace !important;
+  font-size: 11px !important; line-height: 1.5; color: var(--text-primary);
+  padding: 0.75rem; border-radius: var(--radius-sm);
+  overflow: auto; max-height: 280px; white-space: pre;
+  border: 1px solid var(--border-subtle); position: relative;
+}
+.tool-output-wrap { position: relative; }
+.copy-output-btn {
+  position: absolute; top: 0.4rem; right: 0.4rem; opacity: 0;
+  transition: opacity 0.15s; z-index: 5;
+}
+.tool-output-wrap:hover .copy-output-btn { opacity: 1; }
+
+/* ── Local API panel (enhanced) ──────────────────────────────────── */
+.api-key-field {
+  display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;
+}
+.api-key-value {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.3rem 0.6rem;
+  color: var(--text-secondary); flex: 1;
+}
+
+/* ── KPI sparkline bars ──────────────────────────────────────────── */
+.kpi-sparkline {
+  display: flex; align-items: flex-end; gap: 2px; height: 28px;
+  margin-top: 0.4rem;
+}
+.kpi-spark-bar {
+  flex: 1; border-radius: 2px 2px 0 0; min-height: 2px;
+  opacity: 0.5; transition: opacity 0.2s;
+}
+.kpi-spark-bar:hover { opacity: 1; }
+.kpi-spark-blue   { background: var(--accent); }
+.kpi-spark-green  { background: var(--success); }
+.kpi-spark-red    { background: var(--danger); }
+.kpi-spark-amber  { background: var(--warning); }
+
+/* ── Trust badge colors (watchlist purple per spec) ─────────────── */
+.trust-watchlist { background: var(--watchlist-bg); color: var(--watchlist); border-color: rgba(168,85,247,0.3); }
+
+/* ── Topology map (enhanced node colors per spec) ────────────────── */
+.map-node-online  { stroke: var(--success) !important; }
+.map-node-offline { stroke: var(--danger)  !important; }
+.map-node-unknown { stroke: var(--warning) !important; }
+
+/* ── Monitoring live indicator (spec: pulsing green dot + badge) ─── */
+.monitor-live-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.2rem 0.6rem; border-radius: 12px;
+  background: var(--success-bg); border: 1px solid rgba(0,229,122,0.25);
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+  color: var(--success); text-transform: uppercase;
+}
+.monitor-live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--success); animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* ── Per-interface subnet breakdown ─────────────────────────────── */
+.subnet-breakdown-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+}
+.subnet-breakdown-header {
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;
+}
+.subnet-breakdown-section { display: flex; flex-direction: column; gap: 4px; }
+.subnet-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; border-bottom: 1px solid var(--border);
+}
+.subnet-row:last-child { border-bottom: none; }
+.subnet-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem;
+  color: var(--accent); min-width: 130px;
+}
+.subnet-name { font-size: 0.78rem; color: var(--text-muted); flex: 1; }
+.subnet-count { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-align: right; }
