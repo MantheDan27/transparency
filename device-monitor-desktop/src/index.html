@@ -169,6 +169,12 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               <span id="scanBtnModeLabel">Scan</span>
             </button>
+            <!-- Hidden aliases for renderer.js compat -->
+            <button class="btn btn-primary hidden" id="quickScanBtnMain"></button>
+            <span id="scanDropdownToggle" class="hidden"></span>
+            <div id="scanDropdownMenu" class="hidden"></div>
+            <span id="scanDropdownBtn" class="hidden"></span>
+            <input type="checkbox" id="monitorToggleSwitch" class="hidden">
             <button class="btn btn-secondary" id="btnMonitorToggle" onclick="window.toggleMonitoring()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span id="monitorBtnLabel">Start Monitor</span>
@@ -322,6 +328,7 @@
           <button class="filter-btn" data-filter="watchlist">Watchlist <span class="fbadge" id="fWatchlist">0</span></button>
           <button class="filter-btn" data-filter="owned">Owned <span class="fbadge" id="fOwned">0</span></button>
           <button class="filter-btn" data-filter="changed">Changed <span class="fbadge fbadge-info" id="fChanged">0</span></button>
+          <button class="filter-btn" data-filter="risky">Risky <span class="fbadge fbadge-danger" id="fRisky">0</span></button>
         </div>
 
         <!-- Cloud enrichment toggle -->
@@ -374,6 +381,8 @@
             </div>
           </div>
 
+          <!-- Detail panel backdrop (mobile) -->
+          <div class="hidden" id="detailPanelBackdrop" style="position:fixed;inset:0;z-index:99;background:rgba(0,0,0,0.5);display:none"></div>
           <!-- Device detail panel (right slide-in) -->
           <div class="device-detail-panel hidden" id="deviceDetailPanel">
             <div class="detail-panel-header">
@@ -856,7 +865,7 @@
               <p>Permanently delete all local data — device history, metadata, snapshots, alerts. This cannot be undone.</p>
             </div>
             <div class="del-controls">
-              <button class="btn btn-danger btn-sm" onclick="window.confirmWipeData()">Wipe All Data</button>
+              <button class="btn btn-danger btn-sm" id="deleteAllBtn" onclick="window.confirmWipeData()">Wipe All Data</button>
             </div>
           </div>
         </div>
