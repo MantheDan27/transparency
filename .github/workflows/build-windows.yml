@@ -2,54 +2,180 @@ name: Build and Release
 
 on:
   push:
-    branches: [ main ]
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: true
+        type: string
+        default: 'main'
+      build_target:
+        description: 'Which app to build'
+        required: true
+        type: choice
+        options:
+          - cpp-windows
+          - dotnet-windows
+          - cpp-linux
+          - all
+      version_override:
+        description: 'Version override (leave empty to auto-detect from branch)'
+        required: false
+        type: string
 
 jobs:
-  build-cpp:
+  # ─── Determine version and build number ──────────────────────────────────
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      build_number: ${{ steps.ver.outputs.build_number }}
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch || github.ref }}
+        fetch-depth: 0
+
+    - name: Resolve version and build number
+      id: ver
+      run: |
+        BRANCH="${{ inputs.branch || github.ref_name }}"
+
+        # Get version: override > tag > CMakeLists > fallback
+        if [ -n "${{ inputs.version_override }}" ]; then
+          VER="${{ inputs.version_override }}"
+        elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          VER="${GITHUB_REF#refs/tags/v}"
+        elif [ -f transparency-linux/CMakeLists.txt ]; then
+          VER=$(grep 'project(Transparency VERSION' transparency-linux/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+        elif [ -f transparency-cpp/CMakeLists.txt ]; then
+          VER=$(grep 'project(Transparency VERSION' transparency-cpp/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+        else
+          VER="0.0.0"
+        fi
+
+        # Count commits on this branch for build number
+        # This ensures same branch = same build number progression
+        BUILD_NUM=$(git rev-list --count HEAD)
+
+        TAG="v${VER}-build.${BUILD_NUM}"
+
+        echo "version=${VER}" >> "$GITHUB_OUTPUT"
+        echo "build_number=${BUILD_NUM}" >> "$GITHUB_OUTPUT"
+        echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+        echo "Resolved: version=${VER}, build=${BUILD_NUM}, tag=${TAG}, branch=${BRANCH}"
+
+  # ─── C++ Windows Build (CMake + MSBuild) ─────────────────────────────────
+  build-cpp-windows:
+    needs: resolve-version
     runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: >
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && (inputs.build_target == 'cpp-windows' || inputs.build_target == 'all'))
     permissions:
       contents: write
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch || github.ref }}
+
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
+
     - name: Configure CMake
       run: cmake -B build -S transparency-cpp -DCMAKE_BUILD_TYPE=Release
+
     - name: Build Transparency C++ App
       run: cmake --build build --config Release
-    - name: Upload C++ exe to release
+
+    - name: Upload to release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ needs.resolve-version.outputs.tag }}
+        name: "${{ needs.resolve-version.outputs.tag }} (C++ Windows)"
         files: build/Release/Transparency.exe
         draft: false
         prerelease: false
         generate_release_notes: true
+        make_latest: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-native:
+  # ─── .NET Windows Build ──────────────────────────────────────────────────
+  build-dotnet-windows:
+    needs: resolve-version
     runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: >
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && (inputs.build_target == 'dotnet-windows' || inputs.build_target == 'all'))
     permissions:
       contents: write
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch || github.ref }}
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
+
     - name: Publish .NET Native App
-      run: dotnet publish transparency-native/TransparencyApp/TransparencyApp.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish-native
-    - name: Upload native exe to release
+      run: >
+        dotnet publish transparency-native/TransparencyApp/TransparencyApp.csproj
+        -c Release -r win-x64 --self-contained true
+        -p:PublishSingleFile=true
+        -p:Version=${{ needs.resolve-version.outputs.version }}.${{ needs.resolve-version.outputs.build_number }}
+        -o publish-native
+
+    - name: Upload to release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ needs.resolve-version.outputs.tag }}
+        name: "${{ needs.resolve-version.outputs.tag }} (.NET Windows)"
         files: publish-native/TransparencyApp.exe
         draft: false
         prerelease: false
         generate_release_notes: true
+        make_latest: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── C++ Linux Build (GTK3) ─────────────────────────────────────────────
+  build-cpp-linux:
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && (inputs.build_target == 'cpp-linux' || inputs.build_target == 'all'))
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.branch || github.ref }}
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev pkg-config
+
+    - name: Configure CMake
+      run: cmake -B build -S transparency-linux -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build Transparency Linux App
+      run: cmake --build build --config Release -j$(nproc)
+
+    - name: Upload to release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.resolve-version.outputs.tag }}
+        name: "${{ needs.resolve-version.outputs.tag }} (C++ Linux)"
+        files: build/transparency
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        make_latest: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
