@@ -1,6 +1,6 @@
 {
   "name": "device-monitor-desktop",
-  "version": "2.1.0",
+  "version": "3.2.0",
   "description": "Desktop application for comprehensive device security monitoring and threat detection",
   "main": "main.js",
   "homepage": "https://github.com/MantheD27/transparency",
@@ -33,6 +33,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "scanner.js",
+      "cloud-mock.js",
       "src/**",
       "package.json"
     ],
