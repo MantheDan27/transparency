@@ -7,40 +7,52 @@
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
 
-// ─── Color Palette ───────────────────────────────────────────────────────────
+// ─── Color Palette (industrial dark — matches design spec exactly) ────────────
 namespace Theme {
 
-constexpr COLORREF BG_APP       = RGB(18,  18,  30);
-constexpr COLORREF BG_SIDEBAR   = RGB(10,  10,  22);
-constexpr COLORREF BG_CARD      = RGB(28,  28,  46);
-constexpr COLORREF BG_ROW_ALT   = RGB(14,  14,  28);
-constexpr COLORREF BG_ROW_HOV   = RGB(24,  24,  48);
-constexpr COLORREF BG_ROW_SEL   = RGB(24,  42,  68);
-constexpr COLORREF ACCENT       = RGB(74,  158, 255);
-constexpr COLORREF TEXT_PRIMARY = RGB(232, 232, 248);
-constexpr COLORREF TEXT_SECONDARY = RGB(170,170, 192);
-constexpr COLORREF TEXT_MUTED   = RGB(68,  68,  102);
-constexpr COLORREF BORDER       = RGB(37,  37,  64);
-constexpr COLORREF SUCCESS      = RGB(46,  213, 115);
-constexpr COLORREF WARNING      = RGB(255, 165, 2);
-constexpr COLORREF DANGER       = RGB(255, 71,  87);
-constexpr COLORREF SIDEBAR_BORDER = RGB(24, 24, 46);
-constexpr COLORREF BG_INPUT     = RGB(22,  22,  38);
+// Backgrounds
+constexpr COLORREF BG_APP       = RGB(11,  14,  20);   // #0b0e14 near-black
+constexpr COLORREF BG_SIDEBAR   = RGB(17,  21,  32);   // #111520 dark navy
+constexpr COLORREF BG_CARD      = RGB(24,  29,  46);   // #181d2e mid-navy
+constexpr COLORREF BG_ELEVATED  = RGB(24,  29,  46);   // same as card
+constexpr COLORREF BG_INPUT     = RGB(24,  29,  46);   // inputs / hovers
+constexpr COLORREF BG_ROW_ALT   = RGB(17,  21,  32);   // alternating row
+constexpr COLORREF BG_ROW_HOV   = RGB(24,  29,  46);   // hover
+constexpr COLORREF BG_ROW_SEL   = RGB(26,  50,  90);   // selected
+
+// Borders
+constexpr COLORREF BORDER         = RGB(31,  39,  64);  // #1f2740
+constexpr COLORREF SIDEBAR_BORDER = RGB(31,  39,  64);
+
+// Text
+constexpr COLORREF TEXT_PRIMARY   = RGB(200, 212, 240); // #c8d4f0 cool white
+constexpr COLORREF TEXT_SECONDARY = RGB(150, 168, 210); // mid value
+constexpr COLORREF TEXT_MUTED     = RGB(78,  95,  133); // #4e5f85
+
+// Accent colors
+constexpr COLORREF ACCENT         = RGB(61,  127, 255); // #3d7fff electric blue
+constexpr COLORREF ACCENT_GLOW    = RGB(0,   229, 255); // #00e5ff cyan — active/live
+constexpr COLORREF SUCCESS        = RGB(0,   229, 122); // #00e57a online/success
+constexpr COLORREF DANGER         = RGB(255, 64,  96);  // #ff4060 offline/alert
+constexpr COLORREF WARNING        = RGB(255, 200, 50);  // #ffc832 unknown/caution
+constexpr COLORREF WATCHLIST      = RGB(168, 85,  247); // #a855f7 watchlist purple
 
 // ─── Brush Cache ─────────────────────────────────────────────────────────────
-inline HBRUSH BrushApp()      { static HBRUSH b = CreateSolidBrush(BG_APP);       return b; }
-inline HBRUSH BrushSidebar()  { static HBRUSH b = CreateSolidBrush(BG_SIDEBAR);   return b; }
-inline HBRUSH BrushCard()     { static HBRUSH b = CreateSolidBrush(BG_CARD);      return b; }
-inline HBRUSH BrushRowAlt()   { static HBRUSH b = CreateSolidBrush(BG_ROW_ALT);   return b; }
-inline HBRUSH BrushRowHov()   { static HBRUSH b = CreateSolidBrush(BG_ROW_HOV);   return b; }
-inline HBRUSH BrushRowSel()   { static HBRUSH b = CreateSolidBrush(BG_ROW_SEL);   return b; }
-inline HBRUSH BrushAccent()   { static HBRUSH b = CreateSolidBrush(ACCENT);       return b; }
-inline HBRUSH BrushBorder()   { static HBRUSH b = CreateSolidBrush(BORDER);       return b; }
-inline HBRUSH BrushSuccess()  { static HBRUSH b = CreateSolidBrush(SUCCESS);      return b; }
-inline HBRUSH BrushWarning()  { static HBRUSH b = CreateSolidBrush(WARNING);      return b; }
-inline HBRUSH BrushDanger()   { static HBRUSH b = CreateSolidBrush(DANGER);       return b; }
-inline HBRUSH BrushInput()    { static HBRUSH b = CreateSolidBrush(BG_INPUT);     return b; }
-inline HBRUSH BrushNull()     { static HBRUSH b = (HBRUSH)GetStockObject(NULL_BRUSH); return b; }
+inline HBRUSH BrushApp()       { static HBRUSH b = CreateSolidBrush(BG_APP);       return b; }
+inline HBRUSH BrushSidebar()   { static HBRUSH b = CreateSolidBrush(BG_SIDEBAR);   return b; }
+inline HBRUSH BrushCard()      { static HBRUSH b = CreateSolidBrush(BG_CARD);      return b; }
+inline HBRUSH BrushRowAlt()    { static HBRUSH b = CreateSolidBrush(BG_ROW_ALT);   return b; }
+inline HBRUSH BrushRowHov()    { static HBRUSH b = CreateSolidBrush(BG_ROW_HOV);   return b; }
+inline HBRUSH BrushRowSel()    { static HBRUSH b = CreateSolidBrush(BG_ROW_SEL);   return b; }
+inline HBRUSH BrushAccent()    { static HBRUSH b = CreateSolidBrush(ACCENT);       return b; }
+inline HBRUSH BrushAccentGlow(){ static HBRUSH b = CreateSolidBrush(ACCENT_GLOW);  return b; }
+inline HBRUSH BrushBorder()    { static HBRUSH b = CreateSolidBrush(BORDER);       return b; }
+inline HBRUSH BrushSuccess()   { static HBRUSH b = CreateSolidBrush(SUCCESS);      return b; }
+inline HBRUSH BrushWarning()   { static HBRUSH b = CreateSolidBrush(WARNING);      return b; }
+inline HBRUSH BrushDanger()    { static HBRUSH b = CreateSolidBrush(DANGER);       return b; }
+inline HBRUSH BrushWatchlist() { static HBRUSH b = CreateSolidBrush(WATCHLIST);    return b; }
+inline HBRUSH BrushInput()     { static HBRUSH b = CreateSolidBrush(BG_INPUT);     return b; }
+inline HBRUSH BrushNull()      { static HBRUSH b = (HBRUSH)GetStockObject(NULL_BRUSH); return b; }
 
 // ─── Font Helpers ─────────────────────────────────────────────────────────────
 inline HFONT FontBody() {

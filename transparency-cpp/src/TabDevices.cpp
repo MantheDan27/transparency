@@ -148,46 +148,81 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
         hwnd, nullptr, hInst, nullptr);
 
     // Detail controls inside panel
-    auto makeLbl = [&](const wchar_t* text, int y, int h = 20) -> HWND {
+    auto makeLbl = [&](const wchar_t* text, int y, int h = 18) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", text,
             WS_CHILD | WS_VISIBLE | SS_LEFT,
             8, y, DETAIL_WIDTH - 16, h, _hDetailPanel, nullptr, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         return hw;
     };
+    auto makeMonoLbl = [&](const wchar_t* text, int y, int h = 16) -> HWND {
+        HWND hw = CreateWindowEx(0, L"STATIC", text,
+            WS_CHILD | WS_VISIBLE | SS_LEFT,
+            8, y, DETAIL_WIDTH - 16, h, _hDetailPanel, nullptr, hInst, nullptr);
+        SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontMono(), TRUE);
+        return hw;
+    };
 
-    _hDetailName    = makeLbl(L"", 8, 22);
-    _hDetailType    = makeLbl(L"", 32, 18);
-    _hDetailVendor  = makeLbl(L"", 52, 18);
-    _hDetailMac     = makeLbl(L"", 72, 18);
-    _hDetailPorts   = makeLbl(L"", 96, 36);
-    _hDetailLastSeen= makeLbl(L"", 136, 18);
-    _hDetailMdns    = makeLbl(L"", 158, 36);
-    _hDetailAnoms   = makeLbl(L"", 198, 54);
+    int dy = 8;
+    // Custom name edit
+    makeLbl(L"Custom Name:", dy, 14); dy += 14;
+    _hDetailCustomName = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+        8, dy, DETAIL_WIDTH - 16, 22, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NAME, hInst, nullptr);
+    SendMessage(_hDetailCustomName, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    Theme::ApplyDarkEdit(_hDetailCustomName);
+    dy += 28;
+
+    _hDetailName     = makeLbl(L"", dy, 18); dy += 20;
+    _hDetailType     = makeLbl(L"", dy, 16); dy += 18;
+    _hDetailAlt      = makeLbl(L"", dy, 30); dy += 32;  // confidence alternatives (2 lines)
+    _hDetailVendor   = makeLbl(L"", dy, 16); dy += 18;
+    _hDetailMac      = makeMonoLbl(L"", dy, 16); dy += 18;
+    _hDetailLastSeen = makeLbl(L"", dy, 16); dy += 20;
+    _hDetailPorts    = makeLbl(L"", dy, 36); dy += 38;
+    _hDetailMdns     = makeLbl(L"", dy, 30); dy += 32;
+
+    // IoT risk box (hidden when not IoT)
+    _hDetailIotRisk = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+        WS_CHILD | ES_MULTILINE | ES_READONLY | WS_VSCROLL,
+        8, dy, DETAIL_WIDTH - 16, 60, _hDetailPanel, nullptr, hInst, nullptr);
+    SendMessage(_hDetailIotRisk, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+    Theme::ApplyDarkEdit(_hDetailIotRisk);
+    dy += 68;
+
+    _hDetailAnoms = makeLbl(L"", dy, 50); dy += 54;
 
     // Notes edit
+    makeLbl(L"Notes:", dy, 14); dy += 14;
     _hDetailNotes = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL,
-        8, 260, DETAIL_WIDTH - 16, 60, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NOTES, hInst, nullptr);
+        8, dy, DETAIL_WIDTH - 16, 54, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NOTES, hInst, nullptr);
     SendMessage(_hDetailNotes, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     Theme::ApplyDarkEdit(_hDetailNotes);
+    dy += 60;
 
     // Trust dropdown
+    makeLbl(L"Trust:", dy, 14); dy += 14;
     _hDetailTrust = CreateWindowEx(0, L"COMBOBOX", nullptr,
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        8, 328, DETAIL_WIDTH - 16, 120, _hDetailPanel, (HMENU)IDC_COMBO_TRUST, hInst, nullptr);
+        8, dy, DETAIL_WIDTH - 16, 120, _hDetailPanel, (HMENU)IDC_COMBO_TRUST, hInst, nullptr);
     SendMessage(_hDetailTrust, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"unknown");
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"owned");
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"watchlist");
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"guest");
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"blocked");
+    dy += 30;
 
-    // Close button
-    _hDetailClose = CreateWindowEx(0, L"BUTTON", L"Close Detail",
+    // Save + Close buttons
+    _hDetailSave = CreateWindowEx(0, L"BUTTON", L"Save",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        8, DETAIL_WIDTH + 50, DETAIL_WIDTH - 16, 28,
-        _hDetailPanel, (HMENU)9500, hInst, nullptr);
+        8, dy, 80, 26, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
+    SendMessage(_hDetailSave, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+
+    _hDetailClose = CreateWindowEx(0, L"BUTTON", L"Close",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        DETAIL_WIDTH - 90, dy, 82, 26, _hDetailPanel, (HMENU)9500, hInst, nullptr);
     SendMessage(_hDetailClose, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 }
 
@@ -235,6 +270,30 @@ LRESULT TabDevices::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
 
     if (id == 9500) { // Close detail
         HideDetailPanel();
+        return 0;
+    }
+
+    if (id == IDC_BTN_DEVICE_SAVE) { // Save name/notes/trust back to device
+        if (_mainWnd && !_detailDeviceIp.empty()) {
+            wchar_t nameBuf[256] = {}, notesBuf[1024] = {};
+            if (_hDetailCustomName) GetWindowText(_hDetailCustomName, nameBuf, 256);
+            if (_hDetailNotes) GetWindowText(_hDetailNotes, notesBuf, 1024);
+
+            int trustSel = _hDetailTrust ? (int)SendMessage(_hDetailTrust, CB_GETCURSEL, 0, 0) : 0;
+            static const wchar_t* trustOpts[] = { L"unknown", L"owned", L"watchlist", L"guest", L"blocked" };
+            wstring trust = (trustSel >= 0 && trustSel < 5) ? trustOpts[trustSel] : L"unknown";
+
+            std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+            for (auto& d : _mainWnd->_lastResult.devices) {
+                if (d.ip == _detailDeviceIp) {
+                    d.customName = nameBuf;
+                    d.notes = notesBuf;
+                    d.trustState = trust;
+                    break;
+                }
+            }
+            ApplyFilter();
+        }
         return 0;
     }
 
@@ -448,47 +507,71 @@ void TabDevices::HideDetailPanel() {
 void TabDevices::UpdateDetailPanel(const Device& dev) {
     if (!_hDetailPanel) return;
 
-    wstring name = dev.customName.empty() ? dev.hostname : dev.customName;
-    if (name.empty()) name = dev.ip;
+    // Custom name field
+    if (_hDetailCustomName) SetWindowText(_hDetailCustomName, dev.customName.c_str());
 
-    if (_hDetailName)  SetWindowText(_hDetailName, name.c_str());
-    if (_hDetailType)  SetWindowText(_hDetailType,
-        (L"Type: " + dev.deviceType + L"  Confidence: " + std::to_wstring(dev.confidence) + L"%").c_str());
-    if (_hDetailVendor)SetWindowText(_hDetailVendor,
+    // Display name (hostname or IP)
+    wstring displayName = dev.customName.empty() ? dev.hostname : dev.customName;
+    if (displayName.empty()) displayName = dev.ip;
+    if (_hDetailName) SetWindowText(_hDetailName, displayName.c_str());
+
+    // Type + confidence
+    if (_hDetailType) SetWindowText(_hDetailType,
+        (dev.deviceType + L"  (" + std::to_wstring(dev.confidence) + L"% confidence)").c_str());
+
+    // Confidence alternatives
+    wstring altStr;
+    if (!dev.altType1.empty())
+        altStr += L"Alt 1: " + dev.altType1 + L" (" + std::to_wstring(dev.altConf1) + L"%)\r\n";
+    if (!dev.altType2.empty())
+        altStr += L"Alt 2: " + dev.altType2 + L" (" + std::to_wstring(dev.altConf2) + L"%)";
+    if (altStr.empty()) altStr = L"No alternatives — run a Deep scan for better confidence";
+    if (_hDetailAlt) SetWindowText(_hDetailAlt, altStr.c_str());
+
+    if (_hDetailVendor) SetWindowText(_hDetailVendor,
         (L"Vendor: " + (dev.vendor.empty() ? L"Unknown" : dev.vendor)).c_str());
-    if (_hDetailMac)   SetWindowText(_hDetailMac,
-        (L"MAC: " + dev.mac + (dev.latencyMs >= 0 ? L"  Latency: " + std::to_wstring(dev.latencyMs) + L"ms" : L"")).c_str());
-
-    // Ports
-    wstring portStr = L"Ports: ";
-    if (dev.openPorts.empty()) portStr += L"None";
-    else for (int p : dev.openPorts) {
-        auto it = ScanEngine::PORT_NAMES.find(p);
-        portStr += std::to_wstring(p);
-        if (it != ScanEngine::PORT_NAMES.end()) portStr += L"(" + it->second + L")";
-        portStr += L" ";
-    }
-    if (_hDetailPorts) SetWindowText(_hDetailPorts, portStr.c_str());
-
+    if (_hDetailMac) SetWindowText(_hDetailMac,
+        (dev.mac + (dev.latencyMs >= 0 ? L"   " + std::to_wstring(dev.latencyMs) + L"ms" : L"")).c_str());
     if (_hDetailLastSeen) SetWindowText(_hDetailLastSeen,
         (L"Last seen: " + dev.lastSeen).c_str());
 
+    // Ports
+    wstring portStr;
+    if (dev.openPorts.empty()) portStr = L"No open ports";
+    else for (int p : dev.openPorts) {
+        auto it = ScanEngine::PORT_NAMES.find(p);
+        portStr += std::to_wstring(p);
+        if (it != ScanEngine::PORT_NAMES.end()) portStr += L"/" + it->second;
+        portStr += L"  ";
+    }
+    if (_hDetailPorts) SetWindowText(_hDetailPorts, portStr.c_str());
+
     // mDNS
-    wstring mdns = L"mDNS: ";
-    for (auto& s : dev.mdnsServices) mdns += s + L" ";
-    if (dev.mdnsServices.empty()) mdns += L"None";
+    wstring mdns;
+    for (auto& s : dev.mdnsServices) mdns += s + L"  ";
+    if (mdns.empty()) mdns = L"No mDNS services";
     if (_hDetailMdns) SetWindowText(_hDetailMdns, mdns.c_str());
 
-    // Anomalies
+    // IoT risk
+    if (_hDetailIotRisk) {
+        if (dev.iotRisk && !dev.iotRiskDetail.empty()) {
+            SetWindowText(_hDetailIotRisk, dev.iotRiskDetail.c_str());
+            ShowWindow(_hDetailIotRisk, SW_SHOW);
+        } else {
+            ShowWindow(_hDetailIotRisk, SW_HIDE);
+        }
+    }
+
+    // Anomalies for this device
     wstring anoms;
     if (_mainWnd) {
         ScanResult r = _mainWnd->GetLastResult();
         for (auto& a : r.anomalies) {
             if (a.deviceIp == dev.ip)
-                anoms += L"[" + a.severity + L"] " + a.description + L"\n";
+                anoms += L"[" + a.severity + L"] " + a.description + L"\r\n";
         }
     }
-    if (anoms.empty()) anoms = L"No anomalies";
+    if (anoms.empty()) anoms = L"No alerts for this device";
     if (_hDetailAnoms) SetWindowText(_hDetailAnoms, anoms.c_str());
 
     // Notes
@@ -504,6 +587,8 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
             }
         }
     }
+
+    _detailDeviceIp = dev.ip;
 }
 
 void TabDevices::RefreshList() {

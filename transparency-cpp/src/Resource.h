@@ -49,6 +49,7 @@
 #define IDC_LIST_CHANGES    4005
 
 // Edit control IDs
+#define IDC_EDIT_DEVICE_NAME    5000
 #define IDC_EDIT_SEARCH     5001
 #define IDC_EDIT_PING_TARGET    5002
 #define IDC_EDIT_PING_COUNT     5003
@@ -93,6 +94,15 @@
 #define IDC_BTN_DETAIL_TRACE    6051
 #define IDC_BTN_DETAIL_DEEP     6052
 #define IDC_BTN_DETAIL_FORGET   6053
+#define IDC_BTN_DEVICE_SAVE     6054
+#define IDC_BTN_PORT_SCAN_RUN   6060
+#define IDC_BTN_WOL_SEND        6061
+#define IDC_BTN_REVDNS_RUN      6062
+#define IDC_BTN_DIFF_RUN        6063
+#define IDC_BTN_API_TOGGLE      6070
+#define IDC_BTN_HOOK_ADD        6071
+#define IDC_BTN_HOOK_DEL        6072
+#define IDC_BTN_SCHED_SAVE      6073
 
 // Combo box IDs
 #define IDC_COMBO_DNS_TYPE      7001

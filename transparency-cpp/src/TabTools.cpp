@@ -216,6 +216,50 @@ void TabTools::CreateControls(HWND hwnd, int cx, int cy) {
     _hHttpOut = mkEdit(nullptr, IDC_EDIT_HTTP_OUTPUT, 16, y, cx - 32, 60, true);
     y += 68;
 
+    // ── Port Scanner ─────────────────────────────────────────────────────────
+    MakeSection(hwnd, L"Port Scanner", y, cx, hInst);
+    y += 22;
+    mkLbl(L"Target:", 16, y + 3, 50);
+    _hPortScanTarget = mkEdit(L"hostname or IP", IDC_EDIT_PING_TARGET + 100, 70, y, 200, 24);
+    mkLbl(L"Preset:", 278, y + 3, 46);
+    _hPortScanPreset = CreateWindowEx(0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        328, y, 100, 100, hwnd, nullptr, hInst, nullptr);
+    SendMessage(_hPortScanPreset, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    SendMessage(_hPortScanPreset, CB_ADDSTRING, 0, (LPARAM)L"Common (22 ports)");
+    SendMessage(_hPortScanPreset, CB_ADDSTRING, 0, (LPARAM)L"Top 100");
+    SendMessage(_hPortScanPreset, CB_ADDSTRING, 0, (LPARAM)L"Custom range");
+    SendMessage(_hPortScanPreset, CB_SETCURSEL, 0, 0);
+    _hBtnPortScan = mkBtn(L"Scan", IDC_BTN_PORT_SCAN_RUN, 436, y, 60, 24);
+    y += 30;
+    mkLbl(L"Custom range (e.g. 1-1024):", 16, y + 3, 190);
+    _hPortScanCustom = mkEdit(L"1-1024", IDC_EDIT_PING_TARGET + 101, 210, y, 120, 24);
+    y += 30;
+    _hPortScanOut = mkEdit(nullptr, IDC_EDIT_PING_TARGET + 102, 16, y, cx - 32, 90, true);
+    y += 98;
+
+    // ── Wake-on-LAN ──────────────────────────────────────────────────────────
+    MakeSection(hwnd, L"Wake-on-LAN", y, cx, hInst);
+    y += 22;
+    mkLbl(L"MAC:", 16, y + 3, 36);
+    _hWolMac = mkEdit(L"AA:BB:CC:DD:EE:FF", IDC_EDIT_PING_TARGET + 110, 56, y, 160, 24);
+    mkLbl(L"Broadcast:", 224, y + 3, 70);
+    _hWolBcast = mkEdit(L"255.255.255.255", IDC_EDIT_PING_TARGET + 111, 298, y, 134, 24);
+    _hBtnWol = mkBtn(L"Send", IDC_BTN_WOL_SEND, 440, y, 56, 24);
+    y += 30;
+    _hWolOut = mkEdit(nullptr, IDC_EDIT_PING_TARGET + 112, 16, y, cx - 32, 36, true);
+    y += 44;
+
+    // ── Reverse DNS ──────────────────────────────────────────────────────────
+    MakeSection(hwnd, L"Reverse DNS", y, cx, hInst);
+    y += 22;
+    mkLbl(L"IP:", 16, y + 3, 24);
+    _hRevDnsIp = mkEdit(L"IP address", IDC_EDIT_PING_TARGET + 120, 44, y, 200, 24);
+    _hBtnRevDns = mkBtn(L"Lookup", IDC_BTN_REVDNS_RUN, 252, y, 70, 24);
+    y += 30;
+    _hRevDnsOut = mkEdit(nullptr, IDC_EDIT_PING_TARGET + 121, 16, y, cx - 32, 36, true);
+    y += 44;
+
     // ── Wi-Fi Info ────────────────────────────────────────────────────────────
     MakeSection(hwnd, L"Wi-Fi Info", y, cx, hInst);
     y += 22;
@@ -321,6 +365,42 @@ LRESULT TabTools::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     case 9701: ShowGuidedFlow(1); break;
     case 9702: ShowGuidedFlow(2); break;
     case 9703: ShowGuidedFlow(3); break;
+
+    case IDC_BTN_PORT_SCAN_RUN: {
+        wchar_t target[256] = {};
+        if (_hPortScanTarget) GetWindowText(_hPortScanTarget, target, 256);
+        wchar_t custom[128] = L"1-1024";
+        if (_hPortScanCustom) GetWindowText(_hPortScanCustom, custom, 128);
+        int sel = _hPortScanPreset ? (int)SendMessage(_hPortScanPreset, CB_GETCURSEL, 0, 0) : 0;
+        wchar_t presetBuf[64] = L"Common (22 ports)";
+        if (_hPortScanPreset) SendMessage(_hPortScanPreset, CB_GETLBTEXT, sel, (LPARAM)presetBuf);
+        if (target[0]) {
+            if (_hPortScanOut) SetWindowText(_hPortScanOut, L"");
+            RunPortScan(target, presetBuf, custom);
+        }
+        break;
+    }
+
+    case IDC_BTN_WOL_SEND: {
+        wchar_t mac[64] = {}, bcast[64] = {};
+        if (_hWolMac) GetWindowText(_hWolMac, mac, 64);
+        if (_hWolBcast) GetWindowText(_hWolBcast, bcast, 64);
+        if (mac[0]) {
+            if (_hWolOut) SetWindowText(_hWolOut, L"");
+            RunWakeOnLan(mac, bcast[0] ? bcast : L"255.255.255.255");
+        }
+        break;
+    }
+
+    case IDC_BTN_REVDNS_RUN: {
+        wchar_t ip[64] = {};
+        if (_hRevDnsIp) GetWindowText(_hRevDnsIp, ip, 64);
+        if (ip[0]) {
+            if (_hRevDnsOut) SetWindowText(_hRevDnsOut, L"");
+            RunReverseDns(ip);
+        }
+        break;
+    }
     }
 
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
@@ -858,6 +938,190 @@ void TabTools::RefreshGatewayInfo() {
 
     if (info.empty()) info = L"Could not retrieve gateway info.\r\n";
     SetWindowText(_hGwInfo, info.c_str());
+}
+
+// ─── Port Scanner ─────────────────────────────────────────────────────────────
+
+void TabTools::RunPortScan(const wstring& target, const wstring& preset, const wstring& customRange) {
+    HWND hwnd = _hwnd;
+    HWND hOut = _hPortScanOut;
+
+    // Build port list
+    std::vector<int> ports;
+
+    if (preset.find(L"Common") != wstring::npos || preset.find(L"22 ports") != wstring::npos) {
+        ports = {21,22,23,25,53,80,110,135,139,143,443,445,587,993,995,
+                 1433,1883,3306,3389,5900,8080,8443};
+    } else if (preset.find(L"Top 100") != wstring::npos) {
+        for (int p : {21,22,23,25,53,80,81,110,111,119,135,139,143,179,199,443,445,465,514,
+                      515,548,554,587,631,993,995,1025,1026,1433,1720,1723,1883,2049,2082,
+                      2083,2086,2087,2095,2096,3306,3389,4899,5631,5900,6881,8000,8080,
+                      8081,8443,8888,9100,10000}) ports.push_back(p);
+    } else {
+        // Parse custom range e.g. "1-1024" or "80,443,8080"
+        string r;
+        { int n = WideCharToMultiByte(CP_UTF8,0,customRange.c_str(),-1,nullptr,0,nullptr,nullptr);
+          if(n>0){r.resize(n-1);WideCharToMultiByte(CP_UTF8,0,customRange.c_str(),-1,&r[0],n,nullptr,nullptr);} }
+        if (r.find('-') != string::npos) {
+            int lo = atoi(r.c_str());
+            int hi = atoi(r.c_str() + r.find('-') + 1);
+            lo = std::max(1, lo); hi = std::min(65535, hi);
+            for (int p = lo; p <= hi; p++) ports.push_back(p);
+        } else {
+            std::istringstream ss(r);
+            string tok;
+            while (std::getline(ss, tok, ',')) {
+                int p = atoi(tok.c_str());
+                if (p > 0 && p <= 65535) ports.push_back(p);
+            }
+        }
+    }
+
+    std::thread([=]() {
+        string tgt;
+        { int n=WideCharToMultiByte(CP_UTF8,0,target.c_str(),-1,nullptr,0,nullptr,nullptr);
+          if(n>0){tgt.resize(n-1);WideCharToMultiByte(CP_UTF8,0,target.c_str(),-1,&tgt[0],n,nullptr,nullptr);} }
+
+        // Resolve
+        struct in_addr addr;
+        if (inet_pton(AF_INET, tgt.c_str(), &addr) != 1) {
+            addrinfo hints={},*res=nullptr; hints.ai_family=AF_INET;
+            if (getaddrinfo(tgt.c_str(),nullptr,&hints,&res)!=0||!res) {
+                PostMessage(hwnd,WM_TOOL_RESULT,(WPARAM)hOut,(LPARAM)new wstring(L"Could not resolve: "+target+L"\r\n"));
+                return;
+            }
+            addr=reinterpret_cast<sockaddr_in*>(res->ai_addr)->sin_addr;
+            freeaddrinfo(res);
+        }
+        wchar_t ipStr[INET_ADDRSTRLEN]; InetNtop(AF_INET,&addr,ipStr,INET_ADDRSTRLEN);
+
+        wstring header = L"Scanning " + wstring(ipStr) + L" — " + std::to_wstring(ports.size()) + L" ports\r\n";
+        PostMessage(hwnd,WM_TOOL_RESULT,(WPARAM)hOut,(LPARAM)new wstring(header));
+
+        std::vector<int> open;
+        for (int port : ports) {
+            SOCKET s = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+            if (s==INVALID_SOCKET) continue;
+            u_long mode=1; ioctlsocket(s,FIONBIO,&mode);
+            sockaddr_in dest{}; dest.sin_family=AF_INET; dest.sin_port=htons((u_short)port);
+            dest.sin_addr=addr;
+            connect(s,(sockaddr*)&dest,sizeof(dest));
+            fd_set wfds,efds; FD_ZERO(&wfds); FD_ZERO(&efds); FD_SET(s,&wfds); FD_SET(s,&efds);
+            timeval tv; tv.tv_sec=0; tv.tv_usec=400000; // 400ms per port
+            int sel=select(0,nullptr,&wfds,&efds,&tv);
+            bool connected=false;
+            if(sel>0&&FD_ISSET(s,&wfds)&&!FD_ISSET(s,&efds)){
+                int err=0,el=sizeof(err); getsockopt(s,SOL_SOCKET,SO_ERROR,(char*)&err,&el);
+                connected=(err==0);
+            }
+            closesocket(s);
+            if (connected) open.push_back(port);
+        }
+
+        wstring result;
+        if (open.empty()) {
+            result = L"No open ports found.\r\n";
+        } else {
+            result = std::to_wstring(open.size()) + L" open port(s):\r\n";
+            for (int p : open) {
+                result += L"  " + std::to_wstring(p);
+                auto it = ScanEngine::PORT_NAMES.find(p);
+                if (it != ScanEngine::PORT_NAMES.end()) result += L"  " + it->second;
+                result += L"\r\n";
+            }
+        }
+        PostMessage(hwnd,WM_TOOL_RESULT,(WPARAM)hOut,(LPARAM)new wstring(result));
+    }).detach();
+}
+
+// ─── Wake-on-LAN ──────────────────────────────────────────────────────────────
+
+void TabTools::RunWakeOnLan(const wstring& mac, const wstring& broadcast) {
+    HWND hwnd = _hwnd;
+    HWND hOut = _hWolOut;
+
+    // Parse MAC (accepts AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF)
+    string macNarrow;
+    { int n=WideCharToMultiByte(CP_UTF8,0,mac.c_str(),-1,nullptr,0,nullptr,nullptr);
+      if(n>0){macNarrow.resize(n-1);WideCharToMultiByte(CP_UTF8,0,mac.c_str(),-1,&macNarrow[0],n,nullptr,nullptr);} }
+
+    BYTE macBytes[6] = {};
+    int parsed = 0;
+    string clean;
+    for (char c : macNarrow) if (c != ':' && c != '-') clean += c;
+    if (clean.size() == 12) {
+        for (int i = 0; i < 6; i++) {
+            macBytes[i] = (BYTE)strtol(clean.substr(i*2, 2).c_str(), nullptr, 16);
+            parsed++;
+        }
+    }
+
+    if (parsed != 6) {
+        AppendOutput(hOut, L"Invalid MAC address format. Use AA:BB:CC:DD:EE:FF\r\n");
+        return;
+    }
+
+    // Build 102-byte magic packet: 6x 0xFF, then 16x MAC
+    BYTE packet[102];
+    memset(packet, 0xFF, 6);
+    for (int i = 0; i < 16; i++) memcpy(packet + 6 + i * 6, macBytes, 6);
+
+    // Send UDP broadcast on port 9
+    string bcastNarrow;
+    { int n=WideCharToMultiByte(CP_UTF8,0,broadcast.c_str(),-1,nullptr,0,nullptr,nullptr);
+      if(n>0){bcastNarrow.resize(n-1);WideCharToMultiByte(CP_UTF8,0,broadcast.c_str(),-1,&bcastNarrow[0],n,nullptr,nullptr);} }
+
+    SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == INVALID_SOCKET) { AppendOutput(hOut, L"Socket error.\r\n"); return; }
+
+    BOOL opt = TRUE;
+    setsockopt(s, SOL_SOCKET, SO_BROADCAST, (char*)&opt, sizeof(opt));
+
+    sockaddr_in dest{};
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(9);
+    inet_pton(AF_INET, bcastNarrow.c_str(), &dest.sin_addr);
+
+    int sent = sendto(s, (char*)packet, sizeof(packet), 0, (sockaddr*)&dest, sizeof(dest));
+    closesocket(s);
+
+    if (sent == sizeof(packet)) {
+        AppendOutput(hOut, L"Magic packet sent to " + mac + L" via " + broadcast + L"\r\nDevice should wake within 30 seconds.\r\n");
+    } else {
+        AppendOutput(hOut, L"Failed to send magic packet.\r\n");
+    }
+}
+
+// ─── Reverse DNS ──────────────────────────────────────────────────────────────
+
+void TabTools::RunReverseDns(const wstring& ip) {
+    HWND hwnd = _hwnd;
+    HWND hOut = _hRevDnsOut;
+
+    std::thread([=]() {
+        string ipNarrow;
+        { int n=WideCharToMultiByte(CP_UTF8,0,ip.c_str(),-1,nullptr,0,nullptr,nullptr);
+          if(n>0){ipNarrow.resize(n-1);WideCharToMultiByte(CP_UTF8,0,ip.c_str(),-1,&ipNarrow[0],n,nullptr,nullptr);} }
+
+        struct in_addr addr{};
+        if (inet_pton(AF_INET, ipNarrow.c_str(), &addr) != 1) {
+            PostMessage(hwnd,WM_TOOL_RESULT,(WPARAM)hOut,(LPARAM)new wstring(L"Invalid IP address.\r\n"));
+            return;
+        }
+        sockaddr_in sa{}; sa.sin_family=AF_INET; sa.sin_addr=addr;
+        char host[NI_MAXHOST] = {};
+        int rc = getnameinfo((sockaddr*)&sa,sizeof(sa),host,NI_MAXHOST,nullptr,0,NI_NAMEREQD);
+        wstring result;
+        if (rc == 0) {
+            result = ip + L"  →  ";
+            int n=MultiByteToWideChar(CP_UTF8,0,host,-1,nullptr,0);
+            if(n>0){wstring w(n-1,0);MultiByteToWideChar(CP_UTF8,0,host,-1,&w[0],n);result+=w;}
+            result += L"\r\n";
+        } else {
+            result = L"No PTR record found for " + ip + L"\r\n";
+        }
+        PostMessage(hwnd,WM_TOOL_RESULT,(WPARAM)hOut,(LPARAM)new wstring(result));
+    }).detach();
 }
 
 // ─── Guided Flows ─────────────────────────────────────────────────────────────

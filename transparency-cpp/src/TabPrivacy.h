@@ -34,8 +34,11 @@ private:
     void RefreshStats();
     void SaveConfig();
     void LoadConfig();
+    void RefreshHooks();
+    void RefreshSchedScan();
+    void ExportFullJson(HWND hwnd);
 
-    HWND _hwnd = nullptr;
+    HWND _hwnd    = nullptr;
     MainWindow* _mainWnd = nullptr;
 
     // Stats
@@ -45,26 +48,44 @@ private:
 
     // Data deletion
     HWND _hBtnDeleteAll = nullptr;
-    HWND _hPurgeDays = nullptr;
-    HWND _hBtnPurge = nullptr;
+    HWND _hPurgeDays    = nullptr;
+    HWND _hBtnPurge     = nullptr;
 
     // Monitor config
-    HWND _hMonInterval = nullptr;
-    HWND _hMonQuietStart = nullptr;
-    HWND _hMonQuietEnd = nullptr;
+    HWND _hMonInterval    = nullptr;
+    HWND _hMonQuietStart  = nullptr;
+    HWND _hMonQuietEnd    = nullptr;
     HWND _hChkAlertOutage = nullptr;
-    HWND _hChkAlertGateway = nullptr;
-    HWND _hChkAlertDns = nullptr;
-    HWND _hChkAlertLatency = nullptr;
-    HWND _hLatencyThresh = nullptr;
-    HWND _hBtnSaveConfig = nullptr;
+    HWND _hChkAlertGateway= nullptr;
+    HWND _hChkAlertDns    = nullptr;
+    HWND _hChkAlertLatency= nullptr;
+    HWND _hLatencyThresh  = nullptr;
+    HWND _hBtnSaveConfig  = nullptr;
 
     // Export/Import
     HWND _hBtnExport = nullptr;
     HWND _hBtnImport = nullptr;
 
-    // API info
-    HWND _hApiInfo = nullptr;
+    // REST API
+    HWND _hChkApiEnabled  = nullptr;
+    HWND _hEditApiKey     = nullptr;
+    HWND _hBtnApiRotate   = nullptr;
+    HWND _hApiStatusLbl   = nullptr;
+
+    // Plugin hooks list
+    HWND _hHookList     = nullptr;
+    HWND _hBtnHookAdd   = nullptr;
+    HWND _hBtnHookDel   = nullptr;
+
+    // Scheduled scan
+    HWND _hChkSchedEnabled = nullptr;
+    HWND _hComboSchedMode  = nullptr;
+    HWND _hEditSchedInterval = nullptr;
+    HWND _hEditSchedTime   = nullptr;
+    HWND _hBtnSchedSave    = nullptr;
+
+    // Scrollable container HWND for all controls
+    HWND _hScroll = nullptr;
 
     static const wchar_t* s_className;
 };

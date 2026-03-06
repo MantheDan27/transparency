@@ -160,6 +160,48 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_GATEWAY_CHANGED:
         return self->OnGatewayChanged(hwnd, wp, lp);
 
+    case WM_TIMER:
+        if (wp == 1) {
+            // Scheduled scan check — fires every 60 seconds
+            if (self->_scheduledScan.enabled) {
+                SYSTEMTIME st; GetLocalTime(&st);
+                wchar_t nowHHMM[8];
+                swprintf_s(nowHHMM, L"%02d:%02d", st.wHour, st.wMinute);
+
+                // Check if preferred time matches (within the same minute) and
+                // enough hours have elapsed since last run.
+                bool timeMatch = (self->_scheduledScan.timeOfDay == nowHHMM);
+                bool hoursOk   = true;
+                if (!self->_scheduledScan.lastRun.empty()) {
+                    // Simple check: compare wstring date prefix (YYYY-MM-DD HH:MM)
+                    wstring last = self->_scheduledScan.lastRun;
+                    int lastHour = 0, lastMin = 0, lastDay = 0, lastMon = 0, lastYr = 0;
+                    swscanf_s(last.c_str(), L"%d-%d-%d %d:%d",
+                               &lastYr, &lastMon, &lastDay, &lastHour, &lastMin);
+                    int elapsedH = (st.wYear  - lastYr)  * 8760
+                                 + (st.wMonth - lastMon) * 720
+                                 + (st.wDay   - lastDay) * 24
+                                 + (st.wHour  - lastHour);
+                    hoursOk = (elapsedH >= self->_scheduledScan.intervalHours);
+                }
+
+                if (timeMatch && hoursOk) {
+                    wchar_t ts[32];
+                    swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d",
+                               st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
+                    self->_scheduledScan.lastRun = ts;
+
+                    if      (self->_scheduledScan.mode == L"deep")     self->StartDeepScan();
+                    else if (self->_scheduledScan.mode == L"standard") self->StartStandardScan();
+                    else                                                self->StartQuickScan();
+
+                    self->AddLedgerEntry(L"Scheduled Scan",
+                        L"Auto-triggered " + self->_scheduledScan.mode + L" scan");
+                }
+            }
+        }
+        return 0;
+
     case WM_DESTROY:
         return self->OnDestroy(hwnd);
 
@@ -196,7 +238,10 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparency v2.1.0 initialized");
+    AddLedgerEntry(L"App Started", L"Transparency v3.2.0 initialized");
+
+    // Check scheduled scans every 60 seconds
+    SetTimer(hwnd, 1, 60000, nullptr);
 
     // Auto-run quick scan on launch so tabs have data immediately
     StartQuickScan();
@@ -348,7 +393,7 @@ void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
     RECT verRc = { 4, rc.bottom - 28, SIDEBAR_WIDTH - 4, rc.bottom - 6 };
     HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"v2.1.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawText(hdc, L"v3.2.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, verFont);
 }
 
@@ -371,6 +416,8 @@ LRESULT MainWindow::OnPaint(HWND hwnd) {
 // ─── OnDestroy ───────────────────────────────────────────────────────────────
 
 LRESULT MainWindow::OnDestroy(HWND hwnd) {
+    KillTimer(hwnd, 1);
+    StopLocalApi();
     _monitor.Stop();
     _scanner.Cancel();
     PostQuitMessage(0);
@@ -539,6 +586,244 @@ ScanResult MainWindow::GetLastResult() const {
 }
 
 // ─── Scan/Monitor Message Handlers ───────────────────────────────────────────
+
+// ─── SaveSnapshot ─────────────────────────────────────────────────────────────
+
+void MainWindow::SaveSnapshot() {
+    std::lock_guard<std::mutex> lk(_dataMutex);
+    _snapshots.push_back(_lastResult);
+    // Keep last 20 snapshots
+    if (_snapshots.size() > 20) _snapshots.erase(_snapshots.begin());
+}
+
+// ─── FirePluginHooks ──────────────────────────────────────────────────────────
+
+void MainWindow::FirePluginHooks(const std::wstring& eventType, const std::wstring& deviceIp) {
+    std::vector<PluginHook> hooks;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        hooks = _pluginHooks;
+    }
+
+    for (auto& hook : hooks) {
+        if (!hook.enabled) continue;
+        if (hook.eventType != L"any" && hook.eventType != eventType) continue;
+
+        // Build JSON payload for stdin
+        std::string json = "{\"event\":\"";
+        int n = WideCharToMultiByte(CP_UTF8, 0, eventType.c_str(), -1, nullptr, 0, nullptr, nullptr);
+        if (n > 0) { std::string ev(n-1,0); WideCharToMultiByte(CP_UTF8,0,eventType.c_str(),-1,&ev[0],n,nullptr,nullptr); json += ev; }
+        json += "\",\"device\":\"";
+        n = WideCharToMultiByte(CP_UTF8, 0, deviceIp.c_str(), -1, nullptr, 0, nullptr, nullptr);
+        if (n > 0) { std::string ip(n-1,0); WideCharToMultiByte(CP_UTF8,0,deviceIp.c_str(),-1,&ip[0],n,nullptr,nullptr); json += ip; }
+        json += "\"}\n";
+
+        // Create pipe for stdin
+        HANDLE hRead, hWrite;
+        SECURITY_ATTRIBUTES sa{ sizeof(sa), nullptr, TRUE };
+        if (!CreatePipe(&hRead, &hWrite, &sa, 0)) continue;
+        SetHandleInformation(hWrite, HANDLE_FLAG_INHERIT, 0);
+
+        STARTUPINFO si = {};
+        si.cb = sizeof(si);
+        si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+        si.hStdInput = hRead;
+        si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+        si.wShowWindow = SW_HIDE;
+
+        PROCESS_INFORMATION pi = {};
+        std::wstring cmd = hook.execPath;
+        if (CreateProcess(nullptr, &cmd[0], nullptr, nullptr, TRUE,
+                          CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+            DWORD written;
+            WriteFile(hWrite, json.c_str(), (DWORD)json.size(), &written, nullptr);
+            CloseHandle(hWrite);
+            WaitForSingleObject(pi.hProcess, 5000); // max 5s wait
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        } else {
+            CloseHandle(hWrite);
+        }
+        CloseHandle(hRead);
+    }
+}
+
+// ─── LocalApiThreadProc ────────────────────────────────────────────────────────
+// Minimal HTTP/1.0 REST server on port 7722.
+
+DWORD WINAPI MainWindow::LocalApiThreadProc(LPVOID param) {
+    auto* self = static_cast<MainWindow*>(param);
+
+    SOCKET srv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (srv == INVALID_SOCKET) return 1;
+
+    int opt = 1;
+    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((u_short)self->_apiPort);
+    addr.sin_addr.S_un.S_addr = htonl(INADDR_LOOPBACK);
+
+    if (bind(srv, (sockaddr*)&addr, sizeof(addr)) != 0 ||
+        listen(srv, 4) != 0) {
+        closesocket(srv);
+        return 1;
+    }
+
+    while (self->_apiEnabled) {
+        fd_set rfds; FD_ZERO(&rfds); FD_SET(srv, &rfds);
+        timeval tv{ 1, 0 };
+        if (select(0, &rfds, nullptr, nullptr, &tv) <= 0) continue;
+
+        SOCKET client = accept(srv, nullptr, nullptr);
+        if (client == INVALID_SOCKET) continue;
+
+        // Read request (up to 4KB)
+        char buf[4096] = {};
+        int recvd = recv(client, buf, sizeof(buf)-1, 0);
+        if (recvd <= 0) { closesocket(client); continue; }
+        buf[recvd] = '\0';
+        std::string req = buf;
+
+        // Check API key header
+        std::string keyHdr;
+        {
+            int n = WideCharToMultiByte(CP_UTF8,0,self->_apiKey.c_str(),-1,nullptr,0,nullptr,nullptr);
+            if(n>0){keyHdr.resize(n-1);WideCharToMultiByte(CP_UTF8,0,self->_apiKey.c_str(),-1,&keyHdr[0],n,nullptr,nullptr);}
+        }
+        bool authorized = keyHdr.empty() || req.find("X-API-Key: " + keyHdr) != std::string::npos;
+
+        if (!authorized) {
+            std::string resp = "HTTP/1.0 401 Unauthorized\r\nContent-Type: application/json\r\n\r\n{\"error\":\"Unauthorized\"}\r\n";
+            send(client, resp.c_str(), (int)resp.size(), 0);
+            closesocket(client);
+            continue;
+        }
+
+        // Route
+        std::string body;
+        bool found = false;
+
+        auto route = [&](const char* path) -> bool {
+            return req.find(std::string("GET ") + path) == 0 ||
+                   req.find(std::string("POST ") + path) == 0;
+        };
+
+        ScanResult r;
+        {
+            std::lock_guard<std::mutex> lk(self->_dataMutex);
+            r = self->_lastResult;
+        }
+
+        auto wstr2utf8 = [](const std::wstring& w) -> std::string {
+            int n = WideCharToMultiByte(CP_UTF8,0,w.c_str(),-1,nullptr,0,nullptr,nullptr);
+            if(n<=0) return "";
+            std::string s(n-1,0);
+            WideCharToMultiByte(CP_UTF8,0,w.c_str(),-1,&s[0],n,nullptr,nullptr);
+            return s;
+        };
+        auto jsonEsc = [](std::string s) -> std::string {
+            std::string out;
+            for (char c : s) {
+                if (c=='"') out+="\\\"";
+                else if (c=='\\') out+="\\\\";
+                else if (c=='\r'||c=='\n') out+=" ";
+                else out+=c;
+            }
+            return out;
+        };
+
+        if (route("/api/health")) {
+            body = "{\"status\":\"ok\",\"version\":\"3.2.0\"}\r\n";
+            found = true;
+        } else if (route("/api/status")) {
+            body = "{\"devices\":" + std::to_string(r.devices.size()) +
+                   ",\"anomalies\":" + std::to_string(r.anomalies.size()) +
+                   ",\"scannedAt\":\"" + jsonEsc(wstr2utf8(r.scannedAt)) + "\"}\r\n";
+            found = true;
+        } else if (route("/api/devices")) {
+            body = "[";
+            for (size_t i = 0; i < r.devices.size(); i++) {
+                auto& d = r.devices[i];
+                if (i) body += ",";
+                body += "{\"ip\":\"" + jsonEsc(wstr2utf8(d.ip)) + "\""
+                      + ",\"mac\":\"" + jsonEsc(wstr2utf8(d.mac)) + "\""
+                      + ",\"hostname\":\"" + jsonEsc(wstr2utf8(d.hostname.empty()?d.customName:d.hostname)) + "\""
+                      + ",\"vendor\":\"" + jsonEsc(wstr2utf8(d.vendor)) + "\""
+                      + ",\"type\":\"" + jsonEsc(wstr2utf8(d.deviceType)) + "\""
+                      + ",\"trust\":\"" + jsonEsc(wstr2utf8(d.trustState)) + "\""
+                      + ",\"online\":" + (d.online?"true":"false")
+                      + ",\"latencyMs\":" + std::to_string(d.latencyMs)
+                      + ",\"confidence\":" + std::to_string(d.confidence)
+                      + "}";
+            }
+            body += "]\r\n";
+            found = true;
+        } else if (route("/api/alerts")) {
+            body = "[";
+            for (size_t i = 0; i < r.anomalies.size(); i++) {
+                auto& a = r.anomalies[i];
+                if (i) body += ",";
+                body += "{\"type\":\"" + jsonEsc(wstr2utf8(a.type)) + "\""
+                      + ",\"severity\":\"" + jsonEsc(wstr2utf8(a.severity)) + "\""
+                      + ",\"device\":\"" + jsonEsc(wstr2utf8(a.deviceIp)) + "\""
+                      + ",\"description\":\"" + jsonEsc(wstr2utf8(a.description)) + "\""
+                      + "}";
+            }
+            body += "]\r\n";
+            found = true;
+        } else if (route("/api/snapshots")) {
+            std::lock_guard<std::mutex> lk(self->_dataMutex);
+            body = "[";
+            for (size_t i = 0; i < self->_snapshots.size(); i++) {
+                if (i) body += ",";
+                body += "{\"scannedAt\":\"" + jsonEsc(wstr2utf8(self->_snapshots[i].scannedAt)) + "\""
+                      + ",\"devices\":" + std::to_string(self->_snapshots[i].devices.size())
+                      + "}";
+            }
+            body += "]\r\n";
+            found = true;
+        }
+
+        std::string resp;
+        if (found) {
+            resp = "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: "
+                 + std::to_string(body.size()) + "\r\n\r\n" + body;
+        } else {
+            resp = "HTTP/1.0 404 Not Found\r\nContent-Type: application/json\r\n\r\n{\"error\":\"Not found\"}\r\n";
+        }
+        send(client, resp.c_str(), (int)resp.size(), 0);
+        closesocket(client);
+    }
+
+    closesocket(srv);
+    return 0;
+}
+
+void MainWindow::StartLocalApi() {
+    if (_apiEnabled) return;
+    _apiEnabled = true;
+    // Generate a simple API key if none exists
+    if (_apiKey.empty()) {
+        SYSTEMTIME st; GetSystemTime(&st);
+        wchar_t buf[64];
+        swprintf_s(buf, L"tr-%04x%04x%04x", st.wMilliseconds ^ st.wSecond,
+                   (WORD)GetCurrentProcessId(), st.wMinute ^ st.wHour);
+        _apiKey = buf;
+    }
+    _apiThread = CreateThread(nullptr, 0, LocalApiThreadProc, this, 0, nullptr);
+}
+
+void MainWindow::StopLocalApi() {
+    _apiEnabled = false;
+    if (_apiThread) {
+        WaitForSingleObject(_apiThread, 2000);
+        CloseHandle(_apiThread);
+        _apiThread = nullptr;
+    }
+}
 
 LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
     auto* result = reinterpret_cast<ScanResult*>(lp);

@@ -9,6 +9,7 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 #pragma comment(lib, "iphlpapi.lib")
 
@@ -36,6 +37,14 @@ static const wchar_t* KPI_LABELS[] = {
     L"Unknown Devices",
     L"Active Alerts",
     L"Gateway Latency"
+};
+
+// Accent colors for each KPI tile (top border + sparkline)
+static const COLORREF KPI_ACCENTS[] = {
+    RGB(0, 229, 122),   // Success green  — Devices Online
+    RGB(255, 200, 50),  // Warning amber  — Unknown Devices
+    RGB(255, 64, 96),   // Danger red     — Active Alerts
+    RGB(61, 127, 255),  // Accent blue    — Gateway Latency
 };
 
 bool TabOverview::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -115,31 +124,36 @@ LRESULT TabOverview::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
     return 0;
 }
 
+// ── Layout constants ──────────────────────────────────────────────────────────
+static const int TILE_Y  = 110;
+static const int TILE_H  = 80;  // taller to fit sparkline
+static const int PILL_Y_OFF = 36;
+static const int BTN_H  = 32;
+
+static void GetLayoutMetrics(int cx, int cy,
+    int& tileW, int& pillY, int& btnY, int& listY) {
+    tileW = (cx - 40) / 4;
+    pillY = TILE_Y + TILE_H + PILL_Y_OFF;
+    btnY  = pillY + 34;
+    listY = btnY + BTN_H + 52;
+}
+
 void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
-    // KPI tiles (4 across, below header)
-    int tileY = 110;
-    int tileW = (cx - 40) / 4;
-    int tileH = 72;
+    int tileW, pillY, btnY, listY;
+    GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
 
+    // KPI tiles — owner-drawn buttons so we can paint number + sparkline
     for (int i = 0; i < 4; i++) {
         int x = 16 + i * (tileW + 8);
-        _hKpi[i] = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", L"0",
-            WS_CHILD | WS_VISIBLE | SS_CENTER,
-            x, tileY, tileW, tileH,
-            hwnd, (HMENU)(IDC_STATIC_KPI1 + i), hInst, nullptr);
-        SendMessage(_hKpi[i], WM_SETFONT, (WPARAM)Theme::FontHeader(), TRUE);
-
-        _hKpiLabel[i] = CreateWindowEx(0, L"STATIC", KPI_LABELS[i],
-            WS_CHILD | WS_VISIBLE | SS_CENTER,
-            x, tileY + tileH + 2, tileW, 18,
-            hwnd, (HMENU)(9100 + i), hInst, nullptr);
-        SendMessage(_hKpiLabel[i], WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+        _hKpi[i] = CreateWindowEx(0, L"BUTTON", nullptr,
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            x, TILE_Y, tileW, TILE_H,
+            hwnd, (HMENU)(INT_PTR)(IDC_STATIC_KPI1 + i), hInst, nullptr);
     }
 
     // Scan mode pills
-    int pillY = tileY + tileH + 32;
     _hModeQuick = CreateWindowEx(0, L"BUTTON", L"Quick",
         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
         16, pillY, 80, 24, hwnd, (HMENU)9200, hInst, nullptr);
@@ -162,49 +176,44 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hCheckGentle, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     // Action buttons
-    int btnY = pillY + 34;
-    int btnH = 32;
-
     _hBtnQuickScan = CreateWindowEx(0, L"BUTTON", L"Quick Scan",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        16, btnY, 100, btnH, hwnd, (HMENU)IDC_BTN_SCAN_QUICK, hInst, nullptr);
+        16, btnY, 100, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_QUICK, hInst, nullptr);
     SendMessage(_hBtnQuickScan, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hBtnDeepScan = CreateWindowEx(0, L"BUTTON", L"Deep Scan",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        122, btnY, 100, btnH, hwnd, (HMENU)IDC_BTN_SCAN_DEEP, hInst, nullptr);
+        122, btnY, 100, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_DEEP, hInst, nullptr);
     SendMessage(_hBtnDeepScan, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hBtnMonStart = CreateWindowEx(0, L"BUTTON", L"Start Monitor",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        228, btnY, 110, btnH, hwnd, (HMENU)IDC_BTN_MONITOR_START, hInst, nullptr);
+        228, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_START, hInst, nullptr);
     SendMessage(_hBtnMonStart, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hBtnMonStop = CreateWindowEx(0, L"BUTTON", L"Stop Monitor",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        344, btnY, 110, btnH, hwnd, (HMENU)IDC_BTN_MONITOR_STOP, hInst, nullptr);
+        344, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_STOP, hInst, nullptr);
     SendMessage(_hBtnMonStop, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     EnableWindow(_hBtnMonStop, FALSE);
 
     _hBtnExport = CreateWindowEx(0, L"BUTTON", L"Export Report",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        460, btnY, 110, btnH, hwnd, (HMENU)IDC_BTN_EXPORT, hInst, nullptr);
+        460, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_EXPORT, hInst, nullptr);
     SendMessage(_hBtnExport, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
-    // Progress / status text
+    // Progress / status
     _hStatusText = CreateWindowEx(0, L"STATIC", L"Ready. Run a scan to discover devices.",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        16, btnY + btnH + 8, cx - 32, 20,
+        16, btnY + BTN_H + 8, cx - 32, 20,
         hwnd, (HMENU)IDC_STATIC_STATUS, hInst, nullptr);
     SendMessage(_hStatusText, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
-    // Progress bar
     _hProgressBar = CreateWindowEx(0, PROGRESS_CLASS, nullptr,
         WS_CHILD | WS_VISIBLE | PBS_SMOOTH,
-        16, btnY + btnH + 32, cx - 32, 8,
+        16, btnY + BTN_H + 32, cx - 32, 8,
         hwnd, nullptr, hInst, nullptr);
     SendMessage(_hProgressBar, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
-    SendMessage(_hProgressBar, PBM_SETPOS, 0, 0);
 
     // Network info
     _hNetworkInfo = CreateWindowEx(0, L"STATIC", L"Detecting network...",
@@ -213,68 +222,292 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
         hwnd, (HMENU)IDC_STATIC_NET_INFO, hInst, nullptr);
     SendMessage(_hNetworkInfo, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
-    // Recent changes list
-    int listY = btnY + btnH + 52;
+    // Right-side changes list  (40% of bottom width)
+    int mapW = (cx - 40) * 6 / 10;
+    int listX = 16 + mapW + 8;
+    int listW = cx - listX - 16;
     int listH = cy - listY - 16;
 
     _hChangesList = CreateWindowEx(
         WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
-        16, listY, cx - 32, listH,
+        listX, listY, std::max(listW, 100), std::max(listH, 50),
         hwnd, (HMENU)IDC_LIST_CHANGES, hInst, nullptr);
 
     SendMessage(_hChangesList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hChangesList,
         LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
-
     Theme::ApplyDarkScrollbar(_hChangesList);
 
-    // Columns for recent changes
     LVCOLUMN col = {};
     col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
     col.fmt  = LVCFMT_LEFT;
 
-    col.cx = 140; col.pszText = (LPWSTR)L"Time";
+    col.cx = 100; col.pszText = (LPWSTR)L"Time";
     ListView_InsertColumn(_hChangesList, 0, &col);
 
-    col.cx = 160; col.pszText = (LPWSTR)L"Change";
+    col.cx = 120; col.pszText = (LPWSTR)L"Change";
     ListView_InsertColumn(_hChangesList, 1, &col);
 
-    col.cx = 400; col.pszText = (LPWSTR)L"Details";
+    col.cx = 240; col.pszText = (LPWSTR)L"Details";
     ListView_InsertColumn(_hChangesList, 2, &col);
 }
 
 void TabOverview::LayoutControls(int cx, int cy) {
     if (!_hwnd) return;
 
-    int tileY = 110;
-    int tileW = (cx - 40) / 4;
-    int tileH = 72;
+    int tileW, pillY, btnY, listY;
+    GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
 
     for (int i = 0; i < 4; i++) {
         int x = 16 + i * (tileW + 8);
-        if (_hKpi[i]) SetWindowPos(_hKpi[i], nullptr, x, tileY, tileW, tileH, SWP_NOZORDER);
-        if (_hKpiLabel[i]) SetWindowPos(_hKpiLabel[i], nullptr, x, tileY + tileH + 2, tileW, 18, SWP_NOZORDER);
+        if (_hKpi[i]) SetWindowPos(_hKpi[i], nullptr, x, TILE_Y, tileW, TILE_H, SWP_NOZORDER);
     }
 
-    if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, 0, cx - 32, 20, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hProgressBar) SetWindowPos(_hProgressBar, nullptr, 16, 0, cx - 32, 8, SWP_NOMOVE | SWP_NOZORDER);
+    if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, btnY + BTN_H + 8,  cx - 32, 20, SWP_NOZORDER);
+    if (_hProgressBar)SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 32, cx - 32,  8, SWP_NOZORDER);
     if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16, cx - 32, 80, SWP_NOZORDER);
 
-    // Recalculate list position
-    int pillY = tileY + tileH + 32;
-    int btnY = pillY + 34;
-    int btnH = 32;
-    int listY = btnY + btnH + 52;
-    int listH = cy - listY - 16;
+    // Topology map rect (left 60%)
+    int mapW = (cx - 40) * 6 / 10;
+    int mapH = cy - listY - 16;
+    _mapRect = { 16, listY, 16 + mapW, listY + std::max(mapH, 80) };
 
-    if (_hChangesList) SetWindowPos(_hChangesList, nullptr, 16, listY, cx - 32, std::max(listH, 50), SWP_NOZORDER);
+    // Changes list (right 40%)
+    int listX = 16 + mapW + 8;
+    int listW = cx - listX - 16;
+    if (_hChangesList)
+        SetWindowPos(_hChangesList, nullptr, listX, listY,
+                     std::max(listW, 100), std::max(mapH, 50), SWP_NOZORDER);
 }
 
 LRESULT TabOverview::OnSize(HWND hwnd, int cx, int cy) {
     LayoutControls(cx, cy);
     return 0;
 }
+
+// ── Owner-draw KPI tiles ──────────────────────────────────────────────────────
+
+LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
+    if (!dis) return 0;
+    int idx = dis->CtlID - IDC_STATIC_KPI1;
+    if (idx < 0 || idx > 3) return 0;
+
+    HDC   hdc = dis->hDC;
+    RECT  rc  = dis->rcItem;
+    COLORREF accent = KPI_ACCENTS[idx];
+
+    // Background
+    HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
+    FillRect(hdc, &rc, bgBrush);
+    DeleteObject(bgBrush);
+
+    // 2px top accent border
+    RECT topBar = { rc.left, rc.top, rc.right, rc.top + 2 };
+    HBRUSH accBrush = CreateSolidBrush(accent);
+    FillRect(hdc, &topBar, accBrush);
+    DeleteObject(accBrush);
+
+    // Card border
+    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+    MoveToEx(hdc, rc.left,     rc.top,      nullptr);
+    LineTo  (hdc, rc.right - 1, rc.top);
+    LineTo  (hdc, rc.right - 1, rc.bottom - 1);
+    LineTo  (hdc, rc.left,      rc.bottom - 1);
+    LineTo  (hdc, rc.left,      rc.top);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+
+    // Big number
+    wchar_t valStr[32];
+    if (idx == 3) {
+        if (_kpiVal[3] >= 0) swprintf_s(valStr, L"%dms", _kpiVal[3]);
+        else                 wcscpy_s(valStr, L"--");
+    } else {
+        swprintf_s(valStr, L"%d", _kpiVal[idx]);
+    }
+
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_PRIMARY);
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontHeader());
+    RECT numRc = { rc.left + 4, rc.top + 4, rc.right - 4, rc.top + 42 };
+    DrawText(hdc, valStr, -1, &numRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
+    // Label
+    SelectObject(hdc, Theme::FontSmall());
+    SetTextColor(hdc, Theme::TEXT_MUTED);
+    RECT lblRc = { rc.left + 4, rc.top + 44, rc.right - 4, rc.top + 60 };
+    DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
+    SelectObject(hdc, oldFont);
+
+    // Sparkline (7 bars) in the bottom ~18px of the tile
+    const std::vector<int>* hist = nullptr;
+    switch (idx) {
+    case 0: hist = &_devicesOnlineHistory; break;
+    case 1: hist = &_unknownDevHistory;    break;
+    case 2: hist = &_alertHistory;         break;
+    case 3: hist = &_latencyHistory;       break;
+    }
+    if (hist && !hist->empty()) {
+        RECT spRc = { rc.left + 6, rc.top + 62, rc.right - 6, rc.bottom - 4 };
+        DrawSparkline(hdc, spRc, *hist, accent);
+    }
+
+    return TRUE;
+}
+
+void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
+                                const std::vector<int>& vals, COLORREF col) {
+    if (vals.empty()) return;
+    int n = (int)vals.size();
+    int w = rc.right  - rc.left;
+    int h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+
+    // Find max (at least 1)
+    int maxVal = 1;
+    for (int v : vals) if (v > maxVal) maxVal = v;
+
+    // 40% opacity blend on BG_CARD (#181d2e)
+    BYTE r = (BYTE)(GetRValue(col) * 40 / 100 + 24 * 60 / 100);
+    BYTE g = (BYTE)(GetGValue(col) * 40 / 100 + 29 * 60 / 100);
+    BYTE b = (BYTE)(GetBValue(col) * 40 / 100 + 46 * 60 / 100);
+    HBRUSH barBrush = CreateSolidBrush(RGB(r, g, b));
+
+    int barW = std::max(2, w / (n + 1));
+
+    for (int i = 0; i < n; i++) {
+        int barH = (vals[i] * h) / maxVal;
+        if (barH < 1 && vals[i] > 0) barH = 1;
+        int x = rc.left + i * (w / n);
+        int bw = w / n - 1;
+        if (bw < 1) bw = 1;
+        RECT barRc = { x, rc.bottom - barH, x + bw, rc.bottom };
+        FillRect(hdc, &barRc, barBrush);
+    }
+    DeleteObject(barBrush);
+}
+
+// ── Topology Map ──────────────────────────────────────────────────────────────
+
+void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
+    // Background
+    HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
+    FillRect(hdc, &rc, bgBrush);
+    DeleteObject(bgBrush);
+
+    // Border
+    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
+    MoveToEx(hdc, rc.left,      rc.top,      nullptr);
+    LineTo  (hdc, rc.right - 1, rc.top);
+    LineTo  (hdc, rc.right - 1, rc.bottom - 1);
+    LineTo  (hdc, rc.left,      rc.bottom - 1);
+    LineTo  (hdc, rc.left,      rc.top);
+
+    // Section label
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_MUTED);
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+    RECT hdrRc = { rc.left + 8, rc.top + 6, rc.right - 8, rc.top + 20 };
+    DrawText(hdc, L"NETWORK MAP", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+
+    if (!_mainWnd) goto cleanup;
+    {
+        ScanResult r = _mainWnd->GetLastResult();
+        if (r.devices.empty()) {
+            SetTextColor(hdc, Theme::TEXT_MUTED);
+            RECT noRc = { rc.left, rc.top + 24, rc.right, rc.bottom };
+            DrawText(hdc, L"Run a scan to see the network map.",
+                     -1, &noRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            goto cleanup;
+        }
+
+        int mapLeft   = rc.left   + 12;
+        int mapTop    = rc.top    + 28;
+        int mapRight  = rc.right  - 12;
+        int mapBottom = rc.bottom - 12;
+        int cx        = (mapLeft + mapRight)  / 2;
+        int cy        = (mapTop  + mapBottom) / 2;
+        int radius    = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 22;
+        if (radius < 20) radius = 20;
+
+        int n = std::min((int)r.devices.size(), 24);
+
+        // Lines gateway → devices
+        HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+        SelectObject(hdc, linePen);
+        for (int i = 0; i < n; i++) {
+            double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
+            int nx = cx + (int)(radius * cos(angle));
+            int ny = cy + (int)(radius * sin(angle));
+            MoveToEx(hdc, cx, cy, nullptr);
+            LineTo(hdc, nx, ny);
+        }
+        DeleteObject(linePen);
+
+        // Device nodes + labels
+        for (int i = 0; i < n; i++) {
+            auto& d = r.devices[i];
+            double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
+            int nx = cx + (int)(radius * cos(angle));
+            int ny = cy + (int)(radius * sin(angle));
+
+            COLORREF col = RGB(80, 90, 120);  // unknown default
+            if (!d.online)                          col = Theme::TEXT_MUTED;
+            else if (d.iotRisk)                     col = Theme::WARNING;
+            else if (d.trustState == L"owned")      col = Theme::SUCCESS;
+            else if (d.trustState == L"known")      col = Theme::ACCENT;
+            else if (d.trustState == L"guest")      col = Theme::WARNING;
+            else if (d.trustState == L"blocked")    col = Theme::DANGER;
+            else if (d.trustState == L"watchlist")  col = Theme::WATCHLIST;
+
+            HBRUSH nb = CreateSolidBrush(col);
+            HPEN   np = CreatePen(PS_SOLID, 1, col);
+            HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
+            HPEN   op = (HPEN)SelectObject(hdc, np);
+            Ellipse(hdc, nx - 6, ny - 6, nx + 6, ny + 6);
+            SelectObject(hdc, ob); SelectObject(hdc, op);
+            DeleteObject(nb); DeleteObject(np);
+
+            // Truncated label
+            wstring lbl = d.customName.empty()
+                ? (d.hostname.empty() ? d.ip : d.hostname)
+                : d.customName;
+            if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
+
+            SetTextColor(hdc, Theme::TEXT_MUTED);
+            SelectObject(hdc, Theme::FontSmall());
+            RECT lblRc = { nx - 38, ny + 8, nx + 38, ny + 20 };
+            DrawText(hdc, lbl.c_str(), -1, &lblRc,
+                     DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+        }
+
+        // Gateway center node (cyan, larger)
+        HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
+        HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
+        HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
+        HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
+        Ellipse(hdc, cx - 14, cy - 14, cx + 14, cy + 14);
+        SelectObject(hdc, ob2); SelectObject(hdc, op2);
+        DeleteObject(gwb); DeleteObject(gwp);
+
+        SetTextColor(hdc, Theme::BG_APP);
+        SelectObject(hdc, Theme::FontSmall());
+        RECT gwRc = { cx - 14, cy - 8, cx + 14, cy + 8 };
+        DrawText(hdc, L"GW", -1, &gwRc,
+                 DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+cleanup:
+    SelectObject(hdc, oldFont);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+}
+
+// ── OnPaint ───────────────────────────────────────────────────────────────────
 
 LRESULT TabOverview::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
@@ -284,48 +517,25 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
     GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushApp());
 
-    // KPI tile backgrounds
-    int tileW = (rc.right - 40) / 4;
-    int tileH = 72;
-    int tileY = 110;
+    // Topology map (left portion of bottom area)
+    if (_mapRect.right > _mapRect.left && _mapRect.bottom > _mapRect.top)
+        DrawTopologyMap(hdc, _mapRect);
 
-    for (int i = 0; i < 4; i++) {
-        int x = 16 + i * (tileW + 8);
-        RECT tileRc = { x, tileY, x + tileW, tileY + tileH };
-        FillRect(hdc, &tileRc, Theme::BrushCard());
+    // Section header "RECENT CHANGES" above the changes list
+    {
+        int tileW, pillY, btnY, listY;
+        GetLayoutMetrics(rc.right, rc.bottom, tileW, pillY, btnY, listY);
+        int mapW = (rc.right - 40) * 6 / 10;
+        int listX = 16 + mapW + 8;
 
-        // Left accent line for first tile
-        if (i == 0) {
-            RECT acc = { x, tileY, x + 3, tileY + tileH };
-            FillRect(hdc, &acc, Theme::BrushAccent());
-        }
-
-        // Border
-        HPEN pen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-        HPEN old = (HPEN)SelectObject(hdc, pen);
-        MoveToEx(hdc, x, tileY, nullptr);
-        LineTo(hdc, x + tileW, tileY);
-        LineTo(hdc, x + tileW, tileY + tileH);
-        LineTo(hdc, x, tileY + tileH);
-        LineTo(hdc, x, tileY);
+        RECT hdrRc = { listX, listY - 18, rc.right - 16, listY - 2 };
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, Theme::TEXT_SECONDARY);
+        HFONT old = (HFONT)SelectObject(hdc, Theme::FontSmall());
+        DrawText(hdc, L"RECENT CHANGES", -1, &hdrRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SelectObject(hdc, old);
-        DeleteObject(pen);
     }
-
-    // Section header "Recent Changes"
-    RECT scanRc;
-    GetClientRect(hwnd, &scanRc);
-    int pillY = tileY + tileH + 32;
-    int btnY = pillY + 34;
-    int btnH = 32;
-    int listY = btnY + btnH + 52;
-
-    RECT hdrRc = { 16, listY - 22, scanRc.right - 16, listY - 4 };
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::TEXT_SECONDARY);
-    HFONT old = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"RECENT CHANGES", -1, &hdrRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, old);
 
     EndPaint(hwnd, &ps);
     return 0;
@@ -366,32 +576,38 @@ LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         break;
 
     case IDC_BTN_EXPORT:
-        // Show save dialog
         if (_mainWnd) {
             wchar_t path[MAX_PATH] = {};
             OPENFILENAME ofn = {};
             ofn.lStructSize = sizeof(ofn);
-            ofn.hwndOwner = hwnd;
-            ofn.lpstrFile = path;
-            ofn.nMaxFile = MAX_PATH;
+            ofn.hwndOwner   = hwnd;
+            ofn.lpstrFile   = path;
+            ofn.nMaxFile    = MAX_PATH;
             ofn.lpstrFilter = L"JSON Files\0*.json\0All Files\0*.*\0";
             ofn.lpstrDefExt = L"json";
-            ofn.lpstrTitle = L"Export Report";
-            ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
-
+            ofn.lpstrTitle  = L"Export Report";
+            ofn.Flags       = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
             if (GetSaveFileName(&ofn)) {
-                // Write minimal JSON
-                HANDLE hFile = CreateFile(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+                HANDLE hFile = CreateFile(path, GENERIC_WRITE, 0, nullptr,
+                                          CREATE_ALWAYS, 0, nullptr);
                 if (hFile != INVALID_HANDLE_VALUE) {
                     ScanResult r = _mainWnd->GetLastResult();
-                    std::wstring json = L"{\n  \"devices\": " + std::to_wstring(r.devices.size()) + L",\n  \"scannedAt\": \"" + r.scannedAt + L"\"\n}";
+                    std::wstring json =
+                        L"{\n  \"devices\": " + std::to_wstring(r.devices.size()) +
+                        L",\n  \"scannedAt\": \"" + r.scannedAt + L"\"\n}";
                     std::string jn;
-                    int n = WideCharToMultiByte(CP_UTF8, 0, json.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                    if (n > 0) { jn.resize(n - 1); WideCharToMultiByte(CP_UTF8, 0, json.c_str(), -1, &jn[0], n, nullptr, nullptr); }
+                    int n = WideCharToMultiByte(CP_UTF8, 0, json.c_str(), -1,
+                                                nullptr, 0, nullptr, nullptr);
+                    if (n > 0) {
+                        jn.resize(n - 1);
+                        WideCharToMultiByte(CP_UTF8, 0, json.c_str(), -1,
+                                            &jn[0], n, nullptr, nullptr);
+                    }
                     DWORD written;
                     WriteFile(hFile, jn.c_str(), (DWORD)jn.size(), &written, nullptr);
                     CloseHandle(hFile);
-                    MessageBox(hwnd, L"Report exported successfully.", L"Export", MB_OK | MB_ICONINFORMATION);
+                    MessageBox(hwnd, L"Report exported.", L"Export",
+                               MB_OK | MB_ICONINFORMATION);
                 }
             }
         }
@@ -401,14 +617,10 @@ LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
 }
 
-LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
-    return 0;
-}
-
 LRESULT TabOverview::OnScanProgress(HWND hwnd, WPARAM pct, LPARAM msgPtr) {
     auto* msg = reinterpret_cast<std::wstring*>(msgPtr);
     if (msg) {
-        if (_hStatusText) SetWindowText(_hStatusText, msg->c_str());
+        if (_hStatusText)  SetWindowText(_hStatusText, msg->c_str());
         if (_hProgressBar) SendMessage(_hProgressBar, PBM_SETPOS, (WPARAM)pct, 0);
         delete msg;
     }
@@ -417,24 +629,25 @@ LRESULT TabOverview::OnScanProgress(HWND hwnd, WPARAM pct, LPARAM msgPtr) {
 
 LRESULT TabOverview::OnScanComplete(HWND hwnd) {
     RefreshKPIs();
-    if (_hStatusText) SetWindowText(_hStatusText, L"Scan complete.");
+    if (_hStatusText)  SetWindowText(_hStatusText, L"Scan complete.");
     if (_hProgressBar) SendMessage(_hProgressBar, PBM_SETPOS, 100, 0);
 
-    // Refresh changes list with anomalies
+    // Invalidate map area to repaint topology
+    if (_mapRect.right > _mapRect.left)
+        InvalidateRect(hwnd, &_mapRect, FALSE);
+
+    // Populate changes list with anomalies
     if (!_hChangesList || !_mainWnd) return 0;
-
     ListView_DeleteAllItems(_hChangesList);
-
     ScanResult r = _mainWnd->GetLastResult();
     int row = 0;
     for (auto& a : r.anomalies) {
         LVITEM item = {};
-        item.mask = LVIF_TEXT;
-        item.iItem = row;
+        item.mask    = LVIF_TEXT;
+        item.iItem   = row;
         item.iSubItem = 0;
         item.pszText = (LPWSTR)r.scannedAt.c_str();
         ListView_InsertItem(_hChangesList, &item);
-
         ListView_SetItemText(_hChangesList, row, 1, (LPWSTR)a.type.c_str());
         ListView_SetItemText(_hChangesList, row, 2, (LPWSTR)a.description.c_str());
         row++;
@@ -448,55 +661,58 @@ LRESULT TabOverview::OnMonitorTick(HWND hwnd) {
     return 0;
 }
 
+// ── KPI refresh ───────────────────────────────────────────────────────────────
+
+static void PushHistory(std::vector<int>& v, int val, int maxLen = 7) {
+    v.push_back(val);
+    if ((int)v.size() > maxLen) v.erase(v.begin());
+}
+
 void TabOverview::RefreshKPIs() {
     if (!_mainWnd) return;
     ScanResult r = _mainWnd->GetLastResult();
 
-    // KPI 0: Devices online
-    wchar_t buf[64];
-    swprintf_s(buf, L"%d", (int)r.devices.size());
-    if (_hKpi[0]) SetWindowText(_hKpi[0], buf);
+    _kpiVal[0] = (int)r.devices.size();
 
-    // KPI 1: Unknown devices
     int unknown = 0;
     for (auto& d : r.devices) if (d.trustState == L"unknown") unknown++;
-    swprintf_s(buf, L"%d", unknown);
-    if (_hKpi[1]) SetWindowText(_hKpi[1], buf);
+    _kpiVal[1] = unknown;
 
-    // KPI 2: Active alerts
-    swprintf_s(buf, L"%d", (int)r.anomalies.size());
-    if (_hKpi[2]) SetWindowText(_hKpi[2], buf);
+    _kpiVal[2] = (int)r.anomalies.size();
 
-    // KPI 3: Gateway latency
+    // Gateway latency
     int lat = -1;
     auto nets = ScanEngine::GetLocalNetworks();
     if (!nets.empty() && !nets[0].gateway.empty()) {
-        // Try to find gateway in results
-        for (auto& d : r.devices) {
+        for (auto& d : r.devices)
             if (d.ip == nets[0].gateway) { lat = d.latencyMs; break; }
-        }
     }
-    if (lat >= 0) swprintf_s(buf, L"%dms", lat);
-    else wcscpy_s(buf, L"--");
-    if (_hKpi[3]) SetWindowText(_hKpi[3], buf);
+    _kpiVal[3] = lat;
+
+    // Update sparkline history
+    PushHistory(_devicesOnlineHistory, _kpiVal[0]);
+    PushHistory(_unknownDevHistory,    _kpiVal[1]);
+    PushHistory(_alertHistory,         _kpiVal[2]);
+    PushHistory(_latencyHistory,       lat >= 0 ? lat : 0);
+
+    // Repaint all 4 KPI tiles
+    for (int i = 0; i < 4; i++)
+        if (_hKpi[i]) InvalidateRect(_hKpi[i], nullptr, FALSE);
 }
 
 void TabOverview::RefreshNetworkInfo() {
     if (!_hNetworkInfo) return;
-
     auto nets = ScanEngine::GetLocalNetworks();
     if (nets.empty()) {
         SetWindowText(_hNetworkInfo, L"No network adapters found.");
         return;
     }
-
     std::wstring info;
     for (auto& ni : nets) {
         info += L"Adapter: " + ni.name +
                 L"   IP: " + ni.localIp + L"/" + ni.cidr +
                 L"   Gateway: " + (ni.gateway.empty() ? L"N/A" : ni.gateway) + L"\n";
     }
-
     SetWindowText(_hNetworkInfo, info.c_str());
 }
 

@@ -96,7 +96,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hBtnClearAll, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
     // Alert list
-    int alertH = (cy - 80) / 2;
+    int alertH = (cy - 80) / 3;
     _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
         16, 48, cx - 32, alertH,
@@ -118,8 +118,43 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         ListView_InsertColumn(_hAlertList, i, &col);
     }
 
+    // Explanation panel (three-part: What / Why / What to do)
+    int explainY = 48 + alertH + 6;
+    int explainH = alertH - 6;
+    _hExplainPanel = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", nullptr,
+        WS_CHILD | WS_VISIBLE,
+        16, explainY, cx - 32, explainH, hwnd, nullptr, hInst, nullptr);
+
+    auto mkExplainLbl = [&](const wchar_t* hdr, int y, int h) -> HWND {
+        // Section label inside panel
+        HWND hw = CreateWindowEx(0, L"STATIC", hdr, WS_CHILD | WS_VISIBLE | SS_LEFT,
+            4, y, 80, 16, _hExplainPanel, nullptr, hInst, nullptr);
+        SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
+        return hw;
+    };
+    auto mkExplainEdit = [&](int id, int y, int h) -> HWND {
+        HWND hw = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+            WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL,
+            4, y, cx - 40, h, _hExplainPanel, (HMENU)(INT_PTR)id, hInst, nullptr);
+        SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        Theme::ApplyDarkEdit(hw);
+        return hw;
+    };
+    int ey = 2;
+    int thirdH = (explainH - 6) / 3 - 20;
+    mkExplainLbl(L"What happened:", 0, 16);
+    _hExplainWhat = mkExplainEdit(9650, 16, thirdH);
+    ey = 16 + thirdH + 4;
+    mkExplainLbl(L"Why it matters:", ey, 16); ey += 16;
+    _hExplainWhy = mkExplainEdit(9651, ey, thirdH); ey += thirdH + 4;
+    mkExplainLbl(L"What to do:", ey, 16); ey += 16;
+    _hExplainDo  = mkExplainEdit(9652, ey, thirdH);
+
+    // Default text when no alert selected
+    if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
+
     // Rules section
-    int rulesY = 48 + alertH + 24;
+    int rulesY = 48 + alertH * 2 + 18;
 
     HWND hRulesHdr = CreateWindowEx(0, L"STATIC", L"ALERT RULES",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -163,11 +198,15 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 }
 
 void TabAlerts::LayoutControls(int cx, int cy) {
-    int alertH = (cy - 80) / 2;
+    int alertH = (cy - 80) / 3;
     if (_hAlertList) SetWindowPos(_hAlertList, nullptr, 16, 48, cx - 32, alertH, SWP_NOZORDER);
     if (_hBtnClearAll) SetWindowPos(_hBtnClearAll, nullptr, cx - 100, 12, 84, 26, SWP_NOZORDER);
 
-    int rulesY = 48 + alertH + 24;
+    int explainY = 48 + alertH + 6;
+    int explainH = alertH - 6;
+    if (_hExplainPanel) SetWindowPos(_hExplainPanel, nullptr, 16, explainY, cx - 32, explainH, SWP_NOZORDER);
+
+    int rulesY = 48 + alertH * 2 + 18;
     int ruleH = cy - rulesY - 16;
     if (_hRuleList) SetWindowPos(_hRuleList, nullptr, 16, rulesY, cx - 32, ruleH, SWP_NOZORDER);
     if (_hBtnAddRule) SetWindowPos(_hBtnAddRule, nullptr, cx - 292, rulesY - 22, 88, 22, SWP_NOZORDER);
@@ -236,8 +275,53 @@ LRESULT TabAlerts::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
 }
 
+void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
+    if (!_mainWnd) return;
+    ScanResult r = _mainWnd->GetLastResult();
+
+    // Build visible anomaly list (respecting current filter)
+    std::vector<const Anomaly*> visible;
+    for (auto& a : r.anomalies) {
+        if (_alertFilter == 1 && a.severity != L"high" && a.severity != L"critical") continue;
+        if (_alertFilter == 2 && a.severity != L"medium") continue;
+        if (_alertFilter == 3 && a.severity != L"low") continue;
+        visible.push_back(&a);
+    }
+
+    if (anomalyIdx < 0 || anomalyIdx >= (int)visible.size()) {
+        if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
+        if (_hExplainWhy)  SetWindowText(_hExplainWhy, L"");
+        if (_hExplainDo)   SetWindowText(_hExplainDo, L"");
+        return;
+    }
+
+    const Anomaly& a = *visible[anomalyIdx];
+
+    wstring what = a.description;
+    if (!a.deviceIp.empty()) what += L"\r\nDevice: " + a.deviceIp;
+
+    wstring why = a.explanation.empty() ?
+        L"This event may indicate a security or configuration issue on your network." :
+        a.explanation;
+
+    wstring todo = a.remediation.empty() ?
+        L"1. Investigate the device.\r\n2. Check your router's logs.\r\n3. Run a Deep scan for more detail." :
+        a.remediation;
+
+    if (_hExplainWhat) SetWindowText(_hExplainWhat, what.c_str());
+    if (_hExplainWhy)  SetWindowText(_hExplainWhy, why.c_str());
+    if (_hExplainDo)   SetWindowText(_hExplainDo, todo.c_str());
+}
+
 LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
     if (!hdr) return 0;
+
+    if (hdr->idFrom == IDC_LIST_ALERTS) {
+        if (hdr->code == NM_CLICK || hdr->code == NM_DBLCLK) {
+            NMITEMACTIVATE* nm = (NMITEMACTIVATE*)hdr;
+            if (nm->iItem >= 0) ShowAlertExplanation(nm->iItem);
+        }
+    }
 
     if (hdr->idFrom == IDC_LIST_ALERTS && hdr->code == NM_CUSTOMDRAW) {
         NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)hdr;

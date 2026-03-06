@@ -40,15 +40,22 @@ private:
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
 
-    HWND _hAlertList = nullptr;
-    HWND _hRuleList  = nullptr;
-    HWND _hBtnAddRule = nullptr;
-    HWND _hBtnEditRule = nullptr;
-    HWND _hBtnDelRule = nullptr;
-    HWND _hBtnClearAll = nullptr;
-    HWND _hFilterBtns[5] = {};
+    HWND _hAlertList      = nullptr;
+    HWND _hExplainPanel   = nullptr;   // three-part explanation panel
+    HWND _hExplainWhat    = nullptr;   // "What happened"
+    HWND _hExplainWhy     = nullptr;   // "Why it matters"
+    HWND _hExplainDo      = nullptr;   // "What to do"
+    HWND _hRuleList       = nullptr;
+    HWND _hBtnAddRule     = nullptr;
+    HWND _hBtnEditRule    = nullptr;
+    HWND _hBtnDelRule     = nullptr;
+    HWND _hBtnClearAll    = nullptr;
+    HWND _hFilterBtns[5]  = {};
 
     int _alertFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low, 4=Unack
+    int _selectedAlert = -1;
+
+    void ShowAlertExplanation(int anomalyIdx);
 
     static const wchar_t* s_className;
 

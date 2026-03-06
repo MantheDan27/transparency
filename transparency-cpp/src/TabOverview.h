@@ -37,13 +37,16 @@ private:
     void LayoutControls(int cx, int cy);
     void RefreshKPIs();
     void RefreshNetworkInfo();
+    void DrawTopologyMap(HDC hdc, const RECT& rc);
+    void DrawSparkline(HDC hdc, const RECT& rc,
+                       const std::vector<int>& vals, COLORREF col);
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
 
-    // KPI tiles
+    // KPI tiles (owner-drawn buttons)
     HWND _hKpi[4] = {};
-    HWND _hKpiLabel[4] = {};
+    int  _kpiVal[4] = {};
 
     // Scan mode pills
     HWND _hModeQuick = nullptr, _hModeStandard = nullptr, _hModeDeep = nullptr;
@@ -56,20 +59,29 @@ private:
     HWND _hBtnMonStop   = nullptr;
     HWND _hBtnExport    = nullptr;
 
-    // Status text
-    HWND _hStatusText = nullptr;
+    // Status text / progress
+    HWND _hStatusText  = nullptr;
     HWND _hProgressBar = nullptr;
 
     // Network info static
     HWND _hNetworkInfo = nullptr;
 
-    // Recent changes list
+    // Recent changes list (right column of bottom split)
     HWND _hChangesList = nullptr;
 
-    // Monitor status card
-    HWND _hMonitorCard = nullptr;
-    HWND _hMonitorStatus = nullptr;
+    // Monitor status
+    HWND _hMonitorCard    = nullptr;
+    HWND _hMonitorStatus  = nullptr;
     HWND _hInternetStatus = nullptr;
+
+    // KPI sparkline history (last 7 scans)
+    std::vector<int> _devicesOnlineHistory;
+    std::vector<int> _unknownDevHistory;
+    std::vector<int> _alertHistory;
+    std::vector<int> _latencyHistory;
+
+    // Topology map draw area (set in LayoutControls)
+    RECT _mapRect = {};
 
     // Current scan mode
     int _scanMode = 0; // 0=Quick, 1=Standard, 2=Deep

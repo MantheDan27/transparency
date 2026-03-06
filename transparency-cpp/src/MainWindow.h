@@ -50,6 +50,11 @@ public:
 
     ScanResult GetLastResult() const;
     void AddLedgerEntry(const std::wstring& action, const std::wstring& details);
+    void SaveSnapshot();
+    void StartLocalApi();
+    void StopLocalApi();
+    void FirePluginHooks(const std::wstring& eventType, const std::wstring& deviceIp);
+    static DWORD WINAPI LocalApiThreadProc(LPVOID param);
 
     ScanEngine  _scanner;
     Monitor     _monitor;
@@ -57,7 +62,16 @@ public:
     ScanResult              _lastResult;
     std::vector<AlertRule>  _alertRules;
     std::vector<LedgerEntry> _ledger;
+    std::vector<ScanResult> _snapshots;       // historical scan snapshots for diff
+    std::vector<PluginHook> _pluginHooks;     // script hooks
+    ScheduledScan           _scheduledScan;
     mutable std::mutex      _dataMutex;
+
+    // REST API
+    bool     _apiEnabled  = false;
+    int      _apiPort     = 7722;
+    wstring  _apiKey;
+    HANDLE   _apiThread   = nullptr;
 
     Tab _currentTab = Tab::Overview;
 

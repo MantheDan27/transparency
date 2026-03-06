@@ -55,6 +55,12 @@ public:
         const ScanResult& current,
         const ScanResult& previous);
 
+    // IoT behavioral risk profiling — returns plain-language risk summary or empty
+    static std::wstring ProfileIoTRisk(const Device& d);
+
+    // Fill top-2 confidence alternative device types on a device
+    static void FillConfidenceAlternatives(Device& d);
+
     // Port/service data
     static const std::map<int, std::wstring> PORT_NAMES;
     static const std::set<int> RISKY_PORTS;

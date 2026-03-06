@@ -1046,6 +1046,123 @@ int ScanEngine::CalcConfidence(const Device& d) {
     return std::min(score, 100);
 }
 
+// ─── IoT Risk Profiling ────────────────────────────────────────────────────────
+// Returns a plain-language risk summary for IoT devices, or empty string if no risk.
+
+wstring ScanEngine::ProfileIoTRisk(const Device& d) {
+    auto hasPort = [&](int p) {
+        return std::find(d.openPorts.begin(), d.openPorts.end(), p) != d.openPorts.end();
+    };
+
+    wstring risk;
+    bool hasHttp  = hasPort(80);
+    bool hasHttps = hasPort(443);
+    bool hasTelnet = hasPort(23);
+    bool hasFtp    = hasPort(21);
+    bool hasUpnp   = hasPort(1900);
+    bool hasSsh    = hasPort(22);
+    bool hasRtsp   = hasPort(554);
+    bool hasOnvif  = hasPort(2020) || hasPort(8899) || hasPort(37777);
+
+    // Telnet on any device is critical
+    if (hasTelnet) {
+        risk += L"CRITICAL: Telnet (port 23) is open. "
+                L"Credentials transmitted in cleartext — any device on the network can intercept them. "
+                L"Disable Telnet immediately and enable SSH if remote access is needed.\r\n";
+    }
+
+    // FTP is high risk
+    if (hasFtp) {
+        risk += L"HIGH: FTP (port 21) is open. "
+                L"Unencrypted file transfer — passwords and data are visible in plain text on the wire. "
+                L"Disable FTP or replace with SFTP.\r\n";
+    }
+
+    // HTTP admin panel without HTTPS
+    if (hasHttp && !hasHttps) {
+        risk += L"MEDIUM: HTTP admin panel (port 80) without HTTPS. "
+                L"Logging into this device over HTTP exposes your credentials on the local network. "
+                L"Enable HTTPS in device settings, or access only from a trusted wired connection.\r\n";
+    }
+
+    // UPnP exposed
+    if (hasUpnp) {
+        risk += L"MEDIUM: UPnP (port 1900) is exposed. "
+                L"UPnP has a history of critical vulnerabilities (CallStranger, NAT injection). "
+                L"Disable UPnP in device and router settings if not required.\r\n";
+    }
+
+    // RTSP/camera stream exposed
+    if (hasRtsp || hasOnvif) {
+        risk += L"HIGH: Camera stream port (RTSP/ONVIF) is open. "
+                L"Verify this camera requires authentication before connecting. "
+                L"Many IP cameras have default or blank credentials. "
+                L"Change the admin password and disable ONVIF if unused.\r\n";
+    }
+
+    // SSH without HTTPS (unusual for IoT — may indicate compromised device)
+    if (hasSsh && !hasHttp && d.deviceType.find(L"IoT") != wstring::npos) {
+        risk += L"INFO: SSH (port 22) open on what appears to be an IoT device. "
+                L"Verify this is expected — some IoT devices include SSH backdoors. "
+                L"Check that SSH uses key-based auth, not a default password.\r\n";
+    }
+
+    return risk;
+}
+
+// ─── FillConfidenceAlternatives ───────────────────────────────────────────────
+// Populates altType1/altConf1/altType2/altConf2 on a device after fingerprinting.
+
+void ScanEngine::FillConfidenceAlternatives(Device& d) {
+    // Score each type category independently
+    struct TypeScore { wstring type; int score; };
+    std::vector<TypeScore> scores;
+
+    auto hasPort = [&](int p) {
+        return std::find(d.openPorts.begin(), d.openPorts.end(), p) != d.openPorts.end();
+    };
+    auto hasMdns = [&](const wchar_t* svc) {
+        for (auto& s : d.mdnsServices)
+            if (s.find(svc) != wstring::npos) return true;
+        return false;
+    };
+    wstring vendor = d.vendor; std::transform(vendor.begin(), vendor.end(), vendor.begin(), ::tolower);
+    wstring ssdp   = d.ssdpInfo; std::transform(ssdp.begin(), ssdp.end(), ssdp.begin(), ::tolower);
+    wstring host   = d.hostname; std::transform(host.begin(), host.end(), host.begin(), ::tolower);
+    auto vendorHas = [&](const wchar_t* v) { wstring vl=v; std::transform(vl.begin(),vl.end(),vl.begin(),::tolower); return vendor.find(vl)!=wstring::npos; };
+    auto ssdpHas   = [&](const wchar_t* v) { wstring vl=v; std::transform(vl.begin(),vl.end(),vl.begin(),::tolower); return ssdp.find(vl)!=wstring::npos; };
+    auto hostHas   = [&](const wchar_t* v) { wstring vl=v; std::transform(vl.begin(),vl.end(),vl.begin(),::tolower); return host.find(vl)!=wstring::npos; };
+
+    auto add = [&](const wchar_t* type, int sc) { scores.push_back({ type, sc }); };
+
+    add(L"Router/Switch",      (vendorHas(L"Cisco")||vendorHas(L"Netgear")||vendorHas(L"Ubiquiti")||ssdpHas(L"router")||hostHas(L"router")) ? 80 : 5);
+    add(L"NAS / Storage",      (vendorHas(L"Synology")||vendorHas(L"QNAP")||(hasPort(5000)&&hasPort(5001))||hostHas(L"nas")) ? 80 : 5);
+    add(L"Printer",            (hasMdns(L"_ipp")||hasMdns(L"_printer")||hasPort(9100)||hasPort(631)||vendorHas(L"Epson")||vendorHas(L"Canon")||vendorHas(L"Brother")) ? 80 : 5);
+    add(L"Smart TV / Streaming",(hasMdns(L"_googlecast")||hasMdns(L"_airplay")||vendorHas(L"Roku")||ssdpHas(L"tv")) ? 80 : 5);
+    add(L"Smart Speaker",      (hasMdns(L"_sonos")||vendorHas(L"Sonos")||vendorHas(L"Amazon")||ssdpHas(L"echo")) ? 80 : 5);
+    add(L"Smart Home Hub",     (hasMdns(L"_homekit")||hasMdns(L"_matter")||vendorHas(L"Philips Hue")||hasPort(8123)) ? 80 : 5);
+    add(L"IoT Device",         (hasPort(1883)||hasPort(8883)||hostHas(L"esp")||hostHas(L"sensor")) ? 75 : 5);
+    add(L"Windows PC",         (hasPort(3389)||hasPort(445)||(hasPort(139)&&hasPort(135))) ? 80 : 5);
+    add(L"Linux Server",       (hasPort(22)&&(hasPort(80)||hasPort(443)||hasPort(8080))) ? 75 : 5);
+    add(L"Mac",                (vendorHas(L"Apple")&&(hasMdns(L"_workstation")||hasPort(548))) ? 80 : 5);
+    add(L"Mobile Device",      (vendorHas(L"Apple")||vendorHas(L"Samsung")||vendorHas(L"Xiaomi")) ? 50 : 5);
+    add(L"Computer",           (vendorHas(L"Dell")||vendorHas(L"HP")||vendorHas(L"Lenovo")||vendorHas(L"Intel")) ? 60 : 5);
+    add(L"Unknown Device",     15);
+
+    // Sort descending
+    std::sort(scores.begin(), scores.end(), [](const TypeScore& a, const TypeScore& b) {
+        return a.score > b.score;
+    });
+
+    // Remove primary type from alternatives
+    int altIdx = 0;
+    for (auto& ts : scores) {
+        if (ts.type == d.deviceType) continue;
+        if (altIdx == 0) { d.altType1 = ts.type; d.altConf1 = ts.score; altIdx++; }
+        else if (altIdx == 1) { d.altType2 = ts.type; d.altConf2 = ts.score; break; }
+    }
+}
+
 // ─── AnalyzeAnomalies ────────────────────────────────────────────────────────
 
 std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
@@ -1417,9 +1534,20 @@ ScanResult ScanEngine::BuildResult(
             // Latency
             dev.latencyMs = PingSingle(ipStr, 300);
 
-            // Fingerprint
+            // Fingerprint + confidence alternatives
             dev.deviceType = FingerprintDeviceType(dev);
             dev.confidence = CalcConfidence(dev);
+            FillConfidenceAlternatives(dev);
+
+            // IoT behavioral risk profiling
+            static const std::set<wstring> IoT_TYPES = {
+                L"IoT Device", L"Smart Speaker", L"Smart TV / Streaming",
+                L"Smart Home Hub", L"Printer", L"NAS / Storage"
+            };
+            if (IoT_TYPES.count(dev.deviceType)) {
+                dev.iotRiskDetail = ProfileIoTRisk(dev);
+                dev.iotRisk = !dev.iotRiskDetail.empty();
+            }
 
             int d = ++done;
             if (progressCb) {

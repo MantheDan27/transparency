@@ -51,18 +51,24 @@ private:
     HWND _hList = nullptr;
 
     // Detail panel
-    HWND _hDetailPanel = nullptr;
-    HWND _hDetailName  = nullptr;
-    HWND _hDetailType  = nullptr;
-    HWND _hDetailVendor = nullptr;
-    HWND _hDetailMac   = nullptr;
-    HWND _hDetailPorts = nullptr;
-    HWND _hDetailLastSeen = nullptr;
-    HWND _hDetailNotes = nullptr;
-    HWND _hDetailTrust = nullptr;
-    HWND _hDetailMdns  = nullptr;
-    HWND _hDetailAnoms = nullptr;
-    HWND _hDetailClose = nullptr;
+    HWND _hDetailPanel      = nullptr;
+    HWND _hDetailCustomName = nullptr;  // editable custom name
+    HWND _hDetailName       = nullptr;
+    HWND _hDetailType       = nullptr;
+    HWND _hDetailAlt        = nullptr;  // confidence alternatives
+    HWND _hDetailVendor     = nullptr;
+    HWND _hDetailMac        = nullptr;
+    HWND _hDetailPorts      = nullptr;
+    HWND _hDetailLastSeen   = nullptr;
+    HWND _hDetailNotes      = nullptr;
+    HWND _hDetailTrust      = nullptr;
+    HWND _hDetailMdns       = nullptr;
+    HWND _hDetailAnoms      = nullptr;
+    HWND _hDetailIotRisk    = nullptr;  // IoT risk panel
+    HWND _hDetailSave       = nullptr;
+    HWND _hDetailClose      = nullptr;
+
+    wstring _detailDeviceIp;            // IP of currently-displayed device
 
     // Sort state
     int _sortCol = 0;

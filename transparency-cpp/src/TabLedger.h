@@ -33,14 +33,25 @@ private:
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
     void PopulateList();
+    void RefreshSnapshots();
+    void RunDiff();
 
-    HWND _hwnd = nullptr;
+    HWND _hwnd     = nullptr;
     MainWindow* _mainWnd = nullptr;
 
-    HWND _hList = nullptr;
-    HWND _hBtnExport = nullptr;
-    HWND _hBtnClear = nullptr;
+    // Ledger list
+    HWND _hList       = nullptr;
+    HWND _hBtnExport  = nullptr;
+    HWND _hBtnClear   = nullptr;
     HWND _hEntryCount = nullptr;
+
+    // Snapshot diff section
+    HWND _hSnapLabel1  = nullptr;
+    HWND _hComboSnap1  = nullptr;
+    HWND _hSnapLabel2  = nullptr;
+    HWND _hComboSnap2  = nullptr;
+    HWND _hBtnDiff     = nullptr;
+    HWND _hDiffList    = nullptr;
 
     static const wchar_t* s_className;
 };

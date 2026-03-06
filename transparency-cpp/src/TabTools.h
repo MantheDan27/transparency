@@ -35,6 +35,9 @@ private:
     void RunDnsLookup(const std::wstring& host, const std::wstring& type);
     void RunTcpConnect(const std::wstring& host, int port);
     void RunHttpTest(const std::wstring& url);
+    void RunPortScan(const std::wstring& target, const std::wstring& preset, const std::wstring& custom);
+    void RunWakeOnLan(const std::wstring& mac, const std::wstring& broadcast);
+    void RunReverseDns(const std::wstring& ip);
     void RefreshWifiInfo();
     void RefreshGatewayInfo();
     void AppendOutput(HWND hEdit, const std::wstring& text);
@@ -71,6 +74,24 @@ private:
 
     // Guided flow
     HWND _hFlowOut = nullptr;
+
+    // Port Scanner
+    HWND _hPortScanTarget = nullptr;
+    HWND _hPortScanPreset = nullptr;  // combo: common / top100 / custom
+    HWND _hPortScanCustom = nullptr;  // custom range edit
+    HWND _hBtnPortScan    = nullptr;
+    HWND _hPortScanOut    = nullptr;
+
+    // Wake-on-LAN
+    HWND _hWolMac       = nullptr;
+    HWND _hWolBcast     = nullptr;
+    HWND _hBtnWol       = nullptr;
+    HWND _hWolOut       = nullptr;
+
+    // Reverse DNS
+    HWND _hRevDnsIp  = nullptr;
+    HWND _hBtnRevDns = nullptr;
+    HWND _hRevDnsOut = nullptr;
 
     static const wchar_t* s_className;
 };
