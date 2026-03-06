@@ -59,10 +59,11 @@ namespace TransparencyApp.Services
         private readonly SemaphoreSlim _concLimit = new(60);
 
         public async Task<(List<Device> devices, List<Anomaly> anomalies)> ScanAsync(
+            IEnumerable<NetworkInterface>? interfaces = null,
             IProgress<string>? progress = null)
         {
             progress?.Report("Resolving local subnet…");
-            var baseIp = GetLocalSubnet();
+            var baseIp = GetLocalSubnet(interfaces);
 
             progress?.Report($"Pinging {baseIp}.1–254…");
             var liveHosts = await PingSweepAsync(baseIp);
@@ -86,9 +87,11 @@ namespace TransparencyApp.Services
         }
 
         // ── Subnet discovery ──────────────────────────────────────────────────
-        private static string GetLocalSubnet()
+        internal static string GetLocalSubnet(IEnumerable<NetworkInterface>? interfaces = null)
         {
-            foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
+            interfaces ??= NetworkInterface.GetAllNetworkInterfaces();
+
+            foreach (var iface in interfaces)
             {
                 if (iface.OperationalStatus != OperationalStatus.Up)      continue;
                 if (iface.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;

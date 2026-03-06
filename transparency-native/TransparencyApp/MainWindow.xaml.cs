@@ -65,7 +65,7 @@ namespace TransparencyApp
                     TxtLoadingDetail.Text = msg;
                 });
 
-                var (devices, anomalies) = await _scanner.ScanAsync(progress);
+                var (devices, anomalies) = await _scanner.ScanAsync(progress: progress);
 
                 // Dashboard
                 DeviceGrid.ItemsSource = devices;
