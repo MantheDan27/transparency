@@ -1,6 +1,6 @@
 {
   "name": "device-monitor-desktop",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Desktop application for comprehensive device security monitoring and threat detection",
   "main": "main.js",
   "homepage": "https://github.com/MantheD27/transparency",
