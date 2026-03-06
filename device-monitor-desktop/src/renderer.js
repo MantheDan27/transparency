@@ -29,7 +29,7 @@ const DEVICE_ICONS = {
   'Windows PC':       '💻', 'macOS Device':   '🍎',
   'Linux Server':     '🐧', 'IoT Device':     '💡',
   'Laptop':           '💻', 'Virtual Machine': '📦',
-  'Unknown Device':   '❓',
+  'Hypervisor Host':  '🖥️', 'Unknown Device':   '❓',
 };
 
 // ── Global state ──────────────────────────────────────────────────────────────
@@ -487,15 +487,37 @@ function renderRecentChanges(anomalies) {
   }
 
   tag.textContent = `${anomalies.length} change(s)`;
-  body.innerHTML = anomalies.slice(0, 8).map(a => `
-    <div class="change-item sev-${a.severity.toLowerCase()}">
+  body.innerHTML = anomalies.slice(0, 12).map(a => {
+    const stepsHtml = a.steps?.length ? `<div class="change-steps">${a.steps.slice(0, 3).map(s => `<div class="change-step">${escHtml(s)}</div>`).join('')}</div>` : '';
+    const linksHtml = a.runbookLinks?.length ? `<div class="change-links">${a.runbookLinks.slice(0, 2).map(l => `<a href="#" class="change-link" data-url="${escHtml(l.url)}">${escHtml(l.label)}</a>`).join('')}</div>` : '';
+    const categoryBadge = a.category ? `<span class="change-cat">${escHtml(a.category)}</span>` : '';
+    return `
+    <div class="change-item sev-${a.severity.toLowerCase()}" data-anomaly-ip="${escHtml(a.device)}">
       <span class="change-dot sev-dot-${a.severity.toLowerCase()}"></span>
       <div class="change-body">
-        <div class="change-title">${escHtml(a.type)} — ${escHtml(a.device)}</div>
+        <div class="change-title">${escHtml(a.type)} — ${escHtml(a.device)} ${categoryBadge}</div>
         <div class="change-desc">${escHtml(a.description)}</div>
+        ${a.what ? `<div class="change-what"><strong>What:</strong> ${escHtml(a.what)}</div>` : ''}
+        ${a.risk ? `<div class="change-risk"><strong>Risk:</strong> ${escHtml(a.risk)}</div>` : ''}
+        ${a.impact ? `<div class="change-impact"><strong>Impact:</strong> ${escHtml(a.impact)}</div>` : ''}
+        ${stepsHtml}
+        ${linksHtml}
       </div>
       <span class="sev-pill sev-${a.severity.toLowerCase()}">${a.severity}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  // Click on anomaly to open device detail
+  body.querySelectorAll('.change-item[data-anomaly-ip]').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('change-link')) return;
+      const dev = allDevices.find(d => d.ip === el.dataset.anomalyIp);
+      if (dev) { switchTab('devices'); openDetailPanel(dev); }
+    });
+  });
+  body.querySelectorAll('.change-link').forEach(el => {
+    el.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); window.electronAPI?.openExternalUrl?.(el.dataset.url); });
+  });
 }
 
 // ── Devices table ─────────────────────────────────────────────────────────────
@@ -520,6 +542,7 @@ function getFilteredDevices() {
       if (currentFilter === 'watchlist' && !dev.meta?.watchlist)  return false;
       if (currentFilter === 'risky'     && !anomalyIpSet.has(dev.ip)) return false;
       if (currentFilter === 'changed'   && !changedIpSet.has(dev.ip)) return false;
+      if (currentFilter === 'virtual'   && !dev.fingerprint?.isVirtualMachine && !dev.fingerprint?.isHypervisor) return false;
     }
     // Search
     if (search) {
@@ -542,6 +565,8 @@ function updateFilterCounts() {
   $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
   $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
   $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  const vmEl = $('fVirtual');
+  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
 }
 
 function renderDeviceTable() {
@@ -956,7 +981,30 @@ function openDetailPanel(dev, tab) {
     ? fp.signals.map(s => `<div class="fp-signal"><span class="fp-signal-type">${escHtml(s.label)}</span><span class="fp-signal-val">${escHtml(s.value)}</span></div>`).join('')
     : '';
   const risksHtml = anomaliesForDev.length > 0
-    ? anomaliesForDev.map(a => `<div class="risk-item risk-${a.severity.toLowerCase()}"><span class="sev-pill sev-${a.severity.toLowerCase()}">${a.severity}</span><div><strong>${escHtml(a.type)}</strong><br><span style="color:var(--text-secondary);font-size:0.82rem">${escHtml(a.description)}</span></div></div>`).join('')
+    ? anomaliesForDev.map(a => {
+        const stepsHtml = a.steps?.length ? `<div class="risk-steps"><div class="risk-steps-title">Remediation Steps:</div>${a.steps.map((s, i) => `<div class="risk-step"><span class="risk-step-num">${i + 1}</span>${escHtml(s)}</div>`).join('')}</div>` : '';
+        const linksHtml = a.runbookLinks?.length ? `<div class="risk-links">${a.runbookLinks.map(l => `<a href="#" class="risk-link" data-url="${escHtml(l.url)}">${escHtml(l.label)}</a>`).join('')}</div>` : '';
+        const driftHtml = a.driftDetails ? (() => {
+          const dd = a.driftDetails;
+          if (dd.added?.length || dd.removed?.length) {
+            return `<div class="risk-drift"><span class="drift-added">+${(dd.added || []).map(p => PORT_NAMES[p] || p).join(', ') || 'none'}</span><span class="drift-removed">-${(dd.removed || []).map(p => PORT_NAMES[p] || p).join(', ') || 'none'}</span></div>`;
+          }
+          return '';
+        })() : '';
+        return `<div class="risk-item risk-${a.severity.toLowerCase()}">
+          <div class="risk-header"><span class="sev-pill sev-${a.severity.toLowerCase()}">${a.severity}</span>${a.category ? `<span class="risk-cat">${escHtml(a.category)}</span>` : ''}</div>
+          <div class="risk-body">
+            <strong>${escHtml(a.type)}</strong>
+            <div class="risk-desc">${escHtml(a.description)}</div>
+            ${a.what ? `<div class="risk-what">${escHtml(a.what)}</div>` : ''}
+            ${a.risk ? `<div class="risk-warn">${escHtml(a.risk)}</div>` : ''}
+            ${a.impact ? `<div class="risk-impact">${escHtml(a.impact)}</div>` : ''}
+            ${driftHtml}
+            ${stepsHtml}
+            ${linksHtml}
+          </div>
+        </div>`;
+      }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
   const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
@@ -966,6 +1014,8 @@ function openDetailPanel(dev, tab) {
       <div class="detail-field"><span class="detail-label">Type</span><span class="detail-val">${escHtml(dev.deviceType || '—')}</span></div>
       <div class="detail-field"><span class="detail-label">Vendor</span><span class="detail-val">${escHtml(dev.vendor || '—')}</span></div>
       ${dev.osGuess ? `<div class="detail-field"><span class="detail-label">OS</span><span class="detail-val">${escHtml(dev.osGuess)}</span></div>` : ''}
+      ${fp.isVirtualMachine ? `<div class="detail-field"><span class="detail-label">VM</span><span class="detail-val" style="color:var(--warning)">Virtual Machine (${escHtml(dev.vendor || 'Unknown hypervisor')})</span></div>` : ''}
+      ${fp.isHypervisor ? `<div class="detail-field"><span class="detail-label">Hypervisor</span><span class="detail-val" style="color:var(--danger)">Hypervisor Host — manages virtual machines</span></div>` : ''}
       <div class="detail-field"><span class="detail-label">Confidence</span>
         <div class="detail-val" style="display:flex;align-items:center;gap:0.5rem">
           <div class="conf-bar" style="width:90px"><div class="conf-fill" style="width:${dev.confidence||0}%"></div></div>
@@ -1019,19 +1069,63 @@ function openDetailPanel(dev, tab) {
   })();
 
   const sparkId = `latencySparkline-${dev.ip.replace(/[.:]/g,'-')}`;
+  const uptimePct = hist.onlineChecks > 1 ? Math.round((hist.onlineCount / hist.onlineChecks) * 100) : null;
+  const uptimeColor = uptimePct === null ? '' : uptimePct >= 90 ? 'var(--success)' : uptimePct >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+  const ipHistoryHtml = hist.ipHistory?.length > 0 ? `
+    <div class="detail-section">
+      <div class="detail-section-title">IP Address History (${hist.ipHistory.length})</div>
+      <div class="history-timeline">
+        ${hist.ipHistory.map((e, i) => `<div class="history-entry${i === 0 ? ' latest' : ''}">
+          <span class="history-dot"></span>
+          <span class="history-val mono">${escHtml(e.ip)}</span>
+          <span class="history-ts">${new Date(e.seenAt || e.firstSeen || e.ts || 0).toLocaleString()}</span>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const portHistoryHtml = hist.portHistory?.length > 0 ? `
+    <div class="detail-section">
+      <div class="detail-section-title">Port Profile History (${hist.portHistory.length})</div>
+      <div class="history-timeline">
+        ${hist.portHistory.map((e, i) => {
+          const portLabels = (e.ports || []).map(p => PORT_NAMES[p] || p).join(', ') || 'none';
+          return `<div class="history-entry${i === 0 ? ' latest' : ''}">
+            <span class="history-dot"></span>
+            <span class="history-val">${escHtml(portLabels)}</span>
+            <span class="history-ts">${new Date(e.ts || 0).toLocaleString()}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  const nameHistoryHtml = hist.nameHistory?.length > 0 ? `
+    <div class="detail-section">
+      <div class="detail-section-title">Hostname History (${hist.nameHistory.length})</div>
+      <div class="history-timeline">
+        ${hist.nameHistory.map((e, i) => `<div class="history-entry${i === 0 ? ' latest' : ''}">
+          <span class="history-dot"></span>
+          <span class="history-val">${escHtml(e.name || '—')}</span>
+          <span class="history-ts">${new Date(e.ts || 0).toLocaleString()}</span>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
   const historyContent = `
     <div class="detail-section">
       <div class="detail-section-title">Presence Timeline</div>
       <div class="detail-field"><span class="detail-label">First seen</span><span class="detail-val">${hist.firstSeen ? new Date(hist.firstSeen).toLocaleString() : '—'}</span></div>
       <div class="detail-field"><span class="detail-label">Last seen</span><span class="detail-val">${hist.lastSeen ? new Date(hist.lastSeen).toLocaleString() : 'Just now'}</span></div>
       ${dev.latencyMs != null ? `<div class="detail-field"><span class="detail-label">Latency</span><span class="detail-val">${dev.latencyMs} ms</span></div>` : ''}
-      ${hist.onlineChecks > 1 ? `<div class="detail-field"><span class="detail-label">Uptime</span><span class="detail-val">${Math.round((hist.onlineCount/hist.onlineChecks)*100)}% (${hist.onlineCount}/${hist.onlineChecks} checks)</span></div>` : ''}
+      ${uptimePct !== null ? `<div class="detail-field"><span class="detail-label">Uptime</span><span class="detail-val" style="color:${uptimeColor}"><strong>${uptimePct}%</strong> (${hist.onlineCount}/${hist.onlineChecks} checks)</span></div>` : ''}
     </div>
     <div class="detail-section">
       <div class="detail-section-title">Latency Sparkline</div>
       <div id="${sparkId}" style="padding:0.25rem 0">Loading…</div>
     </div>
-    ${hist.ipHistory?.length > 1 ? `<div class="detail-section"><div class="detail-section-title">IP History</div>${hist.ipHistory.map(e=>`<div class="detail-field" style="margin-bottom:0.2rem"><span class="detail-label" style="font-family:monospace;font-size:0.78rem">${escHtml(e.ip)}</span><span class="detail-val" style="font-size:0.75rem;color:var(--text-muted)">${new Date(e.seenAt||e.firstSeen||0).toLocaleDateString()}</span></div>`).join('')}</div>` : ''}`;
+    ${ipHistoryHtml}
+    ${portHistoryHtml}
+    ${nameHistoryHtml}`;
 
   const levels = ['off','presence','services','deep'];
   const levelLabels = { off:'Off', presence:'Presence Only', services:'Presence + Services', deep:'Deep' };
@@ -1138,6 +1232,11 @@ function openDetailPanel(dev, tab) {
         openDetailPanel(d, detailActiveTab);
       });
     });
+  });
+
+  // Risk/runbook links
+  document.querySelectorAll('.risk-link').forEach(el => {
+    el.addEventListener('click', e => { e.preventDefault(); window.electronAPI?.openExternalUrl?.(el.dataset.url); });
   });
 
   // Policy save
@@ -1258,19 +1357,61 @@ function renderMap() {
   emptyEl.classList.add('hidden');
 
   const W = mapEl.parentElement.clientWidth || 800;
-  const H = 500;
-  mapEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
   mapEl.setAttribute('width', '100%');
-  mapEl.setAttribute('height', H);
 
   const cx = W / 2;
-  const internetY = 60, routerY = 160, devY = 300;
+  const internetY = 60, routerY = 160;
 
   // Find gateway (first device or one with port 80/443)
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
 
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+
+  // ── Distance tiers based on latency ──
+  // Bucket devices into Near / Mid / Far tiers by latency from router
+  const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
+  const withLatency    = devices.filter(d => latencyOf(d) !== null);
+  const withoutLatency = devices.filter(d => latencyOf(d) === null);
+
+  const TIER_NEAR = { label: 'Near', minY: 280, color: 'var(--success, #22c55e)' };
+  const TIER_MID  = { label: 'Mid',  minY: 380, color: 'var(--warning, #f59e0b)' };
+  const TIER_FAR  = { label: 'Far',  minY: 480, color: 'var(--danger,  #ef4444)' };
+  const TIER_UNK  = { label: '?',    minY: 480, color: 'var(--text-muted)' };
+
+  function tierFor(ms) {
+    if (ms <= 5)  return TIER_NEAR;
+    if (ms <= 30) return TIER_MID;
+    return TIER_FAR;
+  }
+
+  // Sort by latency ascending so close devices render first
+  withLatency.sort((a, b) => a.latencyMs - b.latencyMs);
+  const sortedDevices = [...withLatency, ...withoutLatency];
+
+  // Group into tiers for row layout
+  const tierGroups = new Map(); // tier -> [dev]
+  sortedDevices.forEach(d => {
+    const tier = latencyOf(d) !== null ? tierFor(d.latencyMs) : TIER_UNK;
+    if (!tierGroups.has(tier)) tierGroups.set(tier, []);
+    tierGroups.get(tier).push(d);
+  });
+
+  // Determine required height based on tier rows
+  const tierOrder = [TIER_NEAR, TIER_MID, TIER_FAR, TIER_UNK];
+  const activeTiers = tierOrder.filter(t => tierGroups.has(t));
+  let nextTierY = 280;
+  const tierYMap = new Map();
+  activeTiers.forEach(tier => {
+    tierYMap.set(tier, nextTierY);
+    const count = tierGroups.get(tier).length;
+    const rowsNeeded = Math.ceil(count / Math.max(1, Math.floor(W / 110)));
+    nextTierY += rowsNeeded * 110 + 30; // gap between tiers
+  });
+
+  const totalH = Math.max(500, nextTierY + 20);
+  mapEl.setAttribute('height', totalH);
+  mapEl.setAttribute('viewBox', `0 0 ${W} ${totalH}`);
 
   let svg = '';
 
@@ -1298,35 +1439,64 @@ function renderMap() {
     </g>`;
   }
 
-  // Device nodes arranged in a row
-  const maxPerRow = Math.min(devices.length, Math.floor(W / 110));
-  const rows = [];
-  for (let i = 0; i < devices.length; i += maxPerRow) rows.push(devices.slice(i, i + maxPerRow));
+  // ── Distance rings (concentric arcs from router) ──
+  activeTiers.forEach(tier => {
+    if (tier === TIER_UNK) return;
+    const ringY = tierYMap.get(tier);
+    const ringR = ringY - routerY;
+    svg += `<ellipse cx="${cx}" cy="${routerY}" rx="${Math.min(ringR * 1.2, W / 2 - 20)}" ry="${ringR}"
+      fill="none" stroke="${tier.color}" stroke-width="0.7" stroke-dasharray="6 4" opacity="0.35"/>`;
+    svg += `<text x="${cx + Math.min(ringR * 1.2, W / 2 - 20) + 4}" y="${routerY + 4}" fill="${tier.color}" font-size="8" opacity="0.7">${tier.label}</text>`;
+  });
 
-  rows.forEach((row, ri) => {
-    const y = devY + ri * 110;
-    const rowW = row.length * 100;
-    const startX = (W - rowW) / 2 + 50;
+  // ── Device nodes by tier ──
+  const maxPerRow = Math.max(1, Math.floor(W / 110));
 
-    row.forEach((dev, di) => {
-      const x = startX + di * 100;
-      const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-      const color   = isRisky ? 'var(--danger)' : isNew ? 'var(--warning)' : 'var(--border)';
-      const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
+  activeTiers.forEach(tier => {
+    const tierDevices = tierGroups.get(tier);
+    const baseY = tierYMap.get(tier);
 
-      // Line from router
-      const routerX = cx, routerY2 = routerY + 30;
-      svg += `<line x1="${routerX}" y1="${routerY2}" x2="${x}" y2="${y - 22}" stroke="var(--border-subtle)" stroke-width="1.5"/>`;
+    // Tier label on the left
+    svg += `<text x="12" y="${baseY - 10}" fill="${tier.color}" font-size="9" font-weight="600" opacity="0.8">${tier === TIER_UNK ? 'Unknown' : tier.label + ' (\u2264' + (tier === TIER_NEAR ? '5' : tier === TIER_MID ? '30' : '30+') + ' ms)'}</text>`;
 
-      svg += `<g class="map-node map-clickable" data-ip="${escHtml(dev.ip)}" transform="translate(${x},${y})">
-        <circle r="22" fill="var(--bg-card)" stroke="${color}" stroke-width="${isRisky ? 2.5 : 1.5}"/>
-        <text y="6" text-anchor="middle" font-size="14">${DEVICE_ICONS[dev.deviceType] || '❓'}</text>
-        <text y="36" text-anchor="middle" fill="var(--text-secondary)" font-size="9" font-weight="500">${escHtml(devName)}</text>
-        <text y="46" text-anchor="middle" fill="var(--text-muted)" font-size="8">${escHtml(dev.ip)}</text>
-        ${isRisky ? `<circle r="6" cx="16" cy="-16" fill="var(--danger)"/>` : ''}
-        ${isNew   ? `<circle r="5" cx="16" cy="-16" fill="var(--warning)"/>` : ''}
-      </g>`;
+    const rows = [];
+    for (let i = 0; i < tierDevices.length; i += maxPerRow) rows.push(tierDevices.slice(i, i + maxPerRow));
+
+    rows.forEach((row, ri) => {
+      const y = baseY + ri * 110;
+      const rowW = row.length * 100;
+      const startX = (W - rowW) / 2 + 50;
+
+      row.forEach((dev, di) => {
+        const x = startX + di * 100;
+        const isRisky = anomalyIpSet.has(dev.ip);
+        const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+        const color   = isRisky ? 'var(--danger)' : isNew ? 'var(--warning)' : 'var(--border)';
+        const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
+        const ms      = latencyOf(dev);
+        const distColor = ms !== null ? tierFor(ms).color : 'var(--text-muted)';
+
+        // Line from router
+        const routerX = cx, routerY2 = routerY + 30;
+        svg += `<line x1="${routerX}" y1="${routerY2}" x2="${x}" y2="${y - 22}" stroke="${distColor}" stroke-width="1.5" opacity="0.5"/>`;
+
+        // Latency label on the line
+        if (ms !== null) {
+          const midX = (routerX + x) / 2;
+          const midY = (routerY2 + y - 22) / 2;
+          svg += `<rect x="${midX - 14}" y="${midY - 7}" width="28" height="13" rx="3" fill="var(--bg-card)" opacity="0.85"/>`;
+          svg += `<text x="${midX}" y="${midY + 3}" text-anchor="middle" fill="${distColor}" font-size="7.5" font-weight="600">${ms < 1 ? '<1' : Math.round(ms)}ms</text>`;
+        }
+
+        svg += `<g class="map-node map-clickable" data-ip="${escHtml(dev.ip)}" transform="translate(${x},${y})">
+          <circle r="22" fill="var(--bg-card)" stroke="${color}" stroke-width="${isRisky ? 2.5 : 1.5}"/>
+          <text y="6" text-anchor="middle" font-size="14">${DEVICE_ICONS[dev.deviceType] || '❓'}</text>
+          <text y="36" text-anchor="middle" fill="var(--text-secondary)" font-size="9" font-weight="500">${escHtml(devName)}</text>
+          <text y="46" text-anchor="middle" fill="var(--text-muted)" font-size="8">${escHtml(dev.ip)}</text>
+          ${isRisky ? `<circle r="6" cx="16" cy="-16" fill="var(--danger)"/>` : ''}
+          ${isNew   ? `<circle r="5" cx="16" cy="-16" fill="var(--warning)"/>` : ''}
+        </g>`;
+      });
     });
   });
 
@@ -1344,7 +1514,8 @@ function renderMap() {
       const dev = allDevices.find(d => d.ip === ip);
       if (!dev) return;
       const tooltip = $('mapTooltip');
-      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>${escHtml(dev.ip)}<br>${escHtml(dev.deviceType || '—')}`;
+      const latMs = typeof dev.latencyMs === 'number' && dev.latencyMs > 0 ? `${Math.round(dev.latencyMs)} ms` : '—';
+      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>${escHtml(dev.ip)}<br>${escHtml(dev.deviceType || '—')}<br>Latency: ${latMs}`;
       tooltip.style.left = (e.clientX + 12) + 'px';
       tooltip.style.top  = (e.clientY - 10) + 'px';
       tooltip.classList.remove('hidden');
