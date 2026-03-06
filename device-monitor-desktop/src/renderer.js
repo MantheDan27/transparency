@@ -1258,19 +1258,61 @@ function renderMap() {
   emptyEl.classList.add('hidden');
 
   const W = mapEl.parentElement.clientWidth || 800;
-  const H = 500;
-  mapEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
   mapEl.setAttribute('width', '100%');
-  mapEl.setAttribute('height', H);
 
   const cx = W / 2;
-  const internetY = 60, routerY = 160, devY = 300;
+  const internetY = 60, routerY = 160;
 
   // Find gateway (first device or one with port 80/443)
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
 
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+
+  // ── Distance tiers based on latency ──
+  // Bucket devices into Near / Mid / Far tiers by latency from router
+  const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
+  const withLatency    = devices.filter(d => latencyOf(d) !== null);
+  const withoutLatency = devices.filter(d => latencyOf(d) === null);
+
+  const TIER_NEAR = { label: 'Near', minY: 280, color: 'var(--success, #22c55e)' };
+  const TIER_MID  = { label: 'Mid',  minY: 380, color: 'var(--warning, #f59e0b)' };
+  const TIER_FAR  = { label: 'Far',  minY: 480, color: 'var(--danger,  #ef4444)' };
+  const TIER_UNK  = { label: '?',    minY: 480, color: 'var(--text-muted)' };
+
+  function tierFor(ms) {
+    if (ms <= 5)  return TIER_NEAR;
+    if (ms <= 30) return TIER_MID;
+    return TIER_FAR;
+  }
+
+  // Sort by latency ascending so close devices render first
+  withLatency.sort((a, b) => a.latencyMs - b.latencyMs);
+  const sortedDevices = [...withLatency, ...withoutLatency];
+
+  // Group into tiers for row layout
+  const tierGroups = new Map(); // tier -> [dev]
+  sortedDevices.forEach(d => {
+    const tier = latencyOf(d) !== null ? tierFor(d.latencyMs) : TIER_UNK;
+    if (!tierGroups.has(tier)) tierGroups.set(tier, []);
+    tierGroups.get(tier).push(d);
+  });
+
+  // Determine required height based on tier rows
+  const tierOrder = [TIER_NEAR, TIER_MID, TIER_FAR, TIER_UNK];
+  const activeTiers = tierOrder.filter(t => tierGroups.has(t));
+  let nextTierY = 280;
+  const tierYMap = new Map();
+  activeTiers.forEach(tier => {
+    tierYMap.set(tier, nextTierY);
+    const count = tierGroups.get(tier).length;
+    const rowsNeeded = Math.ceil(count / Math.max(1, Math.floor(W / 110)));
+    nextTierY += rowsNeeded * 110 + 30; // gap between tiers
+  });
+
+  const totalH = Math.max(500, nextTierY + 20);
+  mapEl.setAttribute('height', totalH);
+  mapEl.setAttribute('viewBox', `0 0 ${W} ${totalH}`);
 
   let svg = '';
 
@@ -1298,35 +1340,64 @@ function renderMap() {
     </g>`;
   }
 
-  // Device nodes arranged in a row
-  const maxPerRow = Math.min(devices.length, Math.floor(W / 110));
-  const rows = [];
-  for (let i = 0; i < devices.length; i += maxPerRow) rows.push(devices.slice(i, i + maxPerRow));
+  // ── Distance rings (concentric arcs from router) ──
+  activeTiers.forEach(tier => {
+    if (tier === TIER_UNK) return;
+    const ringY = tierYMap.get(tier);
+    const ringR = ringY - routerY;
+    svg += `<ellipse cx="${cx}" cy="${routerY}" rx="${Math.min(ringR * 1.2, W / 2 - 20)}" ry="${ringR}"
+      fill="none" stroke="${tier.color}" stroke-width="0.7" stroke-dasharray="6 4" opacity="0.35"/>`;
+    svg += `<text x="${cx + Math.min(ringR * 1.2, W / 2 - 20) + 4}" y="${routerY + 4}" fill="${tier.color}" font-size="8" opacity="0.7">${tier.label}</text>`;
+  });
 
-  rows.forEach((row, ri) => {
-    const y = devY + ri * 110;
-    const rowW = row.length * 100;
-    const startX = (W - rowW) / 2 + 50;
+  // ── Device nodes by tier ──
+  const maxPerRow = Math.max(1, Math.floor(W / 110));
 
-    row.forEach((dev, di) => {
-      const x = startX + di * 100;
-      const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-      const color   = isRisky ? 'var(--danger)' : isNew ? 'var(--warning)' : 'var(--border)';
-      const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
+  activeTiers.forEach(tier => {
+    const tierDevices = tierGroups.get(tier);
+    const baseY = tierYMap.get(tier);
 
-      // Line from router
-      const routerX = cx, routerY2 = routerY + 30;
-      svg += `<line x1="${routerX}" y1="${routerY2}" x2="${x}" y2="${y - 22}" stroke="var(--border-subtle)" stroke-width="1.5"/>`;
+    // Tier label on the left
+    svg += `<text x="12" y="${baseY - 10}" fill="${tier.color}" font-size="9" font-weight="600" opacity="0.8">${tier === TIER_UNK ? 'Unknown' : tier.label + ' (\u2264' + (tier === TIER_NEAR ? '5' : tier === TIER_MID ? '30' : '30+') + ' ms)'}</text>`;
 
-      svg += `<g class="map-node map-clickable" data-ip="${escHtml(dev.ip)}" transform="translate(${x},${y})">
-        <circle r="22" fill="var(--bg-card)" stroke="${color}" stroke-width="${isRisky ? 2.5 : 1.5}"/>
-        <text y="6" text-anchor="middle" font-size="14">${DEVICE_ICONS[dev.deviceType] || '❓'}</text>
-        <text y="36" text-anchor="middle" fill="var(--text-secondary)" font-size="9" font-weight="500">${escHtml(devName)}</text>
-        <text y="46" text-anchor="middle" fill="var(--text-muted)" font-size="8">${escHtml(dev.ip)}</text>
-        ${isRisky ? `<circle r="6" cx="16" cy="-16" fill="var(--danger)"/>` : ''}
-        ${isNew   ? `<circle r="5" cx="16" cy="-16" fill="var(--warning)"/>` : ''}
-      </g>`;
+    const rows = [];
+    for (let i = 0; i < tierDevices.length; i += maxPerRow) rows.push(tierDevices.slice(i, i + maxPerRow));
+
+    rows.forEach((row, ri) => {
+      const y = baseY + ri * 110;
+      const rowW = row.length * 100;
+      const startX = (W - rowW) / 2 + 50;
+
+      row.forEach((dev, di) => {
+        const x = startX + di * 100;
+        const isRisky = anomalyIpSet.has(dev.ip);
+        const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+        const color   = isRisky ? 'var(--danger)' : isNew ? 'var(--warning)' : 'var(--border)';
+        const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
+        const ms      = latencyOf(dev);
+        const distColor = ms !== null ? tierFor(ms).color : 'var(--text-muted)';
+
+        // Line from router
+        const routerX = cx, routerY2 = routerY + 30;
+        svg += `<line x1="${routerX}" y1="${routerY2}" x2="${x}" y2="${y - 22}" stroke="${distColor}" stroke-width="1.5" opacity="0.5"/>`;
+
+        // Latency label on the line
+        if (ms !== null) {
+          const midX = (routerX + x) / 2;
+          const midY = (routerY2 + y - 22) / 2;
+          svg += `<rect x="${midX - 14}" y="${midY - 7}" width="28" height="13" rx="3" fill="var(--bg-card)" opacity="0.85"/>`;
+          svg += `<text x="${midX}" y="${midY + 3}" text-anchor="middle" fill="${distColor}" font-size="7.5" font-weight="600">${ms < 1 ? '<1' : Math.round(ms)}ms</text>`;
+        }
+
+        svg += `<g class="map-node map-clickable" data-ip="${escHtml(dev.ip)}" transform="translate(${x},${y})">
+          <circle r="22" fill="var(--bg-card)" stroke="${color}" stroke-width="${isRisky ? 2.5 : 1.5}"/>
+          <text y="6" text-anchor="middle" font-size="14">${DEVICE_ICONS[dev.deviceType] || '❓'}</text>
+          <text y="36" text-anchor="middle" fill="var(--text-secondary)" font-size="9" font-weight="500">${escHtml(devName)}</text>
+          <text y="46" text-anchor="middle" fill="var(--text-muted)" font-size="8">${escHtml(dev.ip)}</text>
+          ${isRisky ? `<circle r="6" cx="16" cy="-16" fill="var(--danger)"/>` : ''}
+          ${isNew   ? `<circle r="5" cx="16" cy="-16" fill="var(--warning)"/>` : ''}
+        </g>`;
+      });
     });
   });
 
@@ -1344,7 +1415,8 @@ function renderMap() {
       const dev = allDevices.find(d => d.ip === ip);
       if (!dev) return;
       const tooltip = $('mapTooltip');
-      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>${escHtml(dev.ip)}<br>${escHtml(dev.deviceType || '—')}`;
+      const latMs = typeof dev.latencyMs === 'number' && dev.latencyMs > 0 ? `${Math.round(dev.latencyMs)} ms` : '—';
+      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>${escHtml(dev.ip)}<br>${escHtml(dev.deviceType || '—')}<br>Latency: ${latMs}`;
       tooltip.style.left = (e.clientX + 12) + 'px';
       tooltip.style.top  = (e.clientY - 10) + 'px';
       tooltip.classList.remove('hidden');
