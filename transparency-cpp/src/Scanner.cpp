@@ -473,23 +473,30 @@ std::vector<int> ScanEngine::ScanPorts(
     std::mutex mtx;
 
     int timeout = gentle ? 1500 : 500;
-    SimpleSemaphore sem(30);
-    std::vector<std::future<void>> futures;
 
-    for (int port : ports) {
-        if (cancelled) break;
-        sem.acquire();
-        futures.push_back(std::async(std::launch::async, [&, p = port]() {
-            auto defer = [&sem]() { sem.release(); };
-            if (!cancelled && TcpProbe(ip, p, timeout)) {
-                std::lock_guard<std::mutex> lk(mtx);
-                openPorts.push_back(p);
+    int num_threads = std::min(30, (int)ports.size());
+    std::vector<std::thread> threads;
+    std::atomic<size_t> idx{0};
+
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([&]() {
+            while (!cancelled) {
+                size_t current_idx = idx.fetch_add(1);
+                if (current_idx >= ports.size()) break;
+
+                int p = ports[current_idx];
+                if (TcpProbe(ip, p, timeout)) {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    openPorts.push_back(p);
+                }
             }
-            defer();
-        }));
+        });
     }
 
-    for (auto& f : futures) f.wait();
+    for (auto& t : threads) {
+        if (t.joinable()) t.join();
+    }
+
     std::sort(openPorts.begin(), openPorts.end());
     return openPorts;
 }
