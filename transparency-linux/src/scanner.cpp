@@ -189,12 +189,28 @@ std::vector<std::string> ScanEngine::generateSubnetIPs(const std::string& ip, in
 }
 
 bool ScanEngine::pingHost(const std::string& ip, int timeoutMs) {
+    // Validate IP address to prevent command injection
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    if (inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 1 &&
+        inet_pton(AF_INET6, ip.c_str(), &(sa6.sin6_addr)) != 1) {
+        return false; // Invalid IP address
+    }
+
     std::string cmd = "ping -c 1 -W " + std::to_string(timeoutMs / 1000 + 1) +
                       " " + ip + " > /dev/null 2>&1";
     return system(cmd.c_str()) == 0;
 }
 
 int ScanEngine::measureLatency(const std::string& ip) {
+    // Validate IP address to prevent command injection
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    if (inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) != 1 &&
+        inet_pton(AF_INET6, ip.c_str(), &(sa6.sin6_addr)) != 1) {
+        return -1; // Invalid IP address
+    }
+
     std::string out = execCommand("ping -c 1 -W 2 " + ip + " 2>/dev/null");
     auto pos = out.find("time=");
     if (pos != std::string::npos) {
