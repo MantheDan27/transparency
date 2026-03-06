@@ -287,6 +287,9 @@ function lookupVendor(mac) {
 
 // ── Ping with latency measurement ─────────────────────────────────────────────
 async function pingHost(ip, gentle = false) {
+  if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+    return { alive: false, latencyMs: null };
+  }
   const timeout = gentle ? 2000 : 1000;
   const cmd = process.platform === 'win32'
     ? `ping -n 1 -w ${timeout} ${ip}`
@@ -309,6 +312,9 @@ async function pingHost(ip, gentle = false) {
 
 // ── ARP table lookup ──────────────────────────────────────────────────────────
 async function getMac(ip) {
+  if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+    return 'Unknown';
+  }
   try {
     if (process.platform === 'linux') {
       const { stdout } = await execPromise('cat /proc/net/arp', { timeout: 2000 });
