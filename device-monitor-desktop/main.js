@@ -406,9 +406,7 @@ function updateDeviceHistory(devices) {
 // ── Cloud mock service ────────────────────────────────────────────────────────
 function startCloud() {
   const mockApp = createCloudMockService();
-  cloudServer = mockApp.listen(CLOUD_PORT, '127.0.0.1', () =>
-    console.log(`[cloud-mock] http://127.0.0.1:${CLOUD_PORT}`)
-  );
+  cloudServer = mockApp.listen(CLOUD_PORT, '127.0.0.1');
 }
 
 const cloud = (url, opts = {}) =>
