@@ -1172,7 +1172,6 @@ function scheduleNextRun(s) {
         const downloadsPath = require('electron').app.getPath('downloads');
         const filename = path.join(downloadsPath, `transparency-report-${new Date().toISOString().slice(0,10)}-${s.name.replace(/\s+/g,'-')}.json`);
         fs.writeFileSync(filename, JSON.stringify(exportData, null, 2));
-        console.log(`[schedule] Auto-exported to ${filename}`);
       }
     } catch (err) {
       console.error('[schedule]', err);
