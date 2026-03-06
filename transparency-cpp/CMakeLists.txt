@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Windows subsystem
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+if(MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+else()
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows")
+endif()
 
 # Source files
 set(SOURCES
@@ -87,4 +91,42 @@ if(MSVC)
         /wd4189  # local variable initialized but not referenced
     )
     set_property(TARGET Transparency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# Add tests directory
+enable_testing()
+add_executable(ScannerTest tests/ScannerTest.cpp src/Scanner.cpp)
+target_include_directories(ScannerTest PRIVATE src)
+target_link_libraries(ScannerTest PRIVATE
+    ws2_32
+    iphlpapi
+    comctl32
+    uxtheme
+    dwmapi
+    dnsapi
+    gdi32
+    ole32
+    winmm
+    shell32
+    wlanapi
+    ntdll
+    comdlg32
+)
+add_test(NAME ScannerTest COMMAND ScannerTest)
+
+target_compile_definitions(ScannerTest PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00
+    WINVER=0x0A00
+    _CRT_SECURE_NO_WARNINGS
+)
+
+target_link_options(ScannerTest PRIVATE "-static")
+
+
+if(NOT MSVC)
+    target_link_options(ScannerTest PRIVATE "-mconsole")
 endif()
