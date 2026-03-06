@@ -28,6 +28,7 @@ const DATA_DIR = path.join(app.getPath('userData'), 'transparency-data');
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
+ensureDataDir(); // Must run before any loadJSON/saveJSON calls
 function dataFile(name) { return path.join(DATA_DIR, name); }
 function loadJSON(file, def) {
   try { return JSON.parse(fs.readFileSync(dataFile(file), 'utf8')); }
