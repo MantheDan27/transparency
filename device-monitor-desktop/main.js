@@ -1372,3 +1372,7 @@ function restartLocalApiWithAuth() {
 
 // Script hooks are fired from the existing scan-network handler above
 // and from runMonitorScan — no duplicate handler needed here.
+
+module.exports = {
+  saveJSON
+};
