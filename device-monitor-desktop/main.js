@@ -1241,7 +1241,6 @@ function runScriptHooks(event, payload = {}) {
         : `echo '${jsonStr.replace(/'/g, "'\\''")}' | ${h.cmd}`;
       exec(cmd, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
-        else console.log(`[hook] "${h.cmd}" executed for event: ${event}`);
       });
     } catch (err) {
       console.error('[hook]', err.message);
