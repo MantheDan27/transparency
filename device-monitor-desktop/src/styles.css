@@ -1108,6 +1108,59 @@ tr:hover .row-actions { opacity: 1; }
   box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 10;
 }
 
+/* ── Enhanced Anomaly Details ──────────────────────────────────── */
+.change-what, .change-risk, .change-impact {
+  font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; line-height: 1.4;
+}
+.change-risk { color: var(--warning); }
+.change-impact { color: var(--text-muted); font-style: italic; }
+.change-steps { margin-top: 0.35rem; padding-left: 0.5rem; border-left: 2px solid var(--border-subtle); }
+.change-step {
+  font-size: 0.72rem; color: var(--text-secondary); padding: 0.15rem 0;
+}
+.change-step::before { content: '→ '; color: var(--accent); }
+.change-links { margin-top: 0.3rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.change-link {
+  font-size: 0.68rem; color: var(--accent); text-decoration: underline;
+  cursor: pointer;
+}
+.change-cat {
+  font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
+  background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
+  padding: 0.05rem 0.35rem; border-radius: 3px; color: var(--text-muted);
+  letter-spacing: 0.04em; margin-left: 0.5rem; vertical-align: middle;
+}
+
+/* ── Enhanced Risk Details in Device Panel ─────────────────────── */
+.risk-item { margin-bottom: 0.75rem; padding: 0.6rem; background: var(--bg-card-alt); border-radius: var(--radius-sm); border-left: 3px solid var(--border); }
+.risk-item.risk-high { border-left-color: var(--danger); }
+.risk-item.risk-medium { border-left-color: var(--warning); }
+.risk-item.risk-low { border-left-color: var(--accent); }
+.risk-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.risk-cat { font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0.1rem 0.3rem; border-radius: 3px; }
+.risk-body { font-size: 0.82rem; }
+.risk-desc { color: var(--text-secondary); margin: 0.2rem 0; }
+.risk-what { color: var(--text-primary); margin: 0.3rem 0; font-size: 0.78rem; }
+.risk-warn { color: var(--warning); margin: 0.2rem 0; font-size: 0.76rem; }
+.risk-impact { color: var(--text-muted); font-size: 0.74rem; font-style: italic; }
+.risk-drift { display: flex; gap: 0.5rem; margin: 0.3rem 0; font-family: monospace; font-size: 0.72rem; }
+.drift-added { color: var(--success); }
+.drift-removed { color: var(--danger); }
+.risk-steps { margin: 0.4rem 0; padding: 0.3rem 0; }
+.risk-steps-title { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+.risk-step { display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.74rem; color: var(--text-secondary); padding: 0.15rem 0; }
+.risk-step-num { background: var(--accent); color: var(--bg-body); width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; flex-shrink: 0; }
+.risk-links { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.risk-link { font-size: 0.7rem; color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+/* ── History Timeline ──────────────────────────────────────────── */
+.history-timeline { padding-left: 0.75rem; border-left: 2px solid var(--border-subtle); }
+.history-entry { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; position: relative; }
+.history-entry.latest .history-dot { background: var(--accent); }
+.history-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; margin-left: -0.95rem; }
+.history-val { font-size: 0.8rem; color: var(--text-primary); }
+.history-ts { font-size: 0.7rem; color: var(--text-muted); margin-left: auto; }
+
 /* ── Diff styles ───────────────────────────────────────────────── */
 .diff-stat {
   background: var(--bg-card-alt); border: 1px solid var(--border-subtle);

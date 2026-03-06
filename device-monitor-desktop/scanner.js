@@ -13,7 +13,7 @@ const dnsReverse  = util.promisify(dns.reverse);
 
 // ── Port catalogues ────────────────────────────────────────────────────────────
 const PORT_PROFILES = {
-  common:   [21, 22, 23, 25, 53, 80, 110, 135, 139, 443, 445, 3306, 3389, 5900, 8080, 8443],
+  common:   [21, 22, 23, 25, 53, 80, 110, 135, 139, 443, 445, 902, 903, 2376, 3306, 3389, 5900, 5985, 8006, 8080, 8443, 16509],
   iot:      [80, 443, 1883, 1884, 5683, 7000, 7100, 8008, 8009, 8080, 8443, 8883, 9100, 9123],
   nas:      [21, 22, 80, 111, 139, 443, 445, 548, 873, 2049, 3260, 5000, 5001, 8080, 8443, 9091],
   security: [8080, 8443, 8888, 9000, 9090, 9443, 9999, 37777, 37778, 34567, 34599, 554],
@@ -22,15 +22,41 @@ const PORT_PROFILES = {
 const SCAN_PORTS = PORT_PROFILES.common;
 const RISKY_PORTS = new Set([23, 135, 139, 445, 3389, 5900]);
 
+// Ports commonly used by hypervisors and VM management
+const VM_PORTS = new Set([
+  902, 903,           // VMware ESXi/vCenter
+  8006,               // Proxmox VE
+  2376, 2377,         // Docker daemon / Swarm
+  6443,               // Kubernetes API
+  16509, 16514,       // libvirt (QEMU/KVM)
+  5985, 5986,         // WinRM (Hyper-V management)
+  8000, 8443,         // Various hypervisor web UIs
+]);
+
+// Known VM / hypervisor MAC OUI prefixes
+const VM_MAC_PREFIXES = [
+  '00:0C:29', '00:50:56', '00:05:69', '00:1C:14',  // VMware
+  '08:00:27',                                         // VirtualBox
+  '52:54:00',                                         // QEMU/KVM
+  '00:16:3E',                                         // Xen
+  '00:1C:42',                                         // Parallels
+  '00:15:5D',                                         // Hyper-V
+  '00:0F:4B',                                         // Oracle VM
+  '02:42:AC', '02:42:00',                             // Docker
+  '0A:58:0A',                                         // Kubernetes
+];
+
 const PORT_NAMES = {
   21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS',
   80: 'HTTP', 110: 'POP3', 111: 'RPC', 135: 'MS-RPC', 139: 'NetBIOS',
   443: 'HTTPS', 445: 'SMB', 548: 'AFP', 554: 'RTSP', 631: 'IPP',
-  873: 'rsync', 1883: 'MQTT', 2049: 'NFS', 3306: 'MySQL', 3260: 'iSCSI',
-  3389: 'RDP', 5000: 'UPnP/Web', 5001: 'Web', 5683: 'CoAP', 5900: 'VNC',
+  902: 'VMware', 903: 'VMware-Web',
+  873: 'rsync', 1883: 'MQTT', 2049: 'NFS', 2376: 'Docker', 2377: 'Docker-Swarm', 3306: 'MySQL', 3260: 'iSCSI',
+  3389: 'RDP', 5000: 'UPnP/Web', 5001: 'Web', 5683: 'CoAP', 5900: 'VNC', 5985: 'WinRM', 5986: 'WinRM-SSL',
   7000: 'AirPlay', 7100: 'AirPlay', 8008: 'Chromecast', 8009: 'Chromecast',
-  8080: 'HTTP-Alt', 8443: 'HTTPS-Alt', 8883: 'MQTT-SSL', 9000: 'Web',
+  6443: 'Kubernetes', 8006: 'Proxmox', 8080: 'HTTP-Alt', 8443: 'HTTPS-Alt', 8883: 'MQTT-SSL', 9000: 'Web',
   9090: 'Web', 9100: 'Printing', 9091: 'Web', 9123: 'Web', 9443: 'HTTPS-Alt',
+  16509: 'libvirt', 16514: 'libvirt-TLS',
   34567: 'DVR', 37777: 'DVR', 37778: 'DVR',
 };
 
@@ -157,8 +183,13 @@ const OUI_VENDORS = {
   '1C:7E:E5':'D-Link','28:10:7B':'D-Link','5C:D9:98':'D-Link','90:94:E4':'D-Link',
   'C4:A8:1D':'D-Link','CC:B2:55':'D-Link',
   // VMware / Virtual
-  '00:0C:29':'VMware','00:50:56':'VMware','00:05:69':'VMware','52:54:00':'QEMU/KVM',
+  '00:0C:29':'VMware','00:50:56':'VMware','00:05:69':'VMware',
+  '00:1C:14':'VMware','00:1C:42':'Parallels','00:0F:4B':'Oracle VM',
+  '52:54:00':'QEMU/KVM','00:16:3E':'Xen','02:42:AC':'Docker',
+  '02:42:00':'Docker','0A:58:0A':'Kubernetes',
   '08:00:27':'VirtualBox',
+  // Hyper-V
+  '00:15:5D':'Hyper-V',
   // Eero
   'F4:A0:39':'Eero','78:8B:2A':'Eero',
   // Linksys
@@ -180,7 +211,8 @@ const DEVICE_PATTERNS = [
   { type: 'Linux Server',     osGuess: 'Linux',      portSet: [22, 80, 443], required: [22], vendorHints: ['Dell','HP'] },
   { type: 'IoT Device',       osGuess: 'Embedded',   portSet: [80, 1883, 8008, 9123], required: [1883], vendorHints: ['Philips Hue'] },
   { type: 'Laptop',           osGuess: 'Unknown',    portSet: [22, 80, 443], required: [], vendorHints: ['Apple','Dell','HP','Lenovo','ASUS','Microsoft'] },
-  { type: 'Virtual Machine',  osGuess: 'Various',    portSet: [], required: [], vendorHints: ['VMware','VirtualBox','QEMU/KVM'] },
+  { type: 'Virtual Machine',  osGuess: 'Various',    portSet: [22, 80, 135, 443, 902, 903, 2376, 5985, 8006, 16509], required: [], vendorHints: ['VMware','VirtualBox','QEMU/KVM','Hyper-V','Parallels','Xen','Docker','Oracle VM','Kubernetes'] },
+  { type: 'Hypervisor Host',  osGuess: 'Various',    portSet: [902, 903, 8006, 2376, 2377, 6443, 16509, 16514, 5985, 5986], required: [], vendorHints: ['VMware','Proxmox'] },
 ];
 
 // ── Port impact/explanation library ───────────────────────────────────────────
@@ -655,6 +687,52 @@ function fingerprintDevice({ ip, mac, hostname, ports, mdnsServices = [], ssdpIn
     score += Math.min(bestMatchScore, 30);
   }
 
+  // Signal 8: VM / hypervisor detection
+  const isVmByMac = mac && VM_MAC_PREFIXES.some(pfx => mac.toUpperCase().startsWith(pfx));
+  const vmPortHits = ports.filter(p => VM_PORTS.has(p));
+  const hypervisorPorts = ports.filter(p => [902, 903, 8006, 2376, 2377, 6443, 16509, 16514, 5985, 5986].includes(p));
+
+  let isVirtualMachine = false;
+  let isHypervisor = false;
+
+  if (isVmByMac) {
+    signals.push({ type: 'vm', label: 'VM MAC Address', value: `OUI matches virtual NIC (${vendor || mac?.substring(0, 8)})`, weight: 40 });
+    score += 40;
+    isVirtualMachine = true;
+  }
+
+  if (vmPortHits.length > 0) {
+    signals.push({ type: 'vm', label: 'VM/Hypervisor Ports', value: vmPortHits.map(p => PORT_NAMES[p] || p).join(', '), weight: 25 });
+    score += 25;
+  }
+
+  if (hypervisorPorts.length >= 1) {
+    signals.push({ type: 'hypervisor', label: 'Hypervisor Management', value: hypervisorPorts.map(p => PORT_NAMES[p] || p).join(', '), weight: 35 });
+    score += 35;
+    isHypervisor = true;
+  }
+
+  // Check hostname patterns for VM / container names
+  if (hostname) {
+    const hnLow = hostname.toLowerCase();
+    const vmHostPatterns = ['vm-', 'vm_', 'docker', 'container', 'kube', 'k8s', 'proxmox', 'esxi', 'hyperv', 'vbox', 'qemu', 'libvirt', 'lxc', 'xen'];
+    const matchedPattern = vmHostPatterns.find(p => hnLow.includes(p));
+    if (matchedPattern) {
+      signals.push({ type: 'vm', label: 'VM Hostname Pattern', value: `Matches "${matchedPattern}" pattern`, weight: 20 });
+      score += 20;
+      isVirtualMachine = true;
+    }
+  }
+
+  // Override device type if VM/hypervisor signals are strong
+  if (isHypervisor && hypervisorPorts.length >= 1) {
+    deviceType = 'Hypervisor Host';
+    osGuess = 'Various';
+  } else if (isVirtualMachine) {
+    deviceType = 'Virtual Machine';
+    osGuess = 'Various';
+  }
+
   // Clamp confidence to 0-100
   const confidence = Math.min(100, Math.round(score));
 
@@ -668,7 +746,7 @@ function fingerprintDevice({ ip, mac, hostname, ports, mdnsServices = [], ssdpIn
     ? `We think this is a ${deviceType} because: ${reasons.join('; ')}.`
     : `Unable to identify device type — no reliable signals found.`;
 
-  return { vendor, deviceType, osGuess, confidence, signals, summary };
+  return { vendor, deviceType, osGuess, confidence, signals, summary, isVirtualMachine, isHypervisor };
 }
 
 // ── Anomaly explanation library ───────────────────────────────────────────────
@@ -705,6 +783,22 @@ function getAnomalyExplanation(type, ports = []) {
     impact:'An unverified device has full network access. If unauthorized, it can exfiltrate data or intercept traffic.',
     steps:['Log into your router and review the DHCP lease table','Check the device\'s open ports to assess risk','If unrecognized, block its MAC at the router and change your Wi-Fi password','Enable WPA3 encryption and disable WPS'],
     runbookLinks: ANOMALY_RUNBOOKS['New Device'], category:'inventory',
+  };
+
+  if (type === 'Virtual Machine Detected') return {
+    what:'A device with a virtual network adapter (VM MAC OUI) was found on the network.',
+    risk:'Virtual machines can be used to hide malicious activity, run unauthorized services, or bypass network segmentation and monitoring.',
+    impact:'A hidden VM may have separate firewall rules, run unpatched software, or tunnel traffic outside your network without detection.',
+    steps:['Identify the hypervisor host running this VM','Verify the VM is authorized and inventoried','Check VM network configuration (bridged vs NAT)','Audit running services inside the VM','If unauthorized, shut down and investigate the host machine'],
+    runbookLinks: [{ label:'CIS Control 1: Hardware Asset Inventory', url:'https://www.cisecurity.org/controls/inventory-and-control-of-enterprise-assets/' }], category:'virtualization',
+  };
+
+  if (type === 'Hypervisor Detected') return {
+    what:'A device running hypervisor management services was found on the network.',
+    risk:'Hypervisors control multiple virtual machines and represent a high-value target. Compromise of a hypervisor means compromise of all VMs it hosts.',
+    impact:'An exposed hypervisor management interface can allow attackers to create, modify, or destroy VMs, exfiltrate data, or establish persistent access.',
+    steps:['Restrict hypervisor management interfaces to a dedicated management VLAN','Enable strong authentication (MFA if possible)','Keep hypervisor software fully patched','Audit all VMs running on this host','Block management ports from general network access'],
+    runbookLinks: [{ label:'CIS Benchmark: VMware ESXi', url:'https://www.cisecurity.org/benchmark/vmware' }], category:'virtualization',
   };
 
   if (type === 'Ports Changed') return {
@@ -771,7 +865,33 @@ function analyzeAnomalies(devices, previousSnapshot = []) {
       });
     }
 
-    // Rule 4: Port drift
+    // Rule 4: Virtual machine detection
+    const fp = dev.fingerprint || {};
+    if (fp.isVirtualMachine) {
+      anomalies.push({
+        id: `vm-${dev.ip}`,
+        type: 'Virtual Machine Detected', severity: 'Medium',
+        device: dev.ip, hostname: dev.hostname || dev.name,
+        description: `Virtual machine detected (${dev.vendor || 'VM MAC'}). Verify this VM is authorized.`,
+        ports: [], driftType: 'vm_detected', driftDetails: { vendor: dev.vendor, mac: dev.mac },
+        ...getAnomalyExplanation('Virtual Machine Detected')
+      });
+    }
+
+    // Rule 5: Hypervisor detection
+    if (fp.isHypervisor) {
+      anomalies.push({
+        id: `hypervisor-${dev.ip}`,
+        type: 'Hypervisor Detected', severity: 'High',
+        device: dev.ip, hostname: dev.hostname || dev.name,
+        description: `Hypervisor management interface detected. High-value target — verify access controls.`,
+        ports: dev.ports.filter(p => [902, 903, 8006, 2376, 2377, 6443, 16509, 16514, 5985, 5986].includes(p)),
+        driftType: 'hypervisor_detected', driftDetails: { managementPorts: dev.ports.filter(p => VM_PORTS.has(p)) },
+        ...getAnomalyExplanation('Hypervisor Detected')
+      });
+    }
+
+    // Rule 6: Port drift
     if (prev) {
       const prevSet = new Set(prev.ports);
       const currSet = new Set(dev.ports);
@@ -1137,5 +1257,5 @@ module.exports = {
   fingerprintDevice, lookupVendor,
   grabBanner, getTLSCert,
   getLocalNetwork, getLocalNetworks,
-  RISKY_PORTS, PORT_NAMES, PORT_PROFILES,
+  RISKY_PORTS, VM_PORTS, VM_MAC_PREFIXES, PORT_NAMES, PORT_PROFILES,
 };
