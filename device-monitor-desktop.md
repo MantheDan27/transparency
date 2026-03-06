@@ -1,6 +1,6 @@
 # Device Monitor Desktop
 
-A comprehensive Electron-based desktop application for complete system security monitoring and threat detection.
+A comprehensive windows native desktop application for complete system security monitoring and threat detection.
 
 ## Features
 
