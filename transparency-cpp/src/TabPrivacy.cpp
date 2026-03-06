@@ -568,8 +568,8 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
         json += "      \"notes\": \""      + JEsc(WToU8(d.notes))        + "\",\n";
         json += "      \"firstSeen\": \""  + JEsc(WToU8(d.firstSeen))    + "\",\n";
         json += "      \"lastSeen\": \""   + JEsc(WToU8(d.lastSeen))     + "\",\n";
-        json += "      \"online\": "       + (d.online ? "true" : "false") + ",\n";
-        json += "      \"iotRisk\": "      + (d.iotRisk ? "true" : "false") + ",\n";
+        json += std::string("      \"online\": ")  + (d.online  ? "true" : "false") + ",\n";
+        json += std::string("      \"iotRisk\": ") + (d.iotRisk ? "true" : "false") + ",\n";
         json += "      \"iotRiskDetail\": \"" + JEsc(WToU8(d.iotRiskDetail)) + "\",\n";
         // Open ports
         json += "      \"openPorts\": [";
