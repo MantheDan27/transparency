@@ -5,7 +5,7 @@ const path  = require('path');
 const os    = require('os');
 const net   = require('net');
 const dns   = require('dns');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const util  = require('util');
 const axios = require('axios');
 const fs    = require('fs');
@@ -1236,13 +1236,28 @@ function runScriptHooks(event, payload = {}) {
   for (const h of hooks) {
     try {
       const jsonStr = JSON.stringify(payload);
-      const cmd = process.platform === 'win32'
-        ? `echo ${jsonStr} | ${h.cmd}`
-        : `echo '${jsonStr.replace(/'/g, "'\\''")}' | ${h.cmd}`;
-      exec(cmd, { timeout: 15000 }, (err) => {
+
+      const args = [];
+      const regex = /"([^"]*)"|'([^']*)'|([^\s]+)/g;
+      let match;
+      while ((match = regex.exec(h.cmd)) !== null) {
+        if (match[1] !== undefined) args.push(match[1]);
+        else if (match[2] !== undefined) args.push(match[2]);
+        else args.push(match[3]);
+      }
+
+      if (args.length === 0) continue;
+
+      const file = args[0];
+      const childArgs = args.slice(1);
+
+      const child = execFile(file, childArgs, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
         else console.log(`[hook] "${h.cmd}" executed for event: ${event}`);
       });
+      child.stdin.on('error', () => { /* ignore EPIPE */ });
+      child.stdin.write(jsonStr);
+      child.stdin.end();
     } catch (err) {
       console.error('[hook]', err.message);
     }
