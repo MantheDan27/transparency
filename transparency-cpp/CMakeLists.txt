@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Windows subsystem
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+if(MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+else()
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows")
+endif()
 
 # Source files
 set(SOURCES
@@ -40,6 +44,32 @@ set(HEADERS
 
 add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})
 
+# Add test executable
+add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
+target_include_directories(TransparencyTests PRIVATE src)
+target_compile_definitions(TransparencyTests PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00
+    WINVER=0x0A00
+    _CRT_SECURE_NO_WARNINGS
+)
+if(MSVC)
+    target_compile_options(TransparencyTests PRIVATE
+        /W3
+        /MP
+        /utf-8
+        /Zc:__cplusplus
+    )
+endif()
+target_link_libraries(TransparencyTests PRIVATE
+    ws2_32
+    iphlpapi
+    dnsapi
+)
+
 target_compile_definitions(Transparency PRIVATE
     UNICODE
     _UNICODE
@@ -50,12 +80,14 @@ target_compile_definitions(Transparency PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 
-target_compile_options(Transparency PRIVATE
-    /W3
-    /MP
-    /utf-8
-    /Zc:__cplusplus
-)
+if(MSVC)
+    target_compile_options(Transparency PRIVATE
+        /W3
+        /MP
+        /utf-8
+        /Zc:__cplusplus
+    )
+endif()
 
 target_link_libraries(Transparency PRIVATE
     ws2_32
