@@ -28,6 +28,9 @@
 #include "Resource.h"
 #include "Scanner.h"
 
+using std::string;
+using std::wstring;
+
 using std::wstring;
 
 const wchar_t* TabTools::s_className = L"TransparencyTabTools";
