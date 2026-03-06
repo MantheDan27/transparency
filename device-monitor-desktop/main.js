@@ -1154,7 +1154,6 @@ function scheduleNextRun(s) {
   }
 
   scheduleTimers[s.id] = setTimeout(async () => {
-    console.log(`[schedule] Running ${s.mode} scan for "${s.name}"`);
     try {
       const devices   = await scanNetwork(msg => mainWindow?.webContents.send('scan-progress', msg), { mode: s.mode });
       const anomalies = analyzeAnomalies(devices, lastSnapshot);
