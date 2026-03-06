@@ -88,6 +88,14 @@ static const OuiEntry OUI_TABLE[] = {
     {nullptr, nullptr}
 };
 
+static bool isValidIp(const std::string& ip) {
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    if (inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr)) == 1) return true;
+    if (inet_pton(AF_INET6, ip.c_str(), &(sa6.sin6_addr)) == 1) return true;
+    return false;
+}
+
 static std::string execCommand(const std::string& cmd) {
     std::array<char, 4096> buffer;
     std::string result;
@@ -189,12 +197,14 @@ std::vector<std::string> ScanEngine::generateSubnetIPs(const std::string& ip, in
 }
 
 bool ScanEngine::pingHost(const std::string& ip, int timeoutMs) {
+    if (!isValidIp(ip)) return false;
     std::string cmd = "ping -c 1 -W " + std::to_string(timeoutMs / 1000 + 1) +
                       " " + ip + " > /dev/null 2>&1";
     return system(cmd.c_str()) == 0;
 }
 
 int ScanEngine::measureLatency(const std::string& ip) {
+    if (!isValidIp(ip)) return -1;
     std::string out = execCommand("ping -c 1 -W 2 " + ip + " 2>/dev/null");
     auto pos = out.find("time=");
     if (pos != std::string::npos) {
