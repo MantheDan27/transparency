@@ -10,6 +10,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <algorithm>
 #include <future>
 #include <thread>
@@ -473,23 +474,30 @@ std::vector<int> ScanEngine::ScanPorts(
     std::mutex mtx;
 
     int timeout = gentle ? 1500 : 500;
-    SimpleSemaphore sem(30);
-    std::vector<std::future<void>> futures;
 
-    for (int port : ports) {
-        if (cancelled) break;
-        sem.acquire();
-        futures.push_back(std::async(std::launch::async, [&, p = port]() {
-            auto defer = [&sem]() { sem.release(); };
-            if (!cancelled && TcpProbe(ip, p, timeout)) {
-                std::lock_guard<std::mutex> lk(mtx);
-                openPorts.push_back(p);
+    int num_threads = std::min(30, (int)ports.size());
+    std::vector<std::thread> threads;
+    std::atomic<size_t> idx{0};
+
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([&]() {
+            while (!cancelled) {
+                size_t current_idx = idx.fetch_add(1);
+                if (current_idx >= ports.size()) break;
+
+                int p = ports[current_idx];
+                if (TcpProbe(ip, p, timeout)) {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    openPorts.push_back(p);
+                }
             }
-            defer();
-        }));
+        });
     }
 
-    for (auto& f : futures) f.wait();
+    for (auto& t : threads) {
+        if (t.joinable()) t.join();
+    }
+
     std::sort(openPorts.begin(), openPorts.end());
     return openPorts;
 }
@@ -944,11 +952,7 @@ wstring ScanEngine::FingerprintDeviceType(const Device& d) {
         return false;
     };
     auto vendorContains = [&](const wchar_t* v) {
-        wstring vl = d.vendor;
-        std::transform(vl.begin(), vl.end(), vl.begin(), ::tolower);
-        wstring vf = v;
-        std::transform(vf.begin(), vf.end(), vf.begin(), ::tolower);
-        return vl.find(vf) != wstring::npos;
+        return vendor.find(v) != wstring::npos;
     };
     auto ssdpContains = [&](const wchar_t* v) {
         return ssdp.find(v) != wstring::npos;
@@ -958,39 +962,39 @@ wstring ScanEngine::FingerprintDeviceType(const Device& d) {
     };
 
     // Network equipment
-    if (vendorContains(L"Cisco") || vendorContains(L"Netgear") ||
-        vendorContains(L"Ubiquiti") || vendorContains(L"Linksys") ||
+    if (vendorContains(L"cisco") || vendorContains(L"netgear") ||
+        vendorContains(L"ubiquiti") || vendorContains(L"linksys") ||
         ssdpContains(L"router") || ssdpContains(L"gateway") ||
         hostContains(L"router") || hostContains(L"gateway"))
         return L"Router/Switch";
 
     // NAS
-    if (vendorContains(L"Synology") || vendorContains(L"QNAP") ||
+    if (vendorContains(L"synology") || vendorContains(L"qnap") ||
         (hasPort(5000) && hasPort(5001)) || hasPort(873) ||
         ssdpContains(L"nas") || hostContains(L"nas") || hostContains(L"diskstation"))
         return L"NAS / Storage";
 
     // Printer
-    if (vendorContains(L"Epson") || vendorContains(L"Canon") || vendorContains(L"Brother") ||
-        vendorContains(L"HP") ||
+    if (vendorContains(L"epson") || vendorContains(L"canon") || vendorContains(L"brother") ||
+        vendorContains(L"hp") ||
         hasMdns(L"_ipp") || hasMdns(L"_printer") || hasPort(9100) || hasPort(631) ||
         ssdpContains(L"printer") || hostContains(L"printer"))
         return L"Printer";
 
     // Smart TV / Streaming
-    if (vendorContains(L"Roku") || hasMdns(L"_googlecast") || hasMdns(L"_airplay") ||
+    if (vendorContains(L"roku") || hasMdns(L"_googlecast") || hasMdns(L"_airplay") ||
         hasMdns(L"_raop") || ssdpContains(L"tv") || ssdpContains(L"roku") ||
         ssdpContains(L"chromecast") || hostContains(L"appletv") || hostContains(L"roku"))
         return L"Smart TV / Streaming";
 
     // Smart Speaker
-    if (vendorContains(L"Sonos") || hasMdns(L"_sonos") || ssdpContains(L"sonos") ||
-        vendorContains(L"Bose") || vendorContains(L"Google") && hasPort(8008) ||
-        vendorContains(L"Amazon") || ssdpContains(L"echo") || ssdpContains(L"alexa"))
+    if (vendorContains(L"sonos") || hasMdns(L"_sonos") || ssdpContains(L"sonos") ||
+        vendorContains(L"bose") || vendorContains(L"google") && hasPort(8008) ||
+        vendorContains(L"amazon") || ssdpContains(L"echo") || ssdpContains(L"alexa"))
         return L"Smart Speaker";
 
     // Smart Home Hub
-    if (vendorContains(L"Nest") || vendorContains(L"Philips Hue") ||
+    if (vendorContains(L"nest") || vendorContains(L"philips hue") ||
         hasMdns(L"_homekit") || hasMdns(L"_matter") ||
         ssdpContains(L"homekit") || ssdpContains(L"hue bridge") ||
         hostContains(L"homehub") || hostContains(L"home assistant") || hasPort(8123))
@@ -1002,7 +1006,7 @@ wstring ScanEngine::FingerprintDeviceType(const Device& d) {
         return L"IoT Device";
 
     // Raspberry Pi
-    if (vendorContains(L"Raspberry"))
+    if (vendorContains(L"raspberry"))
         return L"Single-Board Computer";
 
     // Desktop PC / Windows
@@ -1014,17 +1018,17 @@ wstring ScanEngine::FingerprintDeviceType(const Device& d) {
         return L"Linux Server";
 
     // macOS
-    if (vendorContains(L"Apple") && (hasMdns(L"_workstation") || hasPort(548)))
+    if (vendorContains(L"apple") && (hasMdns(L"_workstation") || hasPort(548)))
         return L"Mac";
 
     // Mobile/Phone
-    if (vendorContains(L"Apple") || vendorContains(L"Samsung") ||
-        vendorContains(L"Xiaomi") || vendorContains(L"Huawei"))
+    if (vendorContains(L"apple") || vendorContains(L"samsung") ||
+        vendorContains(L"xiaomi") || vendorContains(L"huawei"))
         return L"Mobile Device";
 
     // Generic computer
-    if (vendorContains(L"Dell") || vendorContains(L"HP") || vendorContains(L"Lenovo") ||
-        vendorContains(L"Intel") || vendorContains(L"Microsoft"))
+    if (vendorContains(L"dell") || vendorContains(L"hp") || vendorContains(L"lenovo") ||
+        vendorContains(L"intel") || vendorContains(L"microsoft"))
         return L"Computer";
 
     return L"Unknown Device";
@@ -1129,24 +1133,27 @@ void ScanEngine::FillConfidenceAlternatives(Device& d) {
     wstring vendor = d.vendor; std::transform(vendor.begin(), vendor.end(), vendor.begin(), ::tolower);
     wstring ssdp   = d.ssdpInfo; std::transform(ssdp.begin(), ssdp.end(), ssdp.begin(), ::tolower);
     wstring host   = d.hostname; std::transform(host.begin(), host.end(), host.begin(), ::tolower);
-    auto vendorHas = [&](const wchar_t* v) { wstring vl=v; std::transform(vl.begin(),vl.end(),vl.begin(),::tolower); return vendor.find(vl)!=wstring::npos; };
-    auto ssdpHas   = [&](const wchar_t* v) { wstring vl=v; std::transform(vl.begin(),vl.end(),vl.begin(),::tolower); return ssdp.find(vl)!=wstring::npos; };
-    auto hostHas   = [&](const wchar_t* v) { wstring vl=v; std::transform(vl.begin(),vl.end(),vl.begin(),::tolower); return host.find(vl)!=wstring::npos; };
+
+    // Helper to do a case-insensitive match against a lowercased input string,
+    // where 'v' must already be lowercased before calling this lambda.
+    auto vendorHas = [&](const wchar_t* v) { return vendor.find(v) != wstring::npos; };
+    auto ssdpHas   = [&](const wchar_t* v) { return ssdp.find(v) != wstring::npos; };
+    auto hostHas   = [&](const wchar_t* v) { return host.find(v) != wstring::npos; };
 
     auto add = [&](const wchar_t* type, int sc) { scores.push_back({ type, sc }); };
 
-    add(L"Router/Switch",      (vendorHas(L"Cisco")||vendorHas(L"Netgear")||vendorHas(L"Ubiquiti")||ssdpHas(L"router")||hostHas(L"router")) ? 80 : 5);
-    add(L"NAS / Storage",      (vendorHas(L"Synology")||vendorHas(L"QNAP")||(hasPort(5000)&&hasPort(5001))||hostHas(L"nas")) ? 80 : 5);
-    add(L"Printer",            (hasMdns(L"_ipp")||hasMdns(L"_printer")||hasPort(9100)||hasPort(631)||vendorHas(L"Epson")||vendorHas(L"Canon")||vendorHas(L"Brother")) ? 80 : 5);
-    add(L"Smart TV / Streaming",(hasMdns(L"_googlecast")||hasMdns(L"_airplay")||vendorHas(L"Roku")||ssdpHas(L"tv")) ? 80 : 5);
-    add(L"Smart Speaker",      (hasMdns(L"_sonos")||vendorHas(L"Sonos")||vendorHas(L"Amazon")||ssdpHas(L"echo")) ? 80 : 5);
-    add(L"Smart Home Hub",     (hasMdns(L"_homekit")||hasMdns(L"_matter")||vendorHas(L"Philips Hue")||hasPort(8123)) ? 80 : 5);
+    add(L"Router/Switch",      (vendorHas(L"cisco")||vendorHas(L"netgear")||vendorHas(L"ubiquiti")||ssdpHas(L"router")||hostHas(L"router")) ? 80 : 5);
+    add(L"NAS / Storage",      (vendorHas(L"synology")||vendorHas(L"qnap")||(hasPort(5000)&&hasPort(5001))||hostHas(L"nas")) ? 80 : 5);
+    add(L"Printer",            (hasMdns(L"_ipp")||hasMdns(L"_printer")||hasPort(9100)||hasPort(631)||vendorHas(L"epson")||vendorHas(L"canon")||vendorHas(L"brother")) ? 80 : 5);
+    add(L"Smart TV / Streaming",(hasMdns(L"_googlecast")||hasMdns(L"_airplay")||vendorHas(L"roku")||ssdpHas(L"tv")) ? 80 : 5);
+    add(L"Smart Speaker",      (hasMdns(L"_sonos")||vendorHas(L"sonos")||vendorHas(L"amazon")||ssdpHas(L"echo")) ? 80 : 5);
+    add(L"Smart Home Hub",     (hasMdns(L"_homekit")||hasMdns(L"_matter")||vendorHas(L"philips hue")||hasPort(8123)) ? 80 : 5);
     add(L"IoT Device",         (hasPort(1883)||hasPort(8883)||hostHas(L"esp")||hostHas(L"sensor")) ? 75 : 5);
     add(L"Windows PC",         (hasPort(3389)||hasPort(445)||(hasPort(139)&&hasPort(135))) ? 80 : 5);
     add(L"Linux Server",       (hasPort(22)&&(hasPort(80)||hasPort(443)||hasPort(8080))) ? 75 : 5);
-    add(L"Mac",                (vendorHas(L"Apple")&&(hasMdns(L"_workstation")||hasPort(548))) ? 80 : 5);
-    add(L"Mobile Device",      (vendorHas(L"Apple")||vendorHas(L"Samsung")||vendorHas(L"Xiaomi")) ? 50 : 5);
-    add(L"Computer",           (vendorHas(L"Dell")||vendorHas(L"HP")||vendorHas(L"Lenovo")||vendorHas(L"Intel")) ? 60 : 5);
+    add(L"Mac",                (vendorHas(L"apple")&&(hasMdns(L"_workstation")||hasPort(548))) ? 80 : 5);
+    add(L"Mobile Device",      (vendorHas(L"apple")||vendorHas(L"samsung")||vendorHas(L"xiaomi")) ? 50 : 5);
+    add(L"Computer",           (vendorHas(L"dell")||vendorHas(L"hp")||vendorHas(L"lenovo")||vendorHas(L"intel")) ? 60 : 5);
     add(L"Unknown Device",     15);
 
     // Sort descending
@@ -1595,12 +1602,13 @@ std::future<ScanResult> ScanEngine::QuickScan(
         auto ssdp = fSsdp.get();
 
         // Add IPs discovered via mDNS/SSDP but not in ping sweep
+        std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
 
@@ -1633,12 +1641,13 @@ std::future<ScanResult> ScanEngine::StandardScan(
         auto ssdp = fSsdp.get();
 
         // Merge
+        std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
 
@@ -1670,12 +1679,13 @@ std::future<ScanResult> ScanEngine::DeepScan(
         auto mdns = fMdns.get();
         auto ssdp = fSsdp.get();
 
+        std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
 

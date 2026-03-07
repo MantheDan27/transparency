@@ -15,6 +15,7 @@ const { createCloudMockService } = require('./cloud-mock');
 const http = require('http');
 
 const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const dnsLookup   = util.promisify(dns.lookup);
 const dnsReverse  = util.promisify(dns.reverse);
 const dnsResolve4 = util.promisify(dns.resolve4);
@@ -406,9 +407,7 @@ function updateDeviceHistory(devices) {
 // ── Cloud mock service ────────────────────────────────────────────────────────
 function startCloud() {
   const mockApp = createCloudMockService();
-  cloudServer = mockApp.listen(CLOUD_PORT, '127.0.0.1', () =>
-    console.log(`[cloud-mock] http://127.0.0.1:${CLOUD_PORT}`)
-  );
+  cloudServer = mockApp.listen(CLOUD_PORT, '127.0.0.1');
 }
 
 const cloud = (url, opts = {}) =>
@@ -591,10 +590,13 @@ ipcMain.handle('delete-snapshot', async (_e, id) => {
 // ── IPC: Diagnostic tools ─────────────────────────────────────────────────────
 ipcMain.handle('ping-host', async (_e, host, count = 4) => {
   try {
-    const cmd = process.platform === 'win32'
-      ? `ping -n ${count} ${host}`
-      : `ping -c ${count} ${host}`;
-    const { stdout } = await execPromise(cmd, { timeout: 15000 });
+    if (typeof host !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(host)) {
+      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    }
+    const isWin = process.platform === 'win32';
+    const cmd = 'ping';
+    const args = isWin ? ['-n', count.toString(), host] : ['-c', count.toString(), host];
+    const { stdout } = await execFilePromise(cmd, args, { timeout: 15000 });
     // Parse latency from output
     let avgMs = null;
     const winMatch = stdout.match(/Average\s*=\s*(\d+)ms/i);
@@ -609,8 +611,13 @@ ipcMain.handle('ping-host', async (_e, host, count = 4) => {
 
 ipcMain.handle('traceroute-host', async (_e, host) => {
   try {
-    const cmd = process.platform === 'win32' ? `tracert -d ${host}` : `traceroute -n ${host}`;
-    const { stdout } = await execPromise(cmd, { timeout: 30000 });
+    if (typeof host !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(host)) {
+      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    }
+    const isWin = process.platform === 'win32';
+    const cmd = isWin ? 'tracert' : 'traceroute';
+    const args = isWin ? ['-d', host] : ['-n', host];
+    const { stdout } = await execFilePromise(cmd, args, { timeout: 30000 });
     return { success: true, output: stdout };
   } catch (err) {
     return { success: false, output: err.stdout || '', error: err.message };
@@ -1154,7 +1161,6 @@ function scheduleNextRun(s) {
   }
 
   scheduleTimers[s.id] = setTimeout(async () => {
-    console.log(`[schedule] Running ${s.mode} scan for "${s.name}"`);
     try {
       const devices   = await scanNetwork(msg => mainWindow?.webContents.send('scan-progress', msg), { mode: s.mode });
       const anomalies = analyzeAnomalies(devices, lastSnapshot);
@@ -1172,7 +1178,6 @@ function scheduleNextRun(s) {
         const downloadsPath = require('electron').app.getPath('downloads');
         const filename = path.join(downloadsPath, `transparency-report-${new Date().toISOString().slice(0,10)}-${s.name.replace(/\s+/g,'-')}.json`);
         fs.writeFileSync(filename, JSON.stringify(exportData, null, 2));
-        console.log(`[schedule] Auto-exported to ${filename}`);
       }
     } catch (err) {
       console.error('[schedule]', err);
@@ -1252,10 +1257,18 @@ function runScriptHooks(event, payload = {}) {
       const childArgs = args.slice(1);
 
       const child = execFile(file, childArgs, { timeout: 15000 }, (err) => {
+      // Parse command string into file and args (simplified parsing)
+      const parts = h.cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+      if (parts.length === 0) continue;
+
+      const execName = parts[0].replace(/"/g, '');
+      const execArgs = parts.slice(1).map(p => p.replace(/"/g, ''));
+
+      const child = execFile(execName, execArgs, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
-        else console.log(`[hook] "${h.cmd}" executed for event: ${event}`);
       });
       child.stdin.on('error', () => { /* ignore EPIPE */ });
+
       child.stdin.write(jsonStr);
       child.stdin.end();
     } catch (err) {
@@ -1387,3 +1400,8 @@ function restartLocalApiWithAuth() {
 
 // Script hooks are fired from the existing scan-network handler above
 // and from runMonitorScan — no duplicate handler needed here.
+
+module.exports = {
+  saveJSON
+};
+module.exports = { isInQuietHours, get monitoringConfig() { return monitoringConfig; }, set monitoringConfig(val) { monitoringConfig = val; } };
