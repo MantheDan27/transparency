@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Windows subsystem
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+if(MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+else()
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows -municode")
+endif()
 
 # Source files
 set(SOURCES
@@ -50,12 +54,14 @@ target_compile_definitions(Transparency PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 
-target_compile_options(Transparency PRIVATE
-    /W3
-    /MP
-    /utf-8
-    /Zc:__cplusplus
-)
+if(MSVC)
+    target_compile_options(Transparency PRIVATE
+        /W3
+        /MP
+        /utf-8
+        /Zc:__cplusplus
+    )
+endif()
 
 target_link_libraries(Transparency PRIVATE
     ws2_32
