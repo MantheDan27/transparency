@@ -129,22 +129,27 @@ namespace TransparencyApp.Services
         }
 
         // ── ARP table ─────────────────────────────────────────────────────────
-        private static async Task<Dictionary<string, string>> GetArpTableAsync()
+        protected internal virtual async Task<string> RunArpCommandAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var psi = new ProcessStartInfo("arp", "-a")
+                {
+                    RedirectStandardOutput = true,
+                    UseShellExecute  = false,
+                    CreateNoWindow   = true
+                };
+                using var proc = Process.Start(psi);
+                return proc?.StandardOutput.ReadToEnd() ?? "";
+            });
+        }
+
+        protected internal async Task<Dictionary<string, string>> GetArpTableAsync()
         {
             var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var output = await Task.Run(() =>
-                {
-                    var psi = new ProcessStartInfo("arp", "-a")
-                    {
-                        RedirectStandardOutput = true,
-                        UseShellExecute  = false,
-                        CreateNoWindow   = true
-                    };
-                    using var proc = Process.Start(psi);
-                    return proc?.StandardOutput.ReadToEnd() ?? "";
-                });
+                var output = await RunArpCommandAsync();
 
                 foreach (var line in output.Split('\n'))
                 {

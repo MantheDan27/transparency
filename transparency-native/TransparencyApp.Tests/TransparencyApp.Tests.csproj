@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TransparencyApp\TransparencyApp.csproj" />
+    <Compile Include="..\TransparencyApp\Services.cs" Link="Services.cs" />
+    <Compile Include="..\TransparencyApp\Models.cs" Link="Models.cs" />
   </ItemGroup>
 
 </Project>
