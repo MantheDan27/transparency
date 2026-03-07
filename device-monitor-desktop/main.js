@@ -591,6 +591,9 @@ ipcMain.handle('delete-snapshot', async (_e, id) => {
 // ── IPC: Diagnostic tools ─────────────────────────────────────────────────────
 ipcMain.handle('ping-host', async (_e, host, count = 4) => {
   try {
+    if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
+      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    }
     const cmd = process.platform === 'win32'
       ? `ping -n ${count} ${host}`
       : `ping -c ${count} ${host}`;
@@ -609,6 +612,9 @@ ipcMain.handle('ping-host', async (_e, host, count = 4) => {
 
 ipcMain.handle('traceroute-host', async (_e, host) => {
   try {
+    if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
+      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    }
     const cmd = process.platform === 'win32' ? `tracert -d ${host}` : `traceroute -n ${host}`;
     const { stdout } = await execPromise(cmd, { timeout: 30000 });
     return { success: true, output: stdout };
