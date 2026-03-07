@@ -1,8 +1,14 @@
 #include "Scanner.h"
 #include "Models.h"
 #include <iostream>
-#include <cassert>
 #include <string>
+#include <cstdlib>
+
+#define ASSERT_TRUE(cond, msg) \
+    if (!(cond)) { \
+        std::cerr << "ERROR: " << msg << " (" << #cond << ") at " << __FILE__ << ":" << __LINE__ << std::endl; \
+        std::exit(1); \
+    }
 
 // Helper to check for a specific anomaly type and target IP
 bool hasAnomaly(const std::vector<Anomaly>& anomalies, const std::wstring& type, const std::wstring& deviceIp = L"") {
@@ -30,8 +36,8 @@ void testNewDevice() {
 
     auto anomalies = ScanEngine::AnalyzeAnomalies(current, previous);
 
-    assert(hasAnomaly(anomalies, L"new_device", L"192.168.1.100"));
-    assert(hasAnomaly(anomalies, L"device_offline", L"192.168.1.1"));
+    ASSERT_TRUE(hasAnomaly(anomalies, L"new_device", L"192.168.1.100"), "Missing new_device anomaly");
+    ASSERT_TRUE(hasAnomaly(anomalies, L"device_offline", L"192.168.1.1"), "Missing device_offline anomaly");
     std::cout << "testNewDevice passed" << std::endl;
 }
 
@@ -47,7 +53,7 @@ void testRiskyPort() {
     current.devices.push_back(dev);
 
     auto anomalies = ScanEngine::AnalyzeAnomalies(current, previous);
-    assert(hasAnomaly(anomalies, L"risky_port", L"192.168.1.100"));
+    ASSERT_TRUE(hasAnomaly(anomalies, L"risky_port", L"192.168.1.100"), "Missing risky_port anomaly");
 
     // Check specific ports are flagged
     bool found23 = false, found445 = false;
@@ -59,7 +65,7 @@ void testRiskyPort() {
             }
         }
     }
-    assert(found23 && found445);
+    ASSERT_TRUE(found23 && found445, "Did not find expected risky ports (23, 445)");
     std::cout << "testRiskyPort passed" << std::endl;
 }
 
@@ -76,7 +82,7 @@ void testPortChanged() {
     current.devices.push_back(dev);
 
     auto anomalies = ScanEngine::AnalyzeAnomalies(current, previous);
-    assert(hasAnomaly(anomalies, L"port_changed", L"192.168.1.100"));
+    ASSERT_TRUE(hasAnomaly(anomalies, L"port_changed", L"192.168.1.100"), "Missing port_changed anomaly");
 
     // Check that 8080 is listed as affected
     bool found8080 = false;
@@ -87,7 +93,7 @@ void testPortChanged() {
             }
         }
     }
-    assert(found8080);
+    ASSERT_TRUE(found8080, "Did not find expected new port 8080 in affectedPorts");
     std::cout << "testPortChanged passed" << std::endl;
 }
 
@@ -106,7 +112,7 @@ void testIpChanged() {
     current.devices.push_back(curDev);
 
     auto anomalies = ScanEngine::AnalyzeAnomalies(current, previous);
-    assert(hasAnomaly(anomalies, L"ip_changed", L"192.168.1.101"));
+    ASSERT_TRUE(hasAnomaly(anomalies, L"ip_changed", L"192.168.1.101"), "Missing ip_changed anomaly");
     std::cout << "testIpChanged passed" << std::endl;
 }
 
@@ -122,7 +128,7 @@ void testDeviceOffline() {
     // No devices in current
 
     auto anomalies = ScanEngine::AnalyzeAnomalies(current, previous);
-    assert(hasAnomaly(anomalies, L"device_offline", L"192.168.1.100"));
+    ASSERT_TRUE(hasAnomaly(anomalies, L"device_offline", L"192.168.1.100"), "Missing device_offline anomaly");
     std::cout << "testDeviceOffline passed" << std::endl;
 }
 
