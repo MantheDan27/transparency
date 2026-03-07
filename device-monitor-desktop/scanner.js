@@ -5,10 +5,11 @@ const net   = require('net');
 const tls   = require('tls');
 const dns   = require('dns');
 const dgram = require('dgram');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const util  = require('util');
 
 const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const dnsReverse  = util.promisify(dns.reverse);
 
 // ── Port catalogues ────────────────────────────────────────────────────────────
@@ -287,16 +288,18 @@ function lookupVendor(mac) {
 
 // ── Ping with latency measurement ─────────────────────────────────────────────
 async function pingHost(ip, gentle = false) {
-  if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+  if (typeof ip !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(ip)) {
     return { alive: false, latencyMs: null };
   }
   const timeout = gentle ? 2000 : 1000;
-  const cmd = process.platform === 'win32'
-    ? `ping -n 1 -w ${timeout} ${ip}`
-    : `ping -c 1 -W ${Math.ceil(timeout / 1000)} ${ip}`;
+  const isWin = process.platform === 'win32';
+  const cmd = 'ping';
+  const args = isWin
+    ? ['-n', '1', '-w', timeout.toString(), ip]
+    : ['-c', '1', '-W', Math.ceil(timeout / 1000).toString(), ip];
   const start = Date.now();
   try {
-    await execPromise(cmd, { timeout: timeout + 1500 });
+    await execFilePromise(cmd, args, { timeout: timeout + 1500 });
     return { alive: true, latencyMs: Date.now() - start };
   } catch {
     // Fallback: TCP probe on common ports
@@ -315,7 +318,7 @@ let arpCachePromise = null;
 let arpCacheTime = 0;
 
 async function getMac(ip) {
-  if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+  if (typeof ip !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(ip)) {
     return 'Unknown';
   }
   if (Date.now() - arpCacheTime > 5000 || !arpCachePromise) {
