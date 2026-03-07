@@ -10,6 +10,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <algorithm>
 #include <future>
 #include <thread>
@@ -1594,12 +1595,13 @@ std::future<ScanResult> ScanEngine::QuickScan(
         auto ssdp = fSsdp.get();
 
         // Add IPs discovered via mDNS/SSDP but not in ping sweep
+        std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
 
@@ -1632,12 +1634,13 @@ std::future<ScanResult> ScanEngine::StandardScan(
         auto ssdp = fSsdp.get();
 
         // Merge
+        std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
 
@@ -1669,12 +1672,13 @@ std::future<ScanResult> ScanEngine::DeepScan(
         auto mdns = fMdns.get();
         auto ssdp = fSsdp.get();
 
+        std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
-            if (std::find(liveIPs.begin(), liveIPs.end(), kv.first) == liveIPs.end())
+            if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
 
