@@ -587,16 +587,24 @@ ipcMain.handle('delete-snapshot', async (_e, id) => {
   return { success: true };
 });
 
+function isValidHost(host) {
+  // Allow IPv4, IPv6, and standard hostnames. Prevent command injection characters.
+  return /^[a-zA-Z0-9.-]+$/.test(host) || net.isIP(host) !== 0;
+}
+
 // ── IPC: Diagnostic tools ─────────────────────────────────────────────────────
 ipcMain.handle('ping-host', async (_e, host, count = 4) => {
   try {
-    if (typeof host !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(host)) {
-      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    if (!isValidHost(host)) {
+      throw new Error('Invalid host provided');
     }
-    const isWin = process.platform === 'win32';
-    const cmd = 'ping';
-    const args = isWin ? ['-n', count.toString(), host] : ['-c', count.toString(), host];
-    const { stdout } = await execFilePromise(cmd, args, { timeout: 15000 });
+
+    const exe = 'ping';
+    const args = process.platform === 'win32'
+      ? ['-n', count.toString(), host]
+      : ['-c', count.toString(), host];
+
+    const { stdout } = await execFilePromise(exe, args, { timeout: 15000 });
     // Parse latency from output
     let avgMs = null;
     const winMatch = stdout.match(/Average\s*=\s*(\d+)ms/i);
@@ -611,13 +619,14 @@ ipcMain.handle('ping-host', async (_e, host, count = 4) => {
 
 ipcMain.handle('traceroute-host', async (_e, host) => {
   try {
-    if (typeof host !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(host)) {
-      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    if (!isValidHost(host)) {
+      throw new Error('Invalid host provided');
     }
-    const isWin = process.platform === 'win32';
-    const cmd = isWin ? 'tracert' : 'traceroute';
-    const args = isWin ? ['-d', host] : ['-n', host];
-    const { stdout } = await execFilePromise(cmd, args, { timeout: 30000 });
+
+    const exe = process.platform === 'win32' ? 'tracert' : 'traceroute';
+    const args = process.platform === 'win32' ? ['-d', host] : ['-n', host];
+
+    const { stdout } = await execFilePromise(exe, args, { timeout: 30000 });
     return { success: true, output: stdout };
   } catch (err) {
     return { success: false, output: err.stdout || '', error: err.message };
