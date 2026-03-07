@@ -1242,6 +1242,21 @@ function runScriptHooks(event, payload = {}) {
     try {
       const jsonStr = JSON.stringify(payload);
 
+      const args = [];
+      const regex = /"([^"]*)"|'([^']*)'|([^\s]+)/g;
+      let match;
+      while ((match = regex.exec(h.cmd)) !== null) {
+        if (match[1] !== undefined) args.push(match[1]);
+        else if (match[2] !== undefined) args.push(match[2]);
+        else args.push(match[3]);
+      }
+
+      if (args.length === 0) continue;
+
+      const file = args[0];
+      const childArgs = args.slice(1);
+
+      const child = execFile(file, childArgs, { timeout: 15000 }, (err) => {
       // Parse command string into file and args (simplified parsing)
       const parts = h.cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
       if (parts.length === 0) continue;
@@ -1252,6 +1267,7 @@ function runScriptHooks(event, payload = {}) {
       const child = execFile(execName, execArgs, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
       });
+      child.stdin.on('error', () => { /* ignore EPIPE */ });
 
       child.stdin.write(jsonStr);
       child.stdin.end();
