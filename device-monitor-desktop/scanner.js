@@ -5,10 +5,11 @@ const net   = require('net');
 const tls   = require('tls');
 const dns   = require('dns');
 const dgram = require('dgram');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const util  = require('util');
 
 const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const dnsReverse  = util.promisify(dns.reverse);
 
 // ── Port catalogues ────────────────────────────────────────────────────────────
@@ -291,12 +292,14 @@ async function pingHost(ip, gentle = false) {
     return { alive: false, latencyMs: null };
   }
   const timeout = gentle ? 2000 : 1000;
-  const cmd = process.platform === 'win32'
-    ? `ping -n 1 -w ${timeout} ${ip}`
-    : `ping -c 1 -W ${Math.ceil(timeout / 1000)} ${ip}`;
+  const isWin = process.platform === 'win32';
+  const cmd = 'ping';
+  const args = isWin
+    ? ['-n', '1', '-w', timeout.toString(), ip]
+    : ['-c', '1', '-W', Math.ceil(timeout / 1000).toString(), ip];
   const start = Date.now();
   try {
-    await execPromise(cmd, { timeout: timeout + 1500 });
+    await execFilePromise(cmd, args, { timeout: timeout + 1500 });
     return { alive: true, latencyMs: Date.now() - start };
   } catch {
     // Fallback: TCP probe on common ports
@@ -317,17 +320,17 @@ async function getMac(ip) {
   }
   try {
     if (process.platform === 'linux') {
-      const { stdout } = await execPromise('cat /proc/net/arp', { timeout: 2000 });
+      const { stdout } = await execFilePromise('cat', ['/proc/net/arp'], { timeout: 2000 });
       for (const line of stdout.split('\n').slice(1)) {
         const p = line.trim().split(/\s+/);
         if (p[0] === ip && p[3] && p[3] !== '00:00:00:00:00:00') return p[3].toUpperCase();
       }
     } else if (process.platform === 'darwin') {
-      const { stdout } = await execPromise(`arp -n ${ip}`, { timeout: 2000 });
+      const { stdout } = await execFilePromise('arp', ['-n', ip], { timeout: 2000 });
       const m = stdout.match(/([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})/i);
       if (m) return m[1].toUpperCase();
     } else if (process.platform === 'win32') {
-      const { stdout } = await execPromise(`arp -a ${ip}`, { timeout: 2000 });
+      const { stdout } = await execFilePromise('arp', ['-a', ip], { timeout: 2000 });
       const m = stdout.match(/([0-9a-f]{2}(?:-[0-9a-f]{2}){5})/i);
       if (m) return m[1].replace(/-/g, ':').toUpperCase();
     }

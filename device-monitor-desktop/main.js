@@ -5,7 +5,7 @@ const path  = require('path');
 const os    = require('os');
 const net   = require('net');
 const dns   = require('dns');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const util  = require('util');
 const axios = require('axios');
 const fs    = require('fs');
@@ -15,6 +15,7 @@ const { createCloudMockService } = require('./cloud-mock');
 const http = require('http');
 
 const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const dnsLookup   = util.promisify(dns.lookup);
 const dnsReverse  = util.promisify(dns.reverse);
 const dnsResolve4 = util.promisify(dns.resolve4);
@@ -592,10 +593,10 @@ ipcMain.handle('ping-host', async (_e, host, count = 4) => {
     if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
       return { success: false, output: '', error: 'Invalid hostname or IP address' };
     }
-    const cmd = process.platform === 'win32'
-      ? `ping -n ${count} ${host}`
-      : `ping -c ${count} ${host}`;
-    const { stdout } = await execPromise(cmd, { timeout: 15000 });
+    const isWin = process.platform === 'win32';
+    const cmd = 'ping';
+    const args = isWin ? ['-n', count.toString(), host] : ['-c', count.toString(), host];
+    const { stdout } = await execFilePromise(cmd, args, { timeout: 15000 });
     // Parse latency from output
     let avgMs = null;
     const winMatch = stdout.match(/Average\s*=\s*(\d+)ms/i);
@@ -613,8 +614,10 @@ ipcMain.handle('traceroute-host', async (_e, host) => {
     if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
       return { success: false, output: '', error: 'Invalid hostname or IP address' };
     }
-    const cmd = process.platform === 'win32' ? `tracert -d ${host}` : `traceroute -n ${host}`;
-    const { stdout } = await execPromise(cmd, { timeout: 30000 });
+    const isWin = process.platform === 'win32';
+    const cmd = isWin ? 'tracert' : 'traceroute';
+    const args = isWin ? ['-d', host] : ['-n', host];
+    const { stdout } = await execFilePromise(cmd, args, { timeout: 30000 });
     return { success: true, output: stdout };
   } catch (err) {
     return { success: false, output: err.stdout || '', error: err.message };
@@ -1238,12 +1241,20 @@ function runScriptHooks(event, payload = {}) {
   for (const h of hooks) {
     try {
       const jsonStr = JSON.stringify(payload);
-      const cmd = process.platform === 'win32'
-        ? `echo ${jsonStr} | ${h.cmd}`
-        : `echo '${jsonStr.replace(/'/g, "'\\''")}' | ${h.cmd}`;
-      exec(cmd, { timeout: 15000 }, (err) => {
+
+      // Parse command string into file and args (simplified parsing)
+      const parts = h.cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+      if (parts.length === 0) continue;
+
+      const execName = parts[0].replace(/"/g, '');
+      const execArgs = parts.slice(1).map(p => p.replace(/"/g, ''));
+
+      const child = execFile(execName, execArgs, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
       });
+
+      child.stdin.write(jsonStr);
+      child.stdin.end();
     } catch (err) {
       console.error('[hook]', err.message);
     }
