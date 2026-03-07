@@ -511,14 +511,22 @@ static void WToU8EscAppend(const std::wstring& w, std::string& out) {
         pBuf = &heapBuf[0];
     }
 
-    for (int i = 0; i < n - 1; i++) {
-        unsigned char c = (unsigned char)pBuf[i];
-        if      (c == '"')  out.append("\\\"", 2);
-        else if (c == '\\') out.append("\\\\", 2);
-        else if (c == '\n') out.append("\\n", 2);
-        else if (c == '\r') out.append("\\r", 2);
-        else if (c < 0x20)  out.push_back(' ');
-        else                out.push_back(c);
+static std::string JEsc(const std::string& s) {
+    std::string o;
+    size_t expected_escapes = 0;
+    for (unsigned char c : s) {
+        if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c < 0x20) {
+            expected_escapes++;
+        }
+    }
+    o.reserve(s.length() + expected_escapes);
+    for (unsigned char c : s) {
+        if      (c == '"')  o += "\\\"";
+        else if (c == '\\') o += "\\\\";
+        else if (c == '\n') o += "\\n";
+        else if (c == '\r') o += "\\r";
+        else if (c < 0x20)  o += " ";
+        else                o += c;
     }
 }
 

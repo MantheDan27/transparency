@@ -17,7 +17,7 @@
     "express": "^4.22.1"
   },
   "devDependencies": {
-    "electron": "latest",
+    "electron": "^40.8.0",
     "electron-builder": "latest"
   },
   "author": "Security Team",
