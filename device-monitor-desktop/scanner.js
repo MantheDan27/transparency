@@ -288,7 +288,7 @@ function lookupVendor(mac) {
 
 // ── Ping with latency measurement ─────────────────────────────────────────────
 async function pingHost(ip, gentle = false) {
-  if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+  if (typeof ip !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(ip)) {
     return { alive: false, latencyMs: null };
   }
   const timeout = gentle ? 2000 : 1000;
@@ -315,7 +315,7 @@ async function pingHost(ip, gentle = false) {
 
 // ── ARP table lookup ──────────────────────────────────────────────────────────
 async function getMac(ip) {
-  if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+  if (typeof ip !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(ip)) {
     return 'Unknown';
   }
   try {

@@ -590,7 +590,7 @@ ipcMain.handle('delete-snapshot', async (_e, id) => {
 // ── IPC: Diagnostic tools ─────────────────────────────────────────────────────
 ipcMain.handle('ping-host', async (_e, host, count = 4) => {
   try {
-    if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
+    if (typeof host !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(host)) {
       return { success: false, output: '', error: 'Invalid hostname or IP address' };
     }
     const isWin = process.platform === 'win32';
@@ -611,7 +611,7 @@ ipcMain.handle('ping-host', async (_e, host, count = 4) => {
 
 ipcMain.handle('traceroute-host', async (_e, host) => {
   try {
-    if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
+    if (typeof host !== 'string' || !/^(?!-)[a-zA-Z0-9.:-]+$/.test(host)) {
       return { success: false, output: '', error: 'Invalid hostname or IP address' };
     }
     const isWin = process.platform === 'win32';
