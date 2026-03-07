@@ -311,28 +311,44 @@ async function pingHost(ip, gentle = false) {
 }
 
 // ── ARP table lookup ──────────────────────────────────────────────────────────
+let arpCachePromise = null;
+let arpCacheTime = 0;
+
 async function getMac(ip) {
   if (typeof ip !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
     return 'Unknown';
   }
-  try {
-    if (process.platform === 'linux') {
-      const { stdout } = await execPromise('cat /proc/net/arp', { timeout: 2000 });
-      for (const line of stdout.split('\n').slice(1)) {
-        const p = line.trim().split(/\s+/);
-        if (p[0] === ip && p[3] && p[3] !== '00:00:00:00:00:00') return p[3].toUpperCase();
-      }
-    } else if (process.platform === 'darwin') {
-      const { stdout } = await execPromise(`arp -n ${ip}`, { timeout: 2000 });
-      const m = stdout.match(/([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})/i);
-      if (m) return m[1].toUpperCase();
-    } else if (process.platform === 'win32') {
-      const { stdout } = await execPromise(`arp -a ${ip}`, { timeout: 2000 });
-      const m = stdout.match(/([0-9a-f]{2}(?:-[0-9a-f]{2}){5})/i);
-      if (m) return m[1].replace(/-/g, ':').toUpperCase();
-    }
-  } catch { /* ignore */ }
-  return 'Unknown';
+  if (Date.now() - arpCacheTime > 5000 || !arpCachePromise) {
+    arpCacheTime = Date.now();
+    arpCachePromise = (async () => {
+      const cache = new Map();
+      try {
+        if (process.platform === 'linux') {
+          const { stdout } = await execPromise('cat /proc/net/arp', { timeout: 2000 });
+          for (const line of stdout.split('\n').slice(1)) {
+            const p = line.trim().split(/\s+/);
+            if (p[0] && p[3]) cache.set(p[0], p[3].toUpperCase());
+          }
+        } else if (process.platform === 'darwin') {
+          const { stdout } = await execPromise('arp -an', { timeout: 2000 });
+          for (const line of stdout.split('\n')) {
+            const m = line.match(/\(([\d.]+)\)\s+at\s+([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})/i);
+            if (m) cache.set(m[1], m[2].split(':').map(x => x.padStart(2, '0')).join(':').toUpperCase());
+          }
+        } else if (process.platform === 'win32') {
+          const { stdout } = await execPromise('arp -a', { timeout: 2000 });
+          for (const line of stdout.split('\n')) {
+            const m = line.match(/^\s*([\d.]+)\s+([0-9a-f]{2}(?:-[0-9a-f]{2}){5})/i);
+            if (m) cache.set(m[1], m[2].replace(/-/g, ':').toUpperCase());
+          }
+        }
+      } catch { /* ignore */ }
+      return cache;
+    })();
+  }
+  const cache = await arpCachePromise;
+  const mac = cache.get(ip);
+  return mac && mac !== '00:00:00:00:00:00' ? mac : 'Unknown';
 }
 
 // ── TCP port probe ────────────────────────────────────────────────────────────
