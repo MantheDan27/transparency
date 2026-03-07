@@ -508,6 +508,13 @@ static std::string WToU8(const std::wstring& w) {
 
 static std::string JEsc(const std::string& s) {
     std::string o;
+    size_t expected_escapes = 0;
+    for (unsigned char c : s) {
+        if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c < 0x20) {
+            expected_escapes++;
+        }
+    }
+    o.reserve(s.length() + expected_escapes);
     for (unsigned char c : s) {
         if      (c == '"')  o += "\\\"";
         else if (c == '\\') o += "\\\\";

@@ -86,6 +86,60 @@ set_target_properties(Transparency PROPERTIES
 
 target_include_directories(Transparency PRIVATE src)
 
+# Enable testing
+enable_testing()
+
+# Test executable for ScanEngine::AnalyzeAnomalies (we use console subsystem for tests)
+add_executable(TransparencyTests src/TestScannerAnomalies.cpp src/Scanner.cpp)
+if(MINGW OR CYGWIN)
+    # Ensure tests run as console app so output is visible
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
+elseif(MSVC)
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+endif()
+target_compile_definitions(TransparencyTests PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00
+    WINVER=0x0A00
+    _CRT_SECURE_NO_WARNINGS
+)
+if(MSVC)
+    target_compile_options(TransparencyTests PRIVATE
+        /W3
+        /MP
+        /utf-8
+        /Zc:__cplusplus
+    )
+endif()
+target_link_libraries(TransparencyTests PRIVATE
+    ws2_32
+    iphlpapi
+    comctl32
+    uxtheme
+    dwmapi
+    dnsapi
+    gdi32
+    ole32
+    winmm
+    shell32
+    wlanapi
+    ntdll
+    comdlg32
+)
+target_include_directories(TransparencyTests PRIVATE src)
+if(MSVC)
+    target_compile_options(TransparencyTests PRIVATE
+        /wd4100
+        /wd4189
+    )
+    set_property(TARGET TransparencyTests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+add_test(NAME TransparencyTests COMMAND TransparencyTests)
+
 # MSVC specific settings
 if(MSVC)
     target_compile_options(Transparency PRIVATE
@@ -94,3 +148,30 @@ if(MSVC)
     )
     set_property(TARGET Transparency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+
+# Tests
+enable_testing()
+add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
+target_compile_definitions(ScannerTest PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00
+    WINVER=0x0A00
+    _CRT_SECURE_NO_WARNINGS
+)
+target_compile_options(ScannerTest PRIVATE
+    /W3
+    /MP
+    /utf-8
+    /Zc:__cplusplus
+)
+target_link_libraries(ScannerTest PRIVATE
+    ws2_32
+    iphlpapi
+    dnsapi
+)
+target_include_directories(ScannerTest PRIVATE src)
+
+add_test(NAME ScannerTest COMMAND ScannerTest)
