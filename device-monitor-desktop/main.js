@@ -406,9 +406,7 @@ function updateDeviceHistory(devices) {
 // ── Cloud mock service ────────────────────────────────────────────────────────
 function startCloud() {
   const mockApp = createCloudMockService();
-  cloudServer = mockApp.listen(CLOUD_PORT, '127.0.0.1', () =>
-    console.log(`[cloud-mock] http://127.0.0.1:${CLOUD_PORT}`)
-  );
+  cloudServer = mockApp.listen(CLOUD_PORT, '127.0.0.1');
 }
 
 const cloud = (url, opts = {}) =>
@@ -591,6 +589,9 @@ ipcMain.handle('delete-snapshot', async (_e, id) => {
 // ── IPC: Diagnostic tools ─────────────────────────────────────────────────────
 ipcMain.handle('ping-host', async (_e, host, count = 4) => {
   try {
+    if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
+      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    }
     const cmd = process.platform === 'win32'
       ? `ping -n ${count} ${host}`
       : `ping -c ${count} ${host}`;
@@ -609,6 +610,9 @@ ipcMain.handle('ping-host', async (_e, host, count = 4) => {
 
 ipcMain.handle('traceroute-host', async (_e, host) => {
   try {
+    if (typeof host !== 'string' || !/^[a-zA-Z0-9.:-]+$/.test(host)) {
+      return { success: false, output: '', error: 'Invalid hostname or IP address' };
+    }
     const cmd = process.platform === 'win32' ? `tracert -d ${host}` : `traceroute -n ${host}`;
     const { stdout } = await execPromise(cmd, { timeout: 30000 });
     return { success: true, output: stdout };
@@ -1154,7 +1158,6 @@ function scheduleNextRun(s) {
   }
 
   scheduleTimers[s.id] = setTimeout(async () => {
-    console.log(`[schedule] Running ${s.mode} scan for "${s.name}"`);
     try {
       const devices   = await scanNetwork(msg => mainWindow?.webContents.send('scan-progress', msg), { mode: s.mode });
       const anomalies = analyzeAnomalies(devices, lastSnapshot);
@@ -1172,7 +1175,6 @@ function scheduleNextRun(s) {
         const downloadsPath = require('electron').app.getPath('downloads');
         const filename = path.join(downloadsPath, `transparency-report-${new Date().toISOString().slice(0,10)}-${s.name.replace(/\s+/g,'-')}.json`);
         fs.writeFileSync(filename, JSON.stringify(exportData, null, 2));
-        console.log(`[schedule] Auto-exported to ${filename}`);
       }
     } catch (err) {
       console.error('[schedule]', err);
@@ -1241,7 +1243,6 @@ function runScriptHooks(event, payload = {}) {
         : `echo '${jsonStr.replace(/'/g, "'\\''")}' | ${h.cmd}`;
       exec(cmd, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
-        else console.log(`[hook] "${h.cmd}" executed for event: ${event}`);
       });
     } catch (err) {
       console.error('[hook]', err.message);
@@ -1376,3 +1377,4 @@ function restartLocalApiWithAuth() {
 module.exports = {
   saveJSON
 };
+module.exports = { isInQuietHours, get monitoringConfig() { return monitoringConfig; }, set monitoringConfig(val) { monitoringConfig = val; } };
