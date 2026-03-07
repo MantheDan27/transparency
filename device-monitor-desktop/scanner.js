@@ -1256,7 +1256,7 @@ async function scanNetwork(progressCallback, opts = {}) {
 }
 
 module.exports = {
-  scanNetwork, analyzeAnomalies,
+  scanNetwork, analyzeAnomalies, getAnomalyExplanation,
   quickScan, standardScan, deepScan,
   discoverMDNS, discoverSSDP, lookupNetBIOS,
   discoverIPv6Neighbors, buildSubnetIPs,
