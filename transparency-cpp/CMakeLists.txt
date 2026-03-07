@@ -148,3 +148,30 @@ if(MSVC)
     )
     set_property(TARGET Transparency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+
+# Tests
+enable_testing()
+add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
+target_compile_definitions(ScannerTest PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00
+    WINVER=0x0A00
+    _CRT_SECURE_NO_WARNINGS
+)
+target_compile_options(ScannerTest PRIVATE
+    /W3
+    /MP
+    /utf-8
+    /Zc:__cplusplus
+)
+target_link_libraries(ScannerTest PRIVATE
+    ws2_32
+    iphlpapi
+    dnsapi
+)
+target_include_directories(ScannerTest PRIVATE src)
+
+add_test(NAME ScannerTest COMMAND ScannerTest)
