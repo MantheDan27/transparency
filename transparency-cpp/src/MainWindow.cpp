@@ -633,7 +633,12 @@ void MainWindow::FirePluginHooks(const std::wstring& eventType, const std::wstri
         si.wShowWindow = SW_HIDE;
 
         PROCESS_INFORMATION pi = {};
-        std::wstring cmd = hook.execPath;
+
+        // Security: Prevent unquoted path execution and command injection
+        // by enforcing quotes and rejecting paths that contain quotes.
+        if (hook.execPath.find(L"\"") != std::wstring::npos) continue;
+
+        std::wstring cmd = L"\"" + hook.execPath + L"\"";
         if (CreateProcess(nullptr, &cmd[0], nullptr, nullptr, TRUE,
                           CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
             DWORD written;
