@@ -586,8 +586,17 @@ function renderDeviceTable() {
   // Build severity map
   const sevMap = {};
   const sevOrder = { High:3, Medium:2, Low:1 };
+
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N*M) nested array searches (allAnomalies.some inside devs.map)
+  // with O(N+M) Set lookups. This improves table rendering time significantly
+  // when handling large networks with many devices and anomalies.
+  const newDeviceIps = new Set();
+  const changedDeviceIps = new Set();
   for (const a of allAnomalies) {
     if (!sevMap[a.device] || sevOrder[a.severity] > sevOrder[sevMap[a.device]]) sevMap[a.device] = a.severity;
+    if (a.type === 'New Device') newDeviceIps.add(a.device);
+    if (a.type === 'Ports Changed') changedDeviceIps.add(a.device);
   }
 
   tbody.innerHTML = devs.map(dev => {
@@ -599,8 +608,8 @@ function renderDeviceTable() {
     const checked = selectedDevices.has(dev.ip) ? 'checked' : '';
     const hist    = dev.history;
     const lastSeen = hist?.lastSeen ? relativeTime(hist.lastSeen) : 'Just now';
-    const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-    const changed = allAnomalies.some(a => (a.type === 'Ports Changed') && a.device === dev.ip);
+    const isNew   = newDeviceIps.has(dev.ip);
+    const changed = changedDeviceIps.has(dev.ip);
 
     const portBadges = dev.ports?.length
       ? dev.ports.slice(0, 6).map(p => {
