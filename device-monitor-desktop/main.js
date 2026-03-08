@@ -1,6 +1,20 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+let app, BrowserWindow, ipcMain, shell, dialog;
+try {
+  const electron = require('electron');
+  app = electron.app;
+  BrowserWindow = electron.BrowserWindow;
+  ipcMain = electron.ipcMain;
+  shell = electron.shell;
+  dialog = electron.dialog;
+} catch (e) {
+  app = { getPath: () => '', whenReady: () => Promise.resolve(), on: () => {} };
+  BrowserWindow = class { loadFile() { return Promise.resolve(); } static getAllWindows() { return []; } };
+  ipcMain = { handle: () => {} };
+  shell = {};
+  dialog = {};
+}
 const path  = require('path');
 const os    = require('os');
 const net   = require('net');
@@ -1410,9 +1424,14 @@ function restartLocalApiWithAuth() {
 // Script hooks are fired from the existing scan-network handler above
 // and from runMonitorScan — no duplicate handler needed here.
 
-module.exports = {
-  triggerAlert
-};
-  saveJSON
-};
-module.exports = { isInQuietHours, get monitoringConfig() { return monitoringConfig; }, set monitoringConfig(val) { monitoringConfig = val; } };
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    checkInternetConnectivity: typeof checkInternetConnectivity !== 'undefined' ? checkInternetConnectivity : null,
+    getInternetStatus: () => typeof internetStatus !== 'undefined' ? internetStatus : null,
+    setInternetStatus: (status) => { if (typeof internetStatus !== 'undefined') internetStatus = status; },
+    getMonitoringConfig: () => typeof monitoringConfig !== 'undefined' ? monitoringConfig : null,
+    setMonitoringConfig: (config) => { if (typeof monitoringConfig !== 'undefined') monitoringConfig = config; },
+    getTriggeredAlerts: () => typeof triggeredAlerts !== 'undefined' ? triggeredAlerts : [],
+    clearTriggeredAlerts: () => { if (typeof triggeredAlerts !== 'undefined') triggeredAlerts = []; }
+  };
+}
