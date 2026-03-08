@@ -497,17 +497,29 @@ void TabPrivacy::RefreshSchedScan() {
 
 // ── Full JSON export ──────────────────────────────────────────────────────────
 
-static std::string WToU8(const std::wstring& w) {
-    if (w.empty()) return "";
-    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
-    if (n <= 0) return "";
-    std::string s(n - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], n, nullptr, nullptr);
-    return s;
-}
+static void WToU8EscAppend(const std::wstring& w, std::string& out) {
+    if (w.empty()) return;
+    char stackBuf[512];
+    std::string heapBuf;
+    char* pBuf = stackBuf;
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, stackBuf, (int)sizeof(stackBuf), nullptr, nullptr);
+    if (n <= 0) {
+        n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+        if (n <= 1) return;
+        heapBuf.resize(n);
+        WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &heapBuf[0], n, nullptr, nullptr);
+        pBuf = &heapBuf[0];
+    }
 
 static std::string JEsc(const std::string& s) {
     std::string o;
+    size_t expected_escapes = 0;
+    for (unsigned char c : s) {
+        if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c < 0x20) {
+            expected_escapes++;
+        }
+    }
+    o.reserve(s.length() + expected_escapes);
     for (unsigned char c : s) {
         if      (c == '"')  o += "\\\"";
         else if (c == '\\') o += "\\\\";
@@ -516,7 +528,6 @@ static std::string JEsc(const std::string& s) {
         else if (c < 0x20)  o += " ";
         else                o += c;
     }
-    return o;
 }
 
 void TabPrivacy::ExportFullJson(HWND hwnd) {
@@ -547,30 +558,32 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
         ledger = _mainWnd->_ledger;
     }
 
-    std::string json = "{\n  \"version\": \"3.2.0\",\n";
-    json += "  \"scannedAt\": \"" + JEsc(WToU8(r.scannedAt)) + "\",\n";
-    json += "  \"mode\": \""      + JEsc(WToU8(r.mode))      + "\",\n";
+    std::string json;
+    json.reserve(r.devices.size() * 512 + ledger.size() * 128 + 1024);
+    json = "{\n  \"version\": \"3.2.0\",\n";
+    json += "  \"scannedAt\": \""; WToU8EscAppend(r.scannedAt, json); json += "\",\n";
+    json += "  \"mode\": \"";      WToU8EscAppend(r.mode, json);      json += "\",\n";
     json += "  \"devices\": [\n";
 
     for (size_t i = 0; i < r.devices.size(); i++) {
         auto& d = r.devices[i];
         json += "    {\n";
-        json += "      \"ip\": \""         + JEsc(WToU8(d.ip))         + "\",\n";
-        json += "      \"mac\": \""        + JEsc(WToU8(d.mac))        + "\",\n";
-        json += "      \"hostname\": \""   + JEsc(WToU8(d.hostname))   + "\",\n";
-        json += "      \"vendor\": \""     + JEsc(WToU8(d.vendor))     + "\",\n";
-        json += "      \"deviceType\": \"" + JEsc(WToU8(d.deviceType)) + "\",\n";
-        json += "      \"osGuess\": \""    + JEsc(WToU8(d.osGuess))    + "\",\n";
-        json += "      \"confidence\": "   + std::to_string(d.confidence) + ",\n";
-        json += "      \"latencyMs\": "    + std::to_string(d.latencyMs)  + ",\n";
-        json += "      \"trustState\": \"" + JEsc(WToU8(d.trustState))   + "\",\n";
-        json += "      \"customName\": \"" + JEsc(WToU8(d.customName))   + "\",\n";
-        json += "      \"notes\": \""      + JEsc(WToU8(d.notes))        + "\",\n";
-        json += "      \"firstSeen\": \""  + JEsc(WToU8(d.firstSeen))    + "\",\n";
-        json += "      \"lastSeen\": \""   + JEsc(WToU8(d.lastSeen))     + "\",\n";
-        json += std::string("      \"online\": ")  + (d.online  ? "true" : "false") + ",\n";
-        json += std::string("      \"iotRisk\": ") + (d.iotRisk ? "true" : "false") + ",\n";
-        json += "      \"iotRiskDetail\": \"" + JEsc(WToU8(d.iotRiskDetail)) + "\",\n";
+        json += "      \"ip\": \"";         WToU8EscAppend(d.ip, json);         json += "\",\n";
+        json += "      \"mac\": \"";        WToU8EscAppend(d.mac, json);        json += "\",\n";
+        json += "      \"hostname\": \"";   WToU8EscAppend(d.hostname, json);   json += "\",\n";
+        json += "      \"vendor\": \"";     WToU8EscAppend(d.vendor, json);     json += "\",\n";
+        json += "      \"deviceType\": \""; WToU8EscAppend(d.deviceType, json); json += "\",\n";
+        json += "      \"osGuess\": \"";    WToU8EscAppend(d.osGuess, json);    json += "\",\n";
+        json += "      \"confidence\": ";   json += std::to_string(d.confidence); json += ",\n";
+        json += "      \"latencyMs\": ";    json += std::to_string(d.latencyMs);  json += ",\n";
+        json += "      \"trustState\": \""; WToU8EscAppend(d.trustState, json);   json += "\",\n";
+        json += "      \"customName\": \""; WToU8EscAppend(d.customName, json);   json += "\",\n";
+        json += "      \"notes\": \"";      WToU8EscAppend(d.notes, json);        json += "\",\n";
+        json += "      \"firstSeen\": \"";  WToU8EscAppend(d.firstSeen, json);    json += "\",\n";
+        json += "      \"lastSeen\": \"";   WToU8EscAppend(d.lastSeen, json);     json += "\",\n";
+        json += "      \"online\": ";       json += (d.online ? "true" : "false"); json += ",\n";
+        json += "      \"iotRisk\": ";      json += (d.iotRisk ? "true" : "false"); json += ",\n";
+        json += "      \"iotRiskDetail\": \""; WToU8EscAppend(d.iotRiskDetail, json); json += "\",\n";
         // Open ports
         json += "      \"openPorts\": [";
         for (size_t j = 0; j < d.openPorts.size(); j++) {
@@ -587,10 +600,10 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
     json += "  \"anomalies\": [\n";
     for (size_t i = 0; i < r.anomalies.size(); i++) {
         auto& a = r.anomalies[i];
-        json += "    {\"type\":\"" + JEsc(WToU8(a.type)) + "\","
-                "\"severity\":\"" + JEsc(WToU8(a.severity)) + "\","
-                "\"deviceIp\":\"" + JEsc(WToU8(a.deviceIp)) + "\","
-                "\"description\":\"" + JEsc(WToU8(a.description)) + "\"}";
+        json += "    {\"type\":\"";        WToU8EscAppend(a.type, json);        json += "\",";
+        json += "\"severity\":\"";         WToU8EscAppend(a.severity, json);    json += "\",";
+        json += "\"deviceIp\":\"";         WToU8EscAppend(a.deviceIp, json);    json += "\",";
+        json += "\"description\":\"";      WToU8EscAppend(a.description, json); json += "\"}";
         if (i + 1 < r.anomalies.size()) json += ",";
         json += "\n";
     }
@@ -600,9 +613,9 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
     json += "  \"ledger\": [\n";
     for (size_t i = 0; i < ledger.size(); i++) {
         auto& e = ledger[i];
-        json += "    {\"timestamp\":\"" + JEsc(WToU8(e.timestamp)) + "\","
-                "\"action\":\"" + JEsc(WToU8(e.action)) + "\","
-                "\"details\":\"" + JEsc(WToU8(e.details)) + "\"}";
+        json += "    {\"timestamp\":\""; WToU8EscAppend(e.timestamp, json); json += "\",";
+        json += "\"action\":\"";         WToU8EscAppend(e.action, json);    json += "\",";
+        json += "\"details\":\"";        WToU8EscAppend(e.details, json);   json += "\"}";
         if (i + 1 < ledger.size()) json += ",";
         json += "\n";
     }
