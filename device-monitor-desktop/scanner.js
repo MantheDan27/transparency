@@ -1280,6 +1280,8 @@ async function scanNetwork(progressCallback, opts = {}) {
 }
 
 module.exports = {
+  getMac,
+  scanNetwork, analyzeAnomalies,
   scanNetwork, analyzeAnomalies, getAnomalyExplanation,
   quickScan, standardScan, deepScan,
   discoverMDNS, discoverSSDP, lookupNetBIOS,
