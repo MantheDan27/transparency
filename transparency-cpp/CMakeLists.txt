@@ -44,6 +44,32 @@ set(HEADERS
 
 add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})
 
+# Add test executable
+add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
+target_include_directories(TransparencyTests PRIVATE src)
+target_compile_definitions(TransparencyTests PRIVATE
+    UNICODE
+    _UNICODE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+    _WIN32_WINNT=0x0A00
+    WINVER=0x0A00
+    _CRT_SECURE_NO_WARNINGS
+)
+if(MSVC)
+    target_compile_options(TransparencyTests PRIVATE
+        /W3
+        /MP
+        /utf-8
+        /Zc:__cplusplus
+    )
+endif()
+target_link_libraries(TransparencyTests PRIVATE
+    ws2_32
+    iphlpapi
+    dnsapi
+)
+
 target_compile_definitions(Transparency PRIVATE
     UNICODE
     _UNICODE
