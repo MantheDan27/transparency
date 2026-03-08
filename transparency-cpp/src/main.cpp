@@ -22,11 +22,19 @@
     publicKeyToken='6595b64144ccf1df' \
     language='*'\"")
 
+#ifdef _MSC_VER
 int WINAPI wWinMain(
     HINSTANCE hInstance,
     HINSTANCE /*hPrevInstance*/,
     LPWSTR    /*lpCmdLine*/,
     int       /*nCmdShow*/)
+#else
+int WINAPI WinMain(
+    HINSTANCE hInstance,
+    HINSTANCE /*hPrevInstance*/,
+    LPSTR     /*lpCmdLine*/,
+    int       /*nCmdShow*/)
+#endif
 {
     // Initialize COM
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);

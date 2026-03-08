@@ -304,13 +304,13 @@ void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
         L"This event may indicate a security or configuration issue on your network." :
         a.explanation;
 
-    wstring todo = a.remediation.empty() ?
+    wstring whatToDo = a.remediation.empty() ?
         L"1. Investigate the device.\r\n2. Check your router's logs.\r\n3. Run a Deep scan for more detail." :
         a.remediation;
 
     if (_hExplainWhat) SetWindowText(_hExplainWhat, what.c_str());
     if (_hExplainWhy)  SetWindowText(_hExplainWhy, why.c_str());
-    if (_hExplainDo)   SetWindowText(_hExplainDo, todo.c_str());
+    if (_hExplainDo)   SetWindowText(_hExplainDo, whatToDo.c_str());
 }
 
 LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
