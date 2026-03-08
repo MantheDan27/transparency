@@ -2288,7 +2288,7 @@ const ALERT_GUIDANCE = {
   new_device: {
     what: 'A device appeared on your network that has not been seen before.',
     why:  'New devices may be authorized (a new phone, smart TV, or guest) or unauthorized (an intruder, rogue access point, or compromised IoT device). Unknown devices on your network can intercept traffic or consume bandwidth without your knowledge.',
-    todo: [
+    steps: [
       'Open the Devices tab and find the new device.',
       'Check its MAC address vendor to identify the manufacturer.',
       'Look at its open ports — unknown ports may indicate suspicious activity.',
@@ -2300,7 +2300,7 @@ const ALERT_GUIDANCE = {
   risky_port: {
     what: 'A known-dangerous port/service is exposed on a device on your network.',
     why:  'Ports like Telnet (23), SMB (445), RDP (3389), and VNC (5900) are common attack vectors. If these services are running on IoT devices or home computers, they may be vulnerable to brute-force, exploitation, or unauthorized access — especially if the device has default credentials.',
-    todo: [
+    steps: [
       'Open the device\'s detail panel and check the Services tab.',
       'Verify whether this service is intentional (e.g., you set up Remote Desktop).',
       'If unintentional, disable the service on the device\'s settings.',
@@ -2312,7 +2312,7 @@ const ALERT_GUIDANCE = {
   port_changed: {
     what: 'A device\'s open ports changed since the last scan.',
     why:  'A port change can mean a service was started or stopped, software was installed or removed, or — in serious cases — a device was compromised and new services were activated without your knowledge. Port changes on IoT devices are particularly suspicious.',
-    todo: [
+    steps: [
       'Open the device\'s Services tab to see exactly what changed.',
       'If the change is expected (e.g., you installed new software), note it in device Notes.',
       'If unexpected, check what software is running on the device.',
@@ -2323,7 +2323,7 @@ const ALERT_GUIDANCE = {
   device_offline: {
     what: 'A device that was previously online is no longer reachable on the network.',
     why:  'A device going offline can be normal (it was turned off, battery died, or left the network) or it may indicate a network problem, DHCP lease expiry, or that the device was physically removed. For critical devices like NAS drives or servers, this warrants investigation.',
-    todo: [
+    steps: [
       'Check if the device is physically powered on.',
       'Use the Ping tool to test if the device responds at its last known IP.',
       'Check your router\'s DHCP table — the device may have a new IP.',
@@ -2334,7 +2334,7 @@ const ALERT_GUIDANCE = {
   ip_changed: {
     what: 'A known device\'s IP address is different from its last recorded address.',
     why:  'IP changes usually happen when DHCP leases expire and a device gets a new address. However, IP changes can also indicate DHCP spoofing (an attacker serving fake IP addresses) or a device being reset. If you have devices with expected static IPs and they\'re changing, investigate immediately.',
-    todo: [
+    steps: [
       'Verify the new IP is in your normal DHCP range.',
       'Check your router\'s DHCP lease table for the assignment.',
       'If the device should have a static IP, reconfigure it on the device.',
@@ -2344,7 +2344,7 @@ const ALERT_GUIDANCE = {
   internet_outage: {
     what: 'Your internet connection is not reachable from this device.',
     why:  'An internet outage can be caused by your ISP, a misconfigured gateway/router, a disconnected cable, or — rarely — a network attack that disrupts routing. Sustained outages with your local network still working often point to the ISP or gateway.',
-    todo: [
+    steps: [
       'Check if your gateway/router power light is on and showing a WAN connection.',
       'Ping your gateway\'s IP using the Ping tool to verify local connectivity.',
       'Try pinging 8.8.8.8 (Google DNS) to bypass DNS issues.',
@@ -2355,7 +2355,7 @@ const ALERT_GUIDANCE = {
   gateway_mac_changed: {
     what: 'Your gateway\'s MAC address changed between scans.',
     why:  'A gateway MAC change is a serious red flag. It may indicate ARP spoofing — an attacker has positioned a device between you and your router to intercept your traffic (a "man-in-the-middle" attack). This is one of the most dangerous network attacks and can expose all unencrypted communications.',
-    todo: [
+    steps: [
       'Check the physical MAC address label on your router and compare it to both values.',
       'Scan your network for any rogue devices (devices you don\'t recognize).',
       'If you have a mesh Wi-Fi system, ensure the detected gateway is one of your nodes.',
@@ -2367,7 +2367,7 @@ const ALERT_GUIDANCE = {
   dns_changed: {
     what: 'The DNS server(s) used by this device changed since the last scan.',
     why:  'DNS server changes can indicate DNS hijacking, where an attacker redirects your DNS queries to a malicious server. This allows them to send you to fake versions of websites (phishing), even for sites with HTTPS, and can expose your browsing history. This often happens through compromised routers.',
-    todo: [
+    steps: [
       'Compare the old and new DNS server IPs. Are they from known providers (1.1.1.1, 8.8.8.8, or your ISP)?',
       'Log into your router admin page and check the DNS server settings.',
       'Look for any unauthorized admin changes or firmware updates.',
@@ -2378,7 +2378,7 @@ const ALERT_GUIDANCE = {
   high_latency: {
     what: 'Network latency to the internet exceeded your configured threshold.',
     why:  'High latency can make websites and applications feel slow, and can indicate network congestion, a failing modem, interference on your Wi-Fi channel, or a device consuming large amounts of bandwidth. Sustained high latency may also indicate your ISP is experiencing issues.',
-    todo: [
+    steps: [
       'Check the Devices tab for any unknown devices that may be consuming bandwidth.',
       'Check if large downloads or updates are in progress on any devices.',
       'Test latency from a wired connection to rule out Wi-Fi issues.',
@@ -2402,9 +2402,9 @@ function renderAlertWithGuidance(a) {
         <div class="alert-section-label">Why it matters</div>
         <div class="alert-section-text">${escHtml(guidance.why)}</div>
       </div>
-      <div class="alert-section alert-section-todo">
+      <div class="alert-section alert-section-steps">
         <div class="alert-section-label">What to do</div>
-        <ul class="alert-todo-list">${guidance.todo.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
+        <ul class="alert-steps-list">${guidance.steps.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
       </div>
     </div>
     <button class="alert-guidance-toggle" onclick="window.toggleAlertGuidance('${escHtml(a.id)}')">

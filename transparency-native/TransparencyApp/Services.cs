@@ -59,10 +59,11 @@ namespace TransparencyApp.Services
         private readonly SemaphoreSlim _concLimit = new(60);
 
         public async Task<(List<Device> devices, List<Anomaly> anomalies)> ScanAsync(
+            IEnumerable<NetworkInterface>? interfaces = null,
             IProgress<string>? progress = null)
         {
             progress?.Report("Resolving local subnet…");
-            var baseIp = GetLocalSubnet();
+            var baseIp = GetLocalSubnet(interfaces);
 
             progress?.Report($"Pinging {baseIp}.1–254…");
             var liveHosts = await PingSweepAsync(baseIp);
@@ -86,9 +87,11 @@ namespace TransparencyApp.Services
         }
 
         // ── Subnet discovery ──────────────────────────────────────────────────
-        private static string GetLocalSubnet()
+        internal static string GetLocalSubnet(IEnumerable<NetworkInterface>? interfaces = null)
         {
-            foreach (var iface in NetworkInterface.GetAllNetworkInterfaces())
+            interfaces ??= NetworkInterface.GetAllNetworkInterfaces();
+
+            foreach (var iface in interfaces)
             {
                 if (iface.OperationalStatus != OperationalStatus.Up)      continue;
                 if (iface.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
@@ -126,22 +129,27 @@ namespace TransparencyApp.Services
         }
 
         // ── ARP table ─────────────────────────────────────────────────────────
-        private static async Task<Dictionary<string, string>> GetArpTableAsync()
+        protected internal virtual async Task<string> RunArpCommandAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var psi = new ProcessStartInfo("arp", "-a")
+                {
+                    RedirectStandardOutput = true,
+                    UseShellExecute  = false,
+                    CreateNoWindow   = true
+                };
+                using var proc = Process.Start(psi);
+                return proc?.StandardOutput.ReadToEnd() ?? "";
+            });
+        }
+
+        protected internal async Task<Dictionary<string, string>> GetArpTableAsync()
         {
             var table = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                var output = await Task.Run(() =>
-                {
-                    var psi = new ProcessStartInfo("arp", "-a")
-                    {
-                        RedirectStandardOutput = true,
-                        UseShellExecute  = false,
-                        CreateNoWindow   = true
-                    };
-                    using var proc = Process.Start(psi);
-                    return proc?.StandardOutput.ReadToEnd() ?? "";
-                });
+                var output = await RunArpCommandAsync();
 
                 foreach (var line in output.Split('\n'))
                 {
