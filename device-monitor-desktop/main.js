@@ -1411,6 +1411,8 @@ function restartLocalApiWithAuth() {
 // and from runMonitorScan — no duplicate handler needed here.
 
 module.exports = {
+  triggerAlert
+};
   saveJSON
 };
 module.exports = { isInQuietHours, get monitoringConfig() { return monitoringConfig; }, set monitoringConfig(val) { monitoringConfig = val; } };
