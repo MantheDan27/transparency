@@ -586,8 +586,13 @@ function renderDeviceTable() {
   // Build severity map
   const sevMap = {};
   const sevOrder = { High:3, Medium:2, Low:1 };
+  const newDeviceSet = new Set();
+  const changedPortsSet = new Set();
+
   for (const a of allAnomalies) {
     if (!sevMap[a.device] || sevOrder[a.severity] > sevOrder[sevMap[a.device]]) sevMap[a.device] = a.severity;
+    if (a.type === 'New Device') newDeviceSet.add(a.device);
+    if (a.type === 'Ports Changed') changedPortsSet.add(a.device);
   }
 
   tbody.innerHTML = devs.map(dev => {
@@ -599,8 +604,8 @@ function renderDeviceTable() {
     const checked = selectedDevices.has(dev.ip) ? 'checked' : '';
     const hist    = dev.history;
     const lastSeen = hist?.lastSeen ? relativeTime(hist.lastSeen) : 'Just now';
-    const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-    const changed = allAnomalies.some(a => (a.type === 'Ports Changed') && a.device === dev.ip);
+    const isNew   = newDeviceSet.has(dev.ip);
+    const changed = changedPortsSet.has(dev.ip);
 
     const portBadges = dev.ports?.length
       ? dev.ports.slice(0, 6).map(p => {
