@@ -116,14 +116,14 @@ target_include_directories(Transparency PRIVATE src)
 enable_testing()
 
 # Test executable for ScanEngine::AnalyzeAnomalies (we use console subsystem for tests)
-add_executable(TransparencyTests src/TestScannerAnomalies.cpp src/Scanner.cpp)
+add_executable(TestScannerAnomalies src/TestScannerAnomalies.cpp src/Scanner.cpp)
 if(MINGW OR CYGWIN)
     # Ensure tests run as console app so output is visible
-    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
+    set_target_properties(TestScannerAnomalies PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
 elseif(MSVC)
-    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+    set_target_properties(TestScannerAnomalies PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 endif()
-target_compile_definitions(TransparencyTests PRIVATE
+target_compile_definitions(TestScannerAnomalies PRIVATE
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
@@ -133,14 +133,14 @@ target_compile_definitions(TransparencyTests PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 if(MSVC)
-    target_compile_options(TransparencyTests PRIVATE
+    target_compile_options(TestScannerAnomalies PRIVATE
         /W3
         /MP
         /utf-8
         /Zc:__cplusplus
     )
 endif()
-target_link_libraries(TransparencyTests PRIVATE
+target_link_libraries(TestScannerAnomalies PRIVATE
     ws2_32
     iphlpapi
     comctl32
@@ -155,16 +155,16 @@ target_link_libraries(TransparencyTests PRIVATE
     ntdll
     comdlg32
 )
-target_include_directories(TransparencyTests PRIVATE src)
+target_include_directories(TestScannerAnomalies PRIVATE src)
 if(MSVC)
-    target_compile_options(TransparencyTests PRIVATE
+    target_compile_options(TestScannerAnomalies PRIVATE
         /wd4100
         /wd4189
     )
-    set_property(TARGET TransparencyTests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET TestScannerAnomalies PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-add_test(NAME TransparencyTests COMMAND TransparencyTests)
+add_test(NAME TestScannerAnomalies COMMAND TestScannerAnomalies)
 
 # MSVC specific settings
 if(MSVC)
@@ -175,8 +175,7 @@ if(MSVC)
     set_property(TARGET Transparency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Tests
-enable_testing()
+# Additional scanner test
 add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
 target_compile_definitions(ScannerTest PRIVATE
     UNICODE
@@ -187,12 +186,14 @@ target_compile_definitions(ScannerTest PRIVATE
     WINVER=0x0A00
     _CRT_SECURE_NO_WARNINGS
 )
-target_compile_options(ScannerTest PRIVATE
-    /W3
-    /MP
-    /utf-8
-    /Zc:__cplusplus
-)
+if(MSVC)
+    target_compile_options(ScannerTest PRIVATE
+        /W3
+        /MP
+        /utf-8
+        /Zc:__cplusplus
+    )
+endif()
 target_link_libraries(ScannerTest PRIVATE
     ws2_32
     iphlpapi
