@@ -510,6 +510,17 @@ static void WToU8EscAppend(const std::wstring& w, std::string& out) {
         WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &heapBuf[0], n, nullptr, nullptr);
         pBuf = &heapBuf[0];
     }
+    // Escape and append UTF-8 chars
+    for (const char* p = pBuf; *p; ++p) {
+        unsigned char c = (unsigned char)*p;
+        if      (c == '"')  out += "\\\"";
+        else if (c == '\\') out += "\\\\";
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c < 0x20)  out += ' ';
+        else                out += (char)c;
+    }
+}
 
 static std::string JEsc(const std::string& s) {
     std::string o;
@@ -528,6 +539,7 @@ static std::string JEsc(const std::string& s) {
         else if (c < 0x20)  o += " ";
         else                o += c;
     }
+    return o;
 }
 
 void TabPrivacy::ExportFullJson(HWND hwnd) {

@@ -46,6 +46,11 @@ add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})
 
 # Add test executable
 add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
+if(MSVC)
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+elseif(MINGW OR CYGWIN)
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole")
+endif()
 target_include_directories(TransparencyTests PRIVATE src)
 target_compile_definitions(TransparencyTests PRIVATE
     UNICODE
