@@ -24,7 +24,7 @@ Pre-built releases are available on the [Releases](../../releases) page. Downloa
 
 **Requirements**: Windows 10 or later (x64). Run as administrator for full ARP/ping functionality.
 
-## Building from Source
+## Building from Source 
 
 ### Prerequisites
 

@@ -7,35 +7,35 @@
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
 
-// ─── Color Palette (industrial dark — matches design spec exactly) ────────────
+// ─── Color Palette (refined professional dark) ───────────────────────────────
 namespace Theme {
 
-// Backgrounds
-constexpr COLORREF BG_APP       = RGB(11,  14,  20);   // #0b0e14 near-black
-constexpr COLORREF BG_SIDEBAR   = RGB(17,  21,  32);   // #111520 dark navy
-constexpr COLORREF BG_CARD      = RGB(24,  29,  46);   // #181d2e mid-navy
-constexpr COLORREF BG_ELEVATED  = RGB(24,  29,  46);   // same as card
-constexpr COLORREF BG_INPUT     = RGB(24,  29,  46);   // inputs / hovers
-constexpr COLORREF BG_ROW_ALT   = RGB(17,  21,  32);   // alternating row
-constexpr COLORREF BG_ROW_HOV   = RGB(24,  29,  46);   // hover
-constexpr COLORREF BG_ROW_SEL   = RGB(26,  50,  90);   // selected
+// Backgrounds — warmer, softer dark tones
+constexpr COLORREF BG_APP       = RGB(16,  18,  24);   // #101218 soft charcoal
+constexpr COLORREF BG_SIDEBAR   = RGB(20,  22,  30);   // #14161e dark slate
+constexpr COLORREF BG_CARD      = RGB(26,  29,  39);   // #1a1d27 card surface
+constexpr COLORREF BG_ELEVATED  = RGB(30,  33,  43);   // #1e212b elevated surface
+constexpr COLORREF BG_INPUT     = RGB(30,  33,  43);   // #1e212b inputs
+constexpr COLORREF BG_ROW_ALT   = RGB(22,  24,  33);   // #161821 alternating row
+constexpr COLORREF BG_ROW_HOV   = RGB(30,  33,  43);   // #1e212b hover
+constexpr COLORREF BG_ROW_SEL   = RGB(35,  55,  85);   // #233755 selected
 
-// Borders
-constexpr COLORREF BORDER         = RGB(31,  39,  64);  // #1f2740
-constexpr COLORREF SIDEBAR_BORDER = RGB(31,  39,  64);
+// Borders — subtle, warm gray
+constexpr COLORREF BORDER         = RGB(37,  40,  48);  // #252830
+constexpr COLORREF SIDEBAR_BORDER = RGB(37,  40,  48);
 
-// Text
-constexpr COLORREF TEXT_PRIMARY   = RGB(200, 212, 240); // #c8d4f0 cool white
-constexpr COLORREF TEXT_SECONDARY = RGB(150, 168, 210); // mid value
-constexpr COLORREF TEXT_MUTED     = RGB(78,  95,  133); // #4e5f85
+// Text — warmer, easier on the eyes
+constexpr COLORREF TEXT_PRIMARY   = RGB(226, 228, 234); // #e2e4ea warm white
+constexpr COLORREF TEXT_SECONDARY = RGB(139, 144, 160); // #8b90a0 warm mid
+constexpr COLORREF TEXT_MUTED     = RGB(86,  91,  110); // #565b6e muted
 
-// Accent colors
-constexpr COLORREF ACCENT         = RGB(61,  127, 255); // #3d7fff electric blue
-constexpr COLORREF ACCENT_GLOW    = RGB(0,   229, 255); // #00e5ff cyan — active/live
-constexpr COLORREF SUCCESS        = RGB(0,   229, 122); // #00e57a online/success
-constexpr COLORREF DANGER         = RGB(255, 64,  96);  // #ff4060 offline/alert
-constexpr COLORREF WARNING        = RGB(255, 200, 50);  // #ffc832 unknown/caution
-constexpr COLORREF WATCHLIST      = RGB(168, 85,  247); // #a855f7 watchlist purple
+// Accent colors — refined, less neon
+constexpr COLORREF ACCENT         = RGB(91,  141, 239); // #5b8def refined blue
+constexpr COLORREF ACCENT_GLOW    = RGB(56,  189, 248); // #38bdf8 sky blue
+constexpr COLORREF SUCCESS        = RGB(52,  211, 153); // #34d399 emerald
+constexpr COLORREF DANGER         = RGB(248, 113, 113); // #f87171 soft red
+constexpr COLORREF WARNING        = RGB(251, 191, 36);  // #fbbf24 amber
+constexpr COLORREF WATCHLIST      = RGB(167, 139, 250); // #a78bfa violet
 
 // ─── Brush Cache ─────────────────────────────────────────────────────────────
 inline HBRUSH BrushApp()       { static HBRUSH b = CreateSolidBrush(BG_APP);       return b; }
@@ -57,55 +57,55 @@ inline HBRUSH BrushNull()      { static HBRUSH b = (HBRUSH)GetStockObject(NULL_B
 // ─── Font Helpers ─────────────────────────────────────────────────────────────
 inline HFONT FontBody() {
     static HFONT f = CreateFont(
-        -MulDiv(11, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        -MulDiv(12, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
         0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
     return f;
 }
 
 inline HFONT FontBold() {
     static HFONT f = CreateFont(
-        -MulDiv(11, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        -MulDiv(12, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
     return f;
 }
 
 inline HFONT FontHeader() {
     static HFONT f = CreateFont(
-        -MulDiv(18, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        -MulDiv(20, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
     return f;
 }
 
 inline HFONT FontSmall() {
     static HFONT f = CreateFont(
-        -MulDiv(9, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
         0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
     return f;
 }
 
 inline HFONT FontMono() {
     static HFONT f = CreateFont(
-        -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        -MulDiv(11, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
         0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+        CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Cascadia Code");
     return f;
 }
 
 inline HFONT FontBrand() {
     static HFONT f = CreateFont(
-        -MulDiv(14, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        -MulDiv(15, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+        0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
     return f;
 }
 
