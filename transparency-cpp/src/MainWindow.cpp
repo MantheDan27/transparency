@@ -244,7 +244,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparency v3.5.0 initialized");
+    AddLedgerEntry(L"App Started", L"Transparency v3.6.0 initialized");
 
     // Check scheduled scans every 60 seconds
     SetTimer(hwnd, 1, 60000, nullptr);
@@ -400,7 +400,7 @@ void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
     RECT verRc = { 4, rc.bottom - 28, SIDEBAR_WIDTH - 4, rc.bottom - 6 };
     HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"v3.5.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawText(hdc, L"v3.6.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, verFont);
 }
 
