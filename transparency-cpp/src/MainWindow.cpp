@@ -10,6 +10,8 @@
 #include <memory>
 #include <mutex>
 #include <future>
+#include <map>
+#include <thread>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "uxtheme.lib")
@@ -478,19 +480,79 @@ void MainWindow::ShowActivePanel() {
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
 
+// ─── MergeDeviceHistory ──────────────────────────────────────────────────────
+// Carry forward persistent fields from previous scan by matching on MAC.
+static void MergeDeviceHistory(ScanResult& result, const ScanResult& prev) {
+    // Build MAC -> device map from previous
+    std::map<wstring, const Device*> prevByMac;
+    for (auto& d : prev.devices) {
+        if (!d.mac.empty()) prevByMac[d.mac] = &d;
+    }
+
+    for (auto& dev : result.devices) {
+        if (dev.mac.empty()) continue;
+        auto it = prevByMac.find(dev.mac);
+        if (it == prevByMac.end()) continue;
+        const Device* pd = it->second;
+
+        // Carry forward user data
+        if (dev.customName.empty() && !pd->customName.empty()) dev.customName = pd->customName;
+        if (dev.notes.empty() && !pd->notes.empty()) dev.notes = pd->notes;
+        if (dev.trustState == L"unknown" && pd->trustState != L"unknown") dev.trustState = pd->trustState;
+        dev.tags = pd->tags;
+        dev.location = pd->location;
+
+        // Carry forward temporal data
+        if (!pd->firstSeen.empty()) dev.firstSeen = pd->firstSeen;
+        dev.prevHostname = pd->hostname;
+        dev.prevPorts = pd->openPorts;
+        dev.sightingCount = pd->sightingCount + 1;
+
+        // Build IP history
+        dev.ipHistory = pd->ipHistory;
+        if (pd->ip != dev.ip && !pd->ip.empty()) {
+            // Add old IP if not already tracked
+            bool found = false;
+            for (auto& h : dev.ipHistory) { if (h == pd->ip) { found = true; break; } }
+            if (!found) {
+                dev.ipHistory.push_back(pd->ip);
+                if (dev.ipHistory.size() > 10) dev.ipHistory.erase(dev.ipHistory.begin());
+            }
+        }
+
+        // Carry forward latency history
+        dev.latencyHistory = pd->latencyHistory;
+        if (dev.latencyMs >= 0) {
+            dev.latencyHistory.push_back(dev.latencyMs);
+            if (dev.latencyHistory.size() > 7)
+                dev.latencyHistory.erase(dev.latencyHistory.begin());
+        }
+    }
+}
+
 void MainWindow::StartQuickScan() {
     AddLedgerEntry(L"Scan Started", L"Quick scan initiated");
 
+    ScanResult prevResult;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        prevResult = _lastResult;
+    }
+
     auto* hwnd = _hwnd;
-    std::thread([this, hwnd]() {
+    std::thread([this, hwnd, prevResult]() {
         auto future = _scanner.QuickScan([hwnd](int pct, std::wstring msg) {
             wstring* msgPtr = new wstring(msg);
             PostMessage(hwnd, WM_SCAN_PROGRESS, (WPARAM)pct, (LPARAM)msgPtr);
         });
 
         ScanResult* result = new ScanResult(future.get());
+        MergeDeviceHistory(*result, prevResult);
+        if (!prevResult.devices.empty())
+            result->anomalies = ScanEngine::AnalyzeAnomalies(*result, prevResult);
         {
             std::lock_guard<std::mutex> lk(_dataMutex);
+            _previousResult = prevResult;
             _lastResult = *result;
         }
         PostMessage(hwnd, WM_SCAN_COMPLETE, 0, (LPARAM)result);
@@ -500,16 +562,26 @@ void MainWindow::StartQuickScan() {
 void MainWindow::StartStandardScan() {
     AddLedgerEntry(L"Scan Started", L"Standard scan initiated");
 
+    ScanResult prevResult;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        prevResult = _lastResult;
+    }
+
     auto* hwnd = _hwnd;
-    std::thread([this, hwnd]() {
+    std::thread([this, hwnd, prevResult]() {
         auto future = _scanner.StandardScan([hwnd](int pct, std::wstring msg) {
             wstring* msgPtr = new wstring(msg);
             PostMessage(hwnd, WM_SCAN_PROGRESS, (WPARAM)pct, (LPARAM)msgPtr);
         });
 
         ScanResult* result = new ScanResult(future.get());
+        MergeDeviceHistory(*result, prevResult);
+        if (!prevResult.devices.empty())
+            result->anomalies = ScanEngine::AnalyzeAnomalies(*result, prevResult);
         {
             std::lock_guard<std::mutex> lk(_dataMutex);
+            _previousResult = prevResult;
             _lastResult = *result;
         }
         PostMessage(hwnd, WM_SCAN_COMPLETE, 0, (LPARAM)result);
@@ -519,16 +591,26 @@ void MainWindow::StartStandardScan() {
 void MainWindow::StartDeepScan() {
     AddLedgerEntry(L"Scan Started", L"Deep scan initiated");
 
+    ScanResult prevResult;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        prevResult = _lastResult;
+    }
+
     auto* hwnd = _hwnd;
-    std::thread([this, hwnd]() {
+    std::thread([this, hwnd, prevResult]() {
         auto future = _scanner.DeepScan([hwnd](int pct, std::wstring msg) {
             wstring* msgPtr = new wstring(msg);
             PostMessage(hwnd, WM_SCAN_PROGRESS, (WPARAM)pct, (LPARAM)msgPtr);
         });
 
         ScanResult* result = new ScanResult(future.get());
+        MergeDeviceHistory(*result, prevResult);
+        if (!prevResult.devices.empty())
+            result->anomalies = ScanEngine::AnalyzeAnomalies(*result, prevResult);
         {
             std::lock_guard<std::mutex> lk(_dataMutex);
+            _previousResult = prevResult;
             _lastResult = *result;
         }
         PostMessage(hwnd, WM_SCAN_COMPLETE, 0, (LPARAM)result);
@@ -768,6 +850,10 @@ DWORD WINAPI MainWindow::LocalApiThreadProc(LPVOID param) {
                       + ",\"online\":" + (d.online?"true":"false")
                       + ",\"latencyMs\":" + std::to_string(d.latencyMs)
                       + ",\"confidence\":" + std::to_string(d.confidence)
+                      + ",\"classificationReason\":\"" + jsonEsc(wstr2utf8(d.classificationReason)) + "\""
+                      + ",\"subnet\":\"" + jsonEsc(wstr2utf8(d.subnet)) + "\""
+                      + ",\"firstSeen\":\"" + jsonEsc(wstr2utf8(d.firstSeen)) + "\""
+                      + ",\"sightings\":" + std::to_string(d.sightingCount)
                       + "}";
             }
             body += "]\r\n";

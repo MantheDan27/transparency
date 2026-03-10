@@ -5,6 +5,20 @@
 using std::wstring;
 using std::vector;
 
+// Evidence tag — tracks where a piece of device info came from
+struct EvidenceTag {
+    wstring field;    // "mac", "vendor", "hostname", "ports", "mdns", "ssdp", "netbios", "os"
+    wstring source;   // "ARP table", "mDNS", "SSDP/UPnP", "NetBIOS", "Reverse DNS", "OUI lookup", "Port scan", "Banner grab"
+    wstring value;    // the actual value discovered
+};
+
+// Per-network NIC pinning
+struct NicPreference {
+    wstring networkId;      // SSID or adapter name for wired
+    wstring pinnedNicName;  // adapter FriendlyName user pinned
+    wstring pinnedSubnet;   // e.g. "192.168.1.0/24"
+};
+
 struct Device {
     wstring ip;
     wstring mac;
@@ -42,6 +56,16 @@ struct Device {
 
     // Latency history (last 7 readings, oldest first, -1 = no data)
     vector<int> latencyHistory;
+
+    // Evidence & transparency
+    vector<EvidenceTag> evidence;       // all protocol evidence for this device
+    wstring classificationReason;       // human-readable: "vendor: Cisco, ports: 80,443"
+    wstring subnet;                     // which subnet (e.g. "192.168.1.0/24")
+
+    // Change tracking
+    wstring prevHostname;               // hostname from prior scan
+    vector<wstring> ipHistory;          // previously seen IPs
+    int sightingCount = 1;             // how many scans this device has been seen in
 };
 
 struct Anomaly {
@@ -79,6 +103,8 @@ struct ScanResult {
     vector<Anomaly> anomalies;
     wstring scannedAt;
     wstring mode;
+    wstring nicUsed;        // adapter name used for this scan
+    wstring nicReason;      // why it was chosen
 };
 
 struct MonitorConfig {

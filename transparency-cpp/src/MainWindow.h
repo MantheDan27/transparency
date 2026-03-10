@@ -62,11 +62,14 @@ public:
     Monitor     _monitor;
 
     ScanResult              _lastResult;
+    ScanResult              _previousResult;  // for anomaly comparison across scans
     std::vector<AlertRule>  _alertRules;
     std::vector<LedgerEntry> _ledger;
     std::vector<ScanResult> _snapshots;       // historical scan snapshots for diff
     std::vector<PluginHook> _pluginHooks;     // script hooks
     ScheduledScan           _scheduledScan;
+    std::vector<NicPreference> _nicPrefs;     // pinned NIC per network
+    std::wstring            _selectedNicName;  // user-selected NIC (empty = auto)
     mutable std::mutex      _dataMutex;
 
     // REST API

@@ -103,11 +103,13 @@
 #define IDC_BTN_HOOK_ADD        6071
 #define IDC_BTN_HOOK_DEL        6072
 #define IDC_BTN_SCHED_SAVE      6073
+#define IDC_BTN_NIC_PIN         6080
 
 // Combo box IDs
 #define IDC_COMBO_DNS_TYPE      7001
 #define IDC_COMBO_TRUST         7002
 #define IDC_COMBO_SCAN_MODE     7003
+#define IDC_COMBO_NIC_SELECT    7004
 
 // Checkbox IDs
 #define IDC_CHECK_GENTLE        8001
