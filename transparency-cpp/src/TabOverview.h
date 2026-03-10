@@ -66,6 +66,11 @@ private:
     // Network info static
     HWND _hNetworkInfo = nullptr;
 
+    // NIC selector
+    HWND _hNicCombo  = nullptr;
+    HWND _hNicPin    = nullptr;
+    HWND _hNicReason = nullptr;
+
     // Recent changes list (right column of bottom split)
     HWND _hChangesList = nullptr;
 

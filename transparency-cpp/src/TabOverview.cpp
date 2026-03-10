@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <map>
 
 #pragma comment(lib, "iphlpapi.lib")
 
@@ -125,7 +126,7 @@ LRESULT TabOverview::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 }
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-static const int TILE_Y  = 110;
+static const int TILE_Y  = 120;  // pushed down for NIC selector row
 static const int TILE_H  = 80;  // taller to fit sparkline
 static const int PILL_Y_OFF = 36;
 static const int BTN_H  = 32;
@@ -215,12 +216,30 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
         hwnd, nullptr, hInst, nullptr);
     SendMessage(_hProgressBar, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
-    // Network info
+    // Network info — NIC selection row
     _hNetworkInfo = CreateWindowEx(0, L"STATIC", L"Detecting network...",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        16, 16, cx - 32, 80,
+        16, 16, cx - 400, 40,
         hwnd, (HMENU)IDC_STATIC_NET_INFO, hInst, nullptr);
     SendMessage(_hNetworkInfo, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+
+    // NIC selector combo
+    _hNicCombo = CreateWindowEx(0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        16, 44, 380, 160, hwnd, (HMENU)IDC_COMBO_NIC_SELECT, hInst, nullptr);
+    SendMessage(_hNicCombo, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+
+    _hNicPin = CreateWindowEx(0, L"BUTTON", L"Pin",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        402, 44, 50, 24, hwnd, (HMENU)IDC_BTN_NIC_PIN, hInst, nullptr);
+    SendMessage(_hNicPin, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+
+    // NIC reason text
+    _hNicReason = CreateWindowEx(0, L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | SS_LEFT,
+        16, 72, cx - 32, 30,
+        hwnd, nullptr, hInst, nullptr);
+    SendMessage(_hNicReason, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
     // Right-side changes list  (40% of bottom width)
     int mapW = (cx - 40) * 6 / 10;
@@ -243,13 +262,13 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
     col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
     col.fmt  = LVCFMT_LEFT;
 
-    col.cx = 100; col.pszText = (LPWSTR)L"Time";
+    col.cx = 85; col.pszText = (LPWSTR)L"Time";
     ListView_InsertColumn(_hChangesList, 0, &col);
 
-    col.cx = 120; col.pszText = (LPWSTR)L"Change";
+    col.cx = 110; col.pszText = (LPWSTR)L"Change";
     ListView_InsertColumn(_hChangesList, 1, &col);
 
-    col.cx = 240; col.pszText = (LPWSTR)L"Details";
+    col.cx = 280; col.pszText = (LPWSTR)L"Details";
     ListView_InsertColumn(_hChangesList, 2, &col);
 }
 
@@ -266,7 +285,10 @@ void TabOverview::LayoutControls(int cx, int cy) {
 
     if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, btnY + BTN_H + 8,  cx - 32, 20, SWP_NOZORDER);
     if (_hProgressBar)SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 32, cx - 32,  8, SWP_NOZORDER);
-    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16, cx - 32, 80, SWP_NOZORDER);
+    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16, cx - 400, 40, SWP_NOZORDER);
+    if (_hNicCombo) SetWindowPos(_hNicCombo, nullptr, 16, 44, 380, 160, SWP_NOZORDER);
+    if (_hNicPin) SetWindowPos(_hNicPin, nullptr, 402, 44, 50, 24, SWP_NOZORDER);
+    if (_hNicReason) SetWindowPos(_hNicReason, nullptr, 16, 72, cx - 32, 30, SWP_NOZORDER);
 
     // Topology map rect (left 60%)
     int mapW = (cx - 40) * 6 / 10;
@@ -392,6 +414,17 @@ void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
 
 // ── Topology Map ──────────────────────────────────────────────────────────────
 
+static COLORREF DeviceNodeColor(const Device& d) {
+    if (!d.online)                          return Theme::TEXT_MUTED;
+    if (d.iotRisk)                          return Theme::WARNING;
+    if (d.trustState == L"owned")           return Theme::SUCCESS;
+    if (d.trustState == L"known")           return Theme::ACCENT;
+    if (d.trustState == L"guest")           return Theme::WARNING;
+    if (d.trustState == L"blocked")         return Theme::DANGER;
+    if (d.trustState == L"watchlist")       return Theme::WATCHLIST;
+    return RGB(80, 90, 120);
+}
+
 void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
     // Background
     HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
@@ -425,80 +458,171 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             goto cleanup;
         }
 
+        // Group devices by subnet
+        std::map<wstring, std::vector<int>> subnetGroups;
+        for (int i = 0; i < (int)r.devices.size(); i++) {
+            wstring sub = r.devices[i].subnet;
+            if (sub.empty()) sub = L"default";
+            subnetGroups[sub].push_back(i);
+        }
+
         int mapLeft   = rc.left   + 12;
         int mapTop    = rc.top    + 28;
         int mapRight  = rc.right  - 12;
         int mapBottom = rc.bottom - 12;
-        int cx        = (mapLeft + mapRight)  / 2;
-        int cy        = (mapTop  + mapBottom) / 2;
-        int radius    = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 22;
-        if (radius < 20) radius = 20;
 
-        int n = std::min((int)r.devices.size(), 24);
+        if (subnetGroups.size() <= 1) {
+            // Single subnet — classic radial layout
+            int cx = (mapLeft + mapRight)  / 2;
+            int cy = (mapTop  + mapBottom) / 2;
+            int radius = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 22;
+            if (radius < 20) radius = 20;
 
-        // Lines gateway → devices
-        HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-        SelectObject(hdc, linePen);
-        for (int i = 0; i < n; i++) {
-            double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
-            int nx = cx + (int)(radius * cos(angle));
-            int ny = cy + (int)(radius * sin(angle));
-            MoveToEx(hdc, cx, cy, nullptr);
-            LineTo(hdc, nx, ny);
-        }
-        DeleteObject(linePen);
+            int n = std::min((int)r.devices.size(), 24);
 
-        // Device nodes + labels
-        for (int i = 0; i < n; i++) {
-            auto& d = r.devices[i];
-            double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
-            int nx = cx + (int)(radius * cos(angle));
-            int ny = cy + (int)(radius * sin(angle));
+            HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+            SelectObject(hdc, linePen);
+            for (int i = 0; i < n; i++) {
+                double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
+                int nx = cx + (int)(radius * cos(angle));
+                int ny = cy + (int)(radius * sin(angle));
+                MoveToEx(hdc, cx, cy, nullptr);
+                LineTo(hdc, nx, ny);
+            }
+            DeleteObject(linePen);
 
-            COLORREF col = RGB(80, 90, 120);  // unknown default
-            if (!d.online)                          col = Theme::TEXT_MUTED;
-            else if (d.iotRisk)                     col = Theme::WARNING;
-            else if (d.trustState == L"owned")      col = Theme::SUCCESS;
-            else if (d.trustState == L"known")      col = Theme::ACCENT;
-            else if (d.trustState == L"guest")      col = Theme::WARNING;
-            else if (d.trustState == L"blocked")    col = Theme::DANGER;
-            else if (d.trustState == L"watchlist")  col = Theme::WATCHLIST;
+            for (int i = 0; i < n; i++) {
+                auto& d = r.devices[i];
+                double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
+                int nx = cx + (int)(radius * cos(angle));
+                int ny = cy + (int)(radius * sin(angle));
 
-            HBRUSH nb = CreateSolidBrush(col);
-            HPEN   np = CreatePen(PS_SOLID, 1, col);
-            HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
-            HPEN   op = (HPEN)SelectObject(hdc, np);
-            Ellipse(hdc, nx - 6, ny - 6, nx + 6, ny + 6);
-            SelectObject(hdc, ob); SelectObject(hdc, op);
-            DeleteObject(nb); DeleteObject(np);
+                COLORREF col = DeviceNodeColor(d);
+                HBRUSH nb = CreateSolidBrush(col);
+                HPEN   np = CreatePen(PS_SOLID, 1, col);
+                HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
+                HPEN   op = (HPEN)SelectObject(hdc, np);
+                Ellipse(hdc, nx - 6, ny - 6, nx + 6, ny + 6);
+                SelectObject(hdc, ob); SelectObject(hdc, op);
+                DeleteObject(nb); DeleteObject(np);
 
-            // Truncated label
-            wstring lbl = d.customName.empty()
-                ? (d.hostname.empty() ? d.ip : d.hostname)
-                : d.customName;
-            if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
+                wstring lbl = d.customName.empty()
+                    ? (d.hostname.empty() ? d.ip : d.hostname)
+                    : d.customName;
+                if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
 
-            SetTextColor(hdc, Theme::TEXT_MUTED);
+                SetTextColor(hdc, Theme::TEXT_MUTED);
+                SelectObject(hdc, Theme::FontSmall());
+                RECT lblRc = { nx - 38, ny + 8, nx + 38, ny + 20 };
+                DrawText(hdc, lbl.c_str(), -1, &lblRc,
+                         DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+            }
+
+            // Gateway center node
+            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
+            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
+            HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
+            HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
+            Ellipse(hdc, cx - 14, cy - 14, cx + 14, cy + 14);
+            SelectObject(hdc, ob2); SelectObject(hdc, op2);
+            DeleteObject(gwb); DeleteObject(gwp);
+
+            SetTextColor(hdc, Theme::BG_APP);
             SelectObject(hdc, Theme::FontSmall());
-            RECT lblRc = { nx - 38, ny + 8, nx + 38, ny + 20 };
-            DrawText(hdc, lbl.c_str(), -1, &lblRc,
-                     DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+            RECT gwRc = { cx - 14, cy - 8, cx + 14, cy + 8 };
+            DrawText(hdc, L"GW", -1, &gwRc,
+                     DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        } else {
+            // Multi-subnet layout — horizontal bands per subnet with gateway at top center
+            int gwCx = (mapLeft + mapRight) / 2;
+            int gwCy = mapTop + 16;
+
+            // Gateway node
+            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
+            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
+            HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
+            HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
+            Ellipse(hdc, gwCx - 12, gwCy - 12, gwCx + 12, gwCy + 12);
+            SelectObject(hdc, ob2); SelectObject(hdc, op2);
+            DeleteObject(gwb); DeleteObject(gwp);
+
+            SetTextColor(hdc, Theme::BG_APP);
+            SelectObject(hdc, Theme::FontSmall());
+            RECT gwRc = { gwCx - 12, gwCy - 7, gwCx + 12, gwCy + 7 };
+            DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+            int bandTop = gwCy + 20;
+            int totalH = mapBottom - bandTop;
+            int numSubnets = std::min((int)subnetGroups.size(), 4);
+            int bandH = totalH / std::max(numSubnets, 1);
+
+            int subIdx = 0;
+            for (auto& [subName, devIndices] : subnetGroups) {
+                if (subIdx >= 4) break;
+                int bTop = bandTop + subIdx * bandH;
+                int bBot = bTop + bandH - 4;
+
+                // Subnet label
+                SetTextColor(hdc, Theme::ACCENT);
+                SelectObject(hdc, Theme::FontSmall());
+                RECT subRc = { mapLeft, bTop, mapRight, bTop + 14 };
+                DrawText(hdc, subName.c_str(), -1, &subRc, DT_LEFT | DT_SINGLELINE);
+
+                // Dashed separator
+                HPEN sepPen = CreatePen(PS_DOT, 1, Theme::BORDER);
+                SelectObject(hdc, sepPen);
+                MoveToEx(hdc, mapLeft, bTop + 15, nullptr);
+                LineTo(hdc, mapRight, bTop + 15);
+                DeleteObject(sepPen);
+
+                // Line from gateway down to this subnet center
+                int subCx = (mapLeft + mapRight) / 2;
+                int subCy = (bTop + 16 + bBot) / 2;
+                HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+                SelectObject(hdc, linePen);
+                MoveToEx(hdc, gwCx, gwCy + 12, nullptr);
+                LineTo(hdc, subCx, bTop + 16);
+                DeleteObject(linePen);
+
+                // Devices in this subnet — horizontal spread
+                int n = std::min((int)devIndices.size(), 12);
+                int nodeW = (mapRight - mapLeft) / std::max(n, 1);
+                for (int i = 0; i < n; i++) {
+                    const Device& d = r.devices[devIndices[i]];
+                    int nx = mapLeft + nodeW / 2 + i * nodeW;
+                    int ny = subCy;
+
+                    // Line from subnet center
+                    HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER);
+                    SelectObject(hdc, lp2);
+                    MoveToEx(hdc, subCx, bTop + 16, nullptr);
+                    LineTo(hdc, nx, ny);
+                    DeleteObject(lp2);
+
+                    COLORREF col = DeviceNodeColor(d);
+                    HBRUSH nb = CreateSolidBrush(col);
+                    HPEN   np = CreatePen(PS_SOLID, 1, col);
+                    HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
+                    HPEN   op = (HPEN)SelectObject(hdc, np);
+                    Ellipse(hdc, nx - 5, ny - 5, nx + 5, ny + 5);
+                    SelectObject(hdc, ob); SelectObject(hdc, op);
+                    DeleteObject(nb); DeleteObject(np);
+
+                    wstring lbl = d.customName.empty()
+                        ? (d.hostname.empty() ? d.ip : d.hostname)
+                        : d.customName;
+                    if ((int)lbl.size() > 8) lbl = lbl.substr(0, 8);
+
+                    SetTextColor(hdc, Theme::TEXT_MUTED);
+                    SelectObject(hdc, Theme::FontSmall());
+                    RECT lblRc = { nx - 32, ny + 7, nx + 32, ny + 18 };
+                    DrawText(hdc, lbl.c_str(), -1, &lblRc,
+                             DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+                }
+
+                subIdx++;
+            }
         }
-
-        // Gateway center node (cyan, larger)
-        HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
-        HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
-        HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
-        HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
-        Ellipse(hdc, cx - 14, cy - 14, cx + 14, cy + 14);
-        SelectObject(hdc, ob2); SelectObject(hdc, op2);
-        DeleteObject(gwb); DeleteObject(gwp);
-
-        SetTextColor(hdc, Theme::BG_APP);
-        SelectObject(hdc, Theme::FontSmall());
-        RECT gwRc = { cx - 14, cy - 8, cx + 14, cy + 8 };
-        DrawText(hdc, L"GW", -1, &gwRc,
-                 DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
 cleanup:
@@ -575,6 +699,31 @@ LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         EnableWindow(_hBtnMonStop, FALSE);
         break;
 
+    case IDC_COMBO_NIC_SELECT:
+        if (HIWORD(wp) == CBN_SELCHANGE && _mainWnd && _hNicCombo && _hNicReason) {
+            int sel = (int)SendMessage(_hNicCombo, CB_GETCURSEL, 0, 0);
+            auto nets = ScanEngine::RankNetworkInterfaces();
+            if (sel >= 0 && sel < (int)nets.size()) {
+                _mainWnd->_selectedNicName = nets[sel].name;
+                SetWindowText(_hNicReason, (L"Selected: " + nets[sel].name +
+                    L" — " + nets[sel].reason).c_str());
+            }
+        }
+        break;
+
+    case IDC_BTN_NIC_PIN:
+        if (_mainWnd && _hNicCombo) {
+            int sel = (int)SendMessage(_hNicCombo, CB_GETCURSEL, 0, 0);
+            auto nets = ScanEngine::RankNetworkInterfaces();
+            if (sel >= 0 && sel < (int)nets.size()) {
+                _mainWnd->_selectedNicName = nets[sel].name;
+                MessageBox(hwnd, (L"Pinned adapter: " + nets[sel].name +
+                    L"\nThis adapter will be preferred for future scans.").c_str(),
+                    L"NIC Pinned", MB_OK | MB_ICONINFORMATION);
+            }
+        }
+        break;
+
     case IDC_BTN_EXPORT:
         if (_mainWnd) {
             wchar_t path[MAX_PATH] = {};
@@ -636,11 +785,42 @@ LRESULT TabOverview::OnScanComplete(HWND hwnd) {
     if (_mapRect.right > _mapRect.left)
         InvalidateRect(hwnd, &_mapRect, FALSE);
 
-    // Populate changes list with anomalies
+    // Populate changes list with anomalies + summary
     if (!_hChangesList || !_mainWnd) return 0;
     ListView_DeleteAllItems(_hChangesList);
     ScanResult r = _mainWnd->GetLastResult();
-    int row = 0;
+
+    // Count change types
+    int nNew = 0, nDisappeared = 0, nPortChanged = 0, nHostChanged = 0, nIpMoved = 0;
+    for (auto& a : r.anomalies) {
+        if (a.type == L"new_device")       nNew++;
+        else if (a.type == L"device_offline")  nDisappeared++;
+        else if (a.type == L"port_changed")    nPortChanged++;
+        else if (a.type == L"hostname_changed") nHostChanged++;
+        else if (a.type == L"ip_changed")      nIpMoved++;
+    }
+
+    // Summary row first
+    if (!r.anomalies.empty()) {
+        wstring summary = L"Summary: ";
+        if (nNew > 0) summary += std::to_wstring(nNew) + L" new, ";
+        if (nDisappeared > 0) summary += std::to_wstring(nDisappeared) + L" disappeared, ";
+        if (nPortChanged > 0) summary += std::to_wstring(nPortChanged) + L" ports changed, ";
+        if (nHostChanged > 0) summary += std::to_wstring(nHostChanged) + L" hostname changed, ";
+        if (nIpMoved > 0) summary += std::to_wstring(nIpMoved) + L" IP moved, ";
+        if (summary.size() > 2 && summary.back() == L' ') { summary.pop_back(); summary.pop_back(); }
+
+        LVITEM item = {};
+        item.mask    = LVIF_TEXT;
+        item.iItem   = 0;
+        item.iSubItem = 0;
+        item.pszText = (LPWSTR)r.scannedAt.c_str();
+        ListView_InsertItem(_hChangesList, &item);
+        ListView_SetItemText(_hChangesList, 0, 1, (LPWSTR)L"SCAN DIFF");
+        ListView_SetItemText(_hChangesList, 0, 2, (LPWSTR)summary.c_str());
+    }
+
+    int row = r.anomalies.empty() ? 0 : 1;
     for (auto& a : r.anomalies) {
         LVITEM item = {};
         item.mask    = LVIF_TEXT;
@@ -702,18 +882,39 @@ void TabOverview::RefreshKPIs() {
 
 void TabOverview::RefreshNetworkInfo() {
     if (!_hNetworkInfo) return;
-    auto nets = ScanEngine::GetLocalNetworks();
+    auto nets = ScanEngine::RankNetworkInterfaces();
     if (nets.empty()) {
         SetWindowText(_hNetworkInfo, L"No network adapters found.");
         return;
     }
-    std::wstring info;
-    for (auto& ni : nets) {
-        info += L"Adapter: " + ni.name +
-                L"   IP: " + ni.localIp + L"/" + ni.cidr +
-                L"   Gateway: " + (ni.gateway.empty() ? L"N/A" : ni.gateway) + L"\n";
-    }
+
+    // Show top-ranked adapter info
+    auto& best = nets[0];
+    std::wstring info = L"Selected: " + best.name + L" (" + best.localIp + L"/" + best.cidr + L")";
+    if (!best.gateway.empty()) info += L"  GW: " + best.gateway;
     SetWindowText(_hNetworkInfo, info.c_str());
+
+    // Show reason
+    if (_hNicReason) {
+        std::wstring reason = L"Auto-selected — " + best.reason;
+        if (nets.size() > 1)
+            reason += L"  |  " + std::to_wstring(nets.size() - 1) + L" other adapter(s) available";
+        SetWindowText(_hNicReason, reason.c_str());
+    }
+
+    // Populate NIC combo
+    if (_hNicCombo) {
+        SendMessage(_hNicCombo, CB_RESETCONTENT, 0, 0);
+        for (size_t i = 0; i < nets.size(); i++) {
+            auto& ni = nets[i];
+            std::wstring label = ni.name + L"  " + ni.localIp + L"/" + ni.cidr;
+            if (!ni.gateway.empty()) label += L" (GW)";
+            if (i == 0) label += L"  \u2605";  // star for recommended
+            label += L"  [" + std::to_wstring(ni.score) + L"pts]";
+            SendMessage(_hNicCombo, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+        }
+        SendMessage(_hNicCombo, CB_SETCURSEL, 0, 0);
+    }
 }
 
 void TabOverview::UpdateFromResult(const ScanResult& result) {

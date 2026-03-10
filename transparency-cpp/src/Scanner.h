@@ -25,6 +25,9 @@ public:
         std::wstring cidr;
         std::wstring gateway;
         std::wstring mask;
+        int    score  = 0;      // NIC ranking score (higher = better)
+        std::wstring reason;    // human-readable explanation of score
+        int    ifType = 0;      // adapter type (6=Ethernet, 71=Wi-Fi)
     };
 
     ScanEngine();
@@ -32,8 +35,10 @@ public:
 
     // Network discovery
     static std::vector<NetworkInterface> GetLocalNetworks();
+    static std::vector<NetworkInterface> RankNetworkInterfaces();
     static std::wstring LookupVendor(const std::wstring& mac);
     static std::wstring FingerprintDeviceType(const Device& d);
+    static void BuildClassificationReason(Device& d);
     static int CalcConfidence(const Device& d);
     static std::wstring GetCurrentTimestamp();
 
