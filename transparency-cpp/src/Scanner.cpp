@@ -331,7 +331,7 @@ std::vector<wstring> ScanEngine::PingSweep(
     if (allIPs.empty()) return liveIPs;
 
     // Semaphore for max 40 concurrent pings
-    SimpleSemaphore sem(40);
+    SimpleSemaphore sem(64);
     std::vector<std::future<void>> futures;
 
     int total = (int)allIPs.size();
@@ -342,7 +342,7 @@ std::vector<wstring> ScanEngine::PingSweep(
         sem.acquire();
         futures.push_back(std::async(std::launch::async, [&, ip = ipStr]() {
             auto defer = [&sem]() { sem.release(); };
-            int lat = PingSingle(ip, 600);
+            int lat = PingSingle(ip, 350);
             if (lat >= 0) {
                 std::lock_guard<std::mutex> lock(liveMtx);
                 liveIPs.push_back(ip);
@@ -1470,7 +1470,7 @@ ScanResult ScanEngine::BuildResult(
 
     // Process each live IP
     std::vector<std::future<Device>> futures;
-    SimpleSemaphore sem(20);
+    SimpleSemaphore sem(32);
 
     for (auto& ip : liveIPs) {
         if (_cancelled) break;
@@ -1588,8 +1588,8 @@ std::future<ScanResult> ScanEngine::QuickScan(
         if (nets.empty()) return ScanResult{};
 
         // Run mDNS, SSDP, IPv6 NDP in parallel
-        auto fMdns = std::async(std::launch::async, [] { return DiscoverMDNS(2500); });
-        auto fSsdp = std::async(std::launch::async, [] { return DiscoverSSDP(2500); });
+        auto fMdns = std::async(std::launch::async, [] { return DiscoverMDNS(1500); });
+        auto fSsdp = std::async(std::launch::async, [] { return DiscoverSSDP(1500); });
         auto fNdp  = std::async(std::launch::async, [] { return DiscoverIPv6NDP(); });
 
         if (progressCb) progressCb(5, L"Discovering services (mDNS/SSDP)...");

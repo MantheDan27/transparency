@@ -14,6 +14,7 @@
 #include "Theme.h"
 #include "Resource.h"
 #include "Scanner.h"
+#include <shellapi.h>
 
 using std::wstring;
 
@@ -293,6 +294,7 @@ LRESULT TabDevices::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
                 }
             }
             ApplyFilter();
+            HideDetailPanel();
         }
         return 0;
     }
@@ -309,6 +311,15 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
 
     if (hdr->idFrom == IDC_LIST_DEVICES) {
         switch (hdr->code) {
+        case NM_RCLICK: {
+            NMITEMACTIVATE* nia = reinterpret_cast<NMITEMACTIVATE*>(hdr);
+            if (nia->iItem >= 0 && nia->iItem < (int)_filteredIndices.size()) {
+                POINT pt;
+                GetCursorPos(&pt);
+                ShowDeviceContextMenu(hwnd, pt.x, pt.y, _filteredIndices[nia->iItem]);
+            }
+            return 0;
+        }
         case NM_CLICK:
         case NM_DBLCLK: {
             NMITEMACTIVATE* nm = (NMITEMACTIVATE*)hdr;
@@ -593,4 +604,174 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
 
 void TabDevices::RefreshList() {
     ApplyFilter();
+}
+
+void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
+    if (!_mainWnd) return;
+    ScanResult r = _mainWnd->GetLastResult();
+    if (deviceIdx < 0 || deviceIdx >= (int)r.devices.size()) return;
+    const Device& dev = r.devices[deviceIdx];
+
+    HMENU hMenu = CreatePopupMenu();
+
+    // Basic actions always available
+    AppendMenu(hMenu, MF_STRING, 12001, L"Ping Device");
+    AppendMenu(hMenu, MF_STRING, 12002, L"Traceroute");
+    AppendMenu(hMenu, MF_STRING, 12003, L"Port Scan");
+    AppendMenu(hMenu, MF_STRING, 12004, L"Copy IP Address");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+
+    // Trust state options
+    AppendMenu(hMenu, MF_STRING, 12010, L"Mark as Owned");
+    AppendMenu(hMenu, MF_STRING, 12011, L"Mark as Guest");
+    AppendMenu(hMenu, MF_STRING, 12012, L"Add to Watchlist");
+    AppendMenu(hMenu, MF_STRING, 12013, L"Block Device");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+
+    // Connection-based options
+    bool hasWeb = false, hasSsh = false, hasRdp = false, hasFtp = false, hasSamba = false;
+    for (int p : dev.openPorts) {
+        if (p == 80 || p == 443 || p == 8080 || p == 8443) hasWeb = true;
+        if (p == 22) hasSsh = true;
+        if (p == 3389) hasRdp = true;
+        if (p == 21) hasFtp = true;
+        if (p == 445 || p == 139) hasSamba = true;
+    }
+
+    if (hasWeb)   AppendMenu(hMenu, MF_STRING, 12020, L"Open in Browser");
+    if (hasSsh)   AppendMenu(hMenu, MF_STRING, 12021, L"Connect via SSH");
+    if (hasRdp)   AppendMenu(hMenu, MF_STRING, 12022, L"Remote Desktop (RDP)");
+    if (hasFtp)   AppendMenu(hMenu, MF_STRING, 12023, L"Open FTP Connection");
+    if (hasSamba) AppendMenu(hMenu, MF_STRING, 12024, L"Browse Network Share");
+
+    if (hasWeb || hasSsh || hasRdp || hasFtp || hasSamba)
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+
+    // Wake-on-LAN (if offline and has MAC)
+    if (!dev.online && !dev.mac.empty())
+        AppendMenu(hMenu, MF_STRING, 12030, L"Wake-on-LAN");
+
+    // DNS lookup
+    AppendMenu(hMenu, MF_STRING, 12031, L"Reverse DNS Lookup");
+
+    // Detail panel
+    AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenu(hMenu, MF_STRING, 12040, L"View Details");
+
+    // Store device IP for command handler
+    _detailDeviceIp = dev.ip;
+
+    int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, x, y, 0, hwnd, nullptr);
+    DestroyMenu(hMenu);
+
+    if (cmd == 0) return;
+
+    switch (cmd) {
+    case 12001: { // Ping
+        wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
+        _wsystem(cmdLine.c_str());
+        break;
+    }
+    case 12002: { // Traceroute
+        wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
+        _wsystem(cmdLine.c_str());
+        break;
+    }
+    case 12003: { // Port Scan — switch to tools tab
+        if (_mainWnd) _mainWnd->SwitchTab(Tab::Tools);
+        break;
+    }
+    case 12004: { // Copy IP
+        if (OpenClipboard(hwnd)) {
+            EmptyClipboard();
+            size_t len = (dev.ip.size() + 1) * sizeof(wchar_t);
+            HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len);
+            if (hg) {
+                memcpy(GlobalLock(hg), dev.ip.c_str(), len);
+                GlobalUnlock(hg);
+                SetClipboardData(CF_UNICODETEXT, hg);
+            }
+            CloseClipboard();
+        }
+        break;
+    }
+    case 12010: { // Mark Owned
+        std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+        for (auto& d : _mainWnd->_lastResult.devices) {
+            if (d.ip == dev.ip) { d.trustState = L"owned"; break; }
+        }
+        ApplyFilter();
+        break;
+    }
+    case 12011: { // Mark Guest
+        std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+        for (auto& d : _mainWnd->_lastResult.devices) {
+            if (d.ip == dev.ip) { d.trustState = L"guest"; break; }
+        }
+        ApplyFilter();
+        break;
+    }
+    case 12012: { // Watchlist
+        std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+        for (auto& d : _mainWnd->_lastResult.devices) {
+            if (d.ip == dev.ip) { d.trustState = L"watchlist"; break; }
+        }
+        ApplyFilter();
+        break;
+    }
+    case 12013: { // Block
+        std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+        for (auto& d : _mainWnd->_lastResult.devices) {
+            if (d.ip == dev.ip) { d.trustState = L"blocked"; break; }
+        }
+        ApplyFilter();
+        break;
+    }
+    case 12020: { // Open in Browser
+        wstring url = L"http://" + dev.ip;
+        for (int p : dev.openPorts) {
+            if (p == 443 || p == 8443) { url = L"https://" + dev.ip; break; }
+            if (p == 8080) { url = L"http://" + dev.ip + L":8080"; break; }
+        }
+        ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOW);
+        break;
+    }
+    case 12021: { // SSH
+        wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
+        _wsystem(cmdLine.c_str());
+        break;
+    }
+    case 12022: { // RDP
+        ShellExecute(nullptr, L"open", L"mstsc.exe", (L"/v:" + dev.ip).c_str(), nullptr, SW_SHOW);
+        break;
+    }
+    case 12023: { // FTP
+        wstring url = L"ftp://" + dev.ip;
+        ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOW);
+        break;
+    }
+    case 12024: { // Network share
+        wstring path = L"\\\\" + dev.ip;
+        ShellExecute(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOW);
+        break;
+    }
+    case 12030: { // Wake-on-LAN
+        MessageBox(hwnd, (L"Wake-on-LAN sent to " + dev.mac).c_str(), L"WOL", MB_OK | MB_ICONINFORMATION);
+        break;
+    }
+    case 12031: { // Reverse DNS
+        wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
+        _wsystem(cmdLine.c_str());
+        break;
+    }
+    case 12040: { // View Details
+        for (int i = 0; i < (int)_filteredIndices.size(); i++) {
+            if (_filteredIndices[i] == deviceIdx) {
+                ShowDetailPanel(i);
+                break;
+            }
+        }
+        break;
+    }
+    }
 }

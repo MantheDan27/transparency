@@ -22,6 +22,7 @@ set(SOURCES
     src/TabTools.cpp
     src/TabPrivacy.cpp
     src/TabLedger.cpp
+    src/TabSmartHome.cpp
     src/Scanner.cpp
     src/Monitor.cpp
 )
@@ -40,6 +41,7 @@ set(HEADERS
     src/TabTools.h
     src/TabPrivacy.h
     src/TabLedger.h
+    src/TabSmartHome.h
 )
 
 add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})

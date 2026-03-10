@@ -20,6 +20,7 @@ class TabAlerts;
 class TabTools;
 class TabLedger;
 class TabPrivacy;
+class TabSmartHome;
 
 enum class Tab {
     Overview,
@@ -28,6 +29,7 @@ enum class Tab {
     Tools,
     Ledger,
     Privacy,
+    SmartHome,
     COUNT
 };
 
@@ -86,6 +88,7 @@ private:
     std::unique_ptr<TabTools>    _tabTools;
     std::unique_ptr<TabLedger>   _tabLedger;
     std::unique_ptr<TabPrivacy>  _tabPrivacy;
+    std::unique_ptr<TabSmartHome> _tabSmartHome;
 
     // Hover tracking
     int  _hoverNav       = -1;

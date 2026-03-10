@@ -23,6 +23,7 @@
 #include "TabTools.h"
 #include "TabLedger.h"
 #include "TabPrivacy.h"
+#include "TabSmartHome.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -40,6 +41,7 @@ static const NavItem NAV_ITEMS[] = {
     { L"\u25C6", L"Tools",     Tab::Tools     },
     { L"\u25A4", L"Ledger",    Tab::Ledger    },
     { L"\u25CB", L"Privacy",   Tab::Privacy   },
+    { L"\u25C8", L"Smart Home", Tab::SmartHome },
 };
 
 // ─── Create ──────────────────────────────────────────────────────────────────
@@ -225,6 +227,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     _tabTools    = std::make_unique<TabTools>();
     _tabLedger   = std::make_unique<TabLedger>();
     _tabPrivacy  = std::make_unique<TabPrivacy>();
+    _tabSmartHome = std::make_unique<TabSmartHome>();
 
     int panelX = SIDEBAR_WIDTH;
     int panelW = cx - SIDEBAR_WIDTH;
@@ -235,6 +238,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     _tabTools   ->Create(hwnd, panelX, 0, panelW, cy, this);
     _tabLedger  ->Create(hwnd, panelX, 0, panelW, cy, this);
     _tabPrivacy ->Create(hwnd, panelX, 0, panelW, cy, this);
+    _tabSmartHome->Create(hwnd, panelX, 0, panelW, cy, this);
 
     ShowActivePanel();
 
@@ -312,6 +316,7 @@ void MainWindow::LayoutChildren(int cx, int cy) {
     resize(_tabTools);
     resize(_tabLedger);
     resize(_tabPrivacy);
+    resize(_tabSmartHome);
 }
 
 // ─── OnSize ──────────────────────────────────────────────────────────────────
@@ -468,6 +473,7 @@ void MainWindow::ShowActivePanel() {
     show(_tabTools,    _currentTab == Tab::Tools);
     show(_tabLedger,   _currentTab == Tab::Ledger);
     show(_tabPrivacy,  _currentTab == Tab::Privacy);
+    show(_tabSmartHome, _currentTab == Tab::SmartHome);
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
@@ -848,6 +854,10 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
         SendMessage(_tabAlerts->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
     if (_tabLedger && _tabLedger->GetHwnd())
         SendMessage(_tabLedger->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
+    if (_tabTools && _tabTools->GetHwnd())
+        SendMessage(_tabTools->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
+    if (_tabSmartHome && _tabSmartHome->GetHwnd())
+        SendMessage(_tabSmartHome->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
 
     ScanResult r = GetLastResult();
     AddLedgerEntry(L"Scan Complete",

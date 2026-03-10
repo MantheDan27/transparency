@@ -37,6 +37,7 @@ private:
     void HideDetailPanel();
     void UpdateDetailPanel(const Device& dev);
     void ApplyFilter();
+    void ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx);
 
     wstring GetPortSummary(const Device& dev);
 
