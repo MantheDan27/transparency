@@ -15,6 +15,7 @@
 #include "Resource.h"
 #include "Scanner.h"
 #include <shellapi.h>
+#include <ws2tcpip.h>
 
 using std::wstring;
 
@@ -666,13 +667,23 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     if (cmd == 0) return;
 
+    auto isSafeIp = [](const wstring& ip) {
+        if (ip.empty() || ip.length() > 255) return false;
+        for (wchar_t c : ip) {
+            if (!iswalnum(c) && c != L'.' && c != L':' && c != L'-') return false;
+        }
+        return true;
+    };
+
     switch (cmd) {
     case 12001: { // Ping
+        if (!isSafeIp(dev.ip)) break;
         wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12002: { // Traceroute
+        if (!isSafeIp(dev.ip)) break;
         wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -737,6 +748,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
+        if (!isSafeIp(dev.ip)) break;
         wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -760,6 +772,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
+        if (!isSafeIp(dev.ip)) break;
         wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
