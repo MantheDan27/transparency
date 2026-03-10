@@ -182,6 +182,11 @@ endif()
 
 # Additional scanner test
 add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
+if(MSVC)
+    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+elseif(MINGW OR CYGWIN)
+    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "-mconsole")
+endif()
 target_compile_definitions(ScannerTest PRIVATE
     UNICODE
     _UNICODE
