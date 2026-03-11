@@ -37,13 +37,13 @@ MainWindow* MainWindow::s_instance = nullptr;
 struct NavItem { const wchar_t* icon; const wchar_t* label; Tab tab; };
 
 static const NavItem NAV_ITEMS[] = {
-    { L"\u25A6", L"Overview",  Tab::Overview  },
-    { L"\u25A1", L"Devices",   Tab::Devices   },
+    { L"\u25C8", L"Overview",  Tab::Overview  },
+    { L"\u25A3", L"Devices",   Tab::Devices   },
     { L"\u25B2", L"Alerts",    Tab::Alerts    },
-    { L"\u25C6", L"Tools",     Tab::Tools     },
+    { L"\u25C7", L"Tools",     Tab::Tools     },
     { L"\u25A4", L"Ledger",    Tab::Ledger    },
-    { L"\u25CB", L"Privacy",   Tab::Privacy   },
-    { L"\u25C8", L"Smart Home", Tab::SmartHome },
+    { L"\u25CF", L"Privacy",   Tab::Privacy   },
+    { L"\u25C9", L"Smart Home", Tab::SmartHome },
 };
 
 // ─── Create ──────────────────────────────────────────────────────────────────
@@ -336,71 +336,100 @@ LRESULT MainWindow::OnSize(HWND hwnd, int cx, int cy) {
 // ─── DrawNavSidebar ──────────────────────────────────────────────────────────
 
 void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
-    // Sidebar background
+    // Sidebar background + chrome
     RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, rc.bottom };
     FillRect(hdc, &sidebarRc, Theme::BrushSidebar());
 
-    // Right border
+    RECT topAccent = { 0, 0, SIDEBAR_WIDTH, 2 };
+    FillRect(hdc, &topAccent, Theme::BrushAccent());
+
     RECT borderRc = { SIDEBAR_WIDTH - 1, 0, SIDEBAR_WIDTH, rc.bottom };
     FillRect(hdc, &borderRc, Theme::BrushBorder());
 
-    // Brand name
-    RECT brandRc = { 0, 12, SIDEBAR_WIDTH, NAV_BTN_TOP - 4 };
+    // Brand block
+    RECT brandRc = { 0, 24, SIDEBAR_WIDTH, NAV_BTN_TOP - 18 };
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::ACCENT);
+    SetTextColor(hdc, Theme::ACCENT_GLOW);
     HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBrand());
     DrawText(hdc, L"Transparency", -1, &brandRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, oldFont);
 
-    // Separator under brand
-    RECT sepRc = { 10, NAV_BTN_TOP - 6, SIDEBAR_WIDTH - 10, NAV_BTN_TOP - 5 };
-    FillRect(hdc, &sepRc, Theme::BrushBorder());
+    SelectObject(hdc, Theme::FontSmall());
+    SetTextColor(hdc, Theme::TEXT_MUTED);
+    RECT tagRc = { 0, 50, SIDEBAR_WIDTH, 66 };
+    DrawText(hdc, L"NETWORK INTELLIGENCE", -1, &tagRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, oldFont);
 
     // Nav buttons
     for (int i = 0; i < (int)Tab::COUNT; i++) {
         int btnY  = NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
-        RECT btnRc = { 8, btnY, SIDEBAR_WIDTH - 8, btnY + NAV_BTN_HEIGHT - 2 };
+        RECT btnRc = { 12, btnY, SIDEBAR_WIDTH - 12, btnY + NAV_BTN_HEIGHT - 6 };
 
         bool active  = (_currentTab == (Tab)i);
         bool hovered = (_hoverNav == i && !active);
 
-        COLORREF bg = active  ? Theme::BG_ROW_SEL
-                    : hovered ? Theme::BG_ROW_HOV
-                    :           Theme::BG_SIDEBAR;
+        COLORREF bg = Theme::BG_SIDEBAR;
+        COLORREF border = Theme::SIDEBAR_BORDER;
+        if (active) {
+            bg = Theme::BG_ROW_SEL;
+            border = Theme::ACCENT;
+        } else if (hovered) {
+            bg = Theme::BG_ROW_HOV;
+            border = Theme::BORDER;
+        }
+
         HBRUSH bgBrush = CreateSolidBrush(bg);
-        FillRect(hdc, &btnRc, bgBrush);
+        HPEN borderPen = CreatePen(PS_SOLID, 1, border);
+        HBRUSH oldB = (HBRUSH)SelectObject(hdc, bgBrush);
+        HPEN oldP = (HPEN)SelectObject(hdc, borderPen);
+        RoundRect(hdc, btnRc.left, btnRc.top, btnRc.right, btnRc.bottom, 12, 12);
+        SelectObject(hdc, oldB);
+        SelectObject(hdc, oldP);
         DeleteObject(bgBrush);
+        DeleteObject(borderPen);
 
         if (active) {
-            RECT accent = { btnRc.left, btnRc.top + 4, btnRc.left + 3, btnRc.bottom - 4 };
-            HBRUSH accentBrush = CreateSolidBrush(Theme::ACCENT);
-            FillRect(hdc, &accent, accentBrush);
-            DeleteObject(accentBrush);
+            // Active indicator (vertical accent pill)
+            RECT accentRc = { btnRc.left + 6, btnRc.top + 10, btnRc.left + 9, btnRc.bottom - 10 };
+            HBRUSH oldAccentBrush = (HBRUSH)SelectObject(hdc, Theme::BrushAccent());
+            HPEN oldAccentPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
+            RoundRect(hdc, accentRc.left, accentRc.top, accentRc.right, accentRc.bottom, 3, 3);
+            SelectObject(hdc, oldAccentBrush);
+            SelectObject(hdc, oldAccentPen);
         }
 
         SetBkMode(hdc, TRANSPARENT);
-        COLORREF textColor = active  ? Theme::ACCENT
+        COLORREF textColor = active  ? Theme::ACCENT_GLOW
                            : hovered ? Theme::TEXT_PRIMARY
                            :           Theme::TEXT_SECONDARY;
         SetTextColor(hdc, textColor);
 
-        HFONT navFont = (HFONT)SelectObject(hdc, Theme::FontBody());
+        HFONT navFont = (HFONT)SelectObject(hdc, active ? Theme::FontBold() : Theme::FontBody());
 
-        RECT iconRc  = { btnRc.left + 12, btnRc.top, btnRc.left + 28, btnRc.bottom };
+        // Draw icon
+        RECT iconRc  = { btnRc.left + 16, btnRc.top, btnRc.left + 38, btnRc.bottom };
         DrawText(hdc, NAV_ITEMS[i].icon, -1, &iconRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
-        RECT labelRc = { btnRc.left + 30, btnRc.top, btnRc.right - 4, btnRc.bottom };
+        // Draw label
+        RECT labelRc = { btnRc.left + 42, btnRc.top, btnRc.right - 8, btnRc.bottom };
         DrawText(hdc, NAV_ITEMS[i].label, -1, &labelRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
         SelectObject(hdc, navFont);
     }
 
-    // Version label
+    // Footer status + version
+    RECT statusDot = { 18, rc.bottom - 54, 26, rc.bottom - 46 };
+    FillRect(hdc, &statusDot, Theme::BrushSuccess());
+    RECT statusRc = { 30, rc.bottom - 56, SIDEBAR_WIDTH - 8, rc.bottom - 44 };
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
-    RECT verRc = { 4, rc.bottom - 28, SIDEBAR_WIDTH - 4, rc.bottom - 6 };
+    HFONT statusFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+    DrawText(hdc, L"System secure", -1, &statusRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, statusFont);
+
+    RECT verRc = { 4, rc.bottom - 30, SIDEBAR_WIDTH - 4, rc.bottom - 10 };
+    SetTextColor(hdc, Theme::TEXT_MUTED);
     HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"v3.6.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawText(hdc, L"v3.6.0 premium", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, verFont);
 }
 

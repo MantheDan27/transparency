@@ -422,12 +422,14 @@ async function grabBanner(ip, port, timeout = 1500) {
 // ── TLS certificate info ──────────────────────────────────────────────────────
 async function getTLSCert(ip, port, timeout = 3000) {
   return new Promise(resolve => {
+    let resolved = false;
+    const finish = (val) => { if (!resolved) { resolved = true; resolve(val); } };
     try {
       const sock = tls.connect({ host: ip, port, rejectUnauthorized: false, timeout }, () => {
         const cert = sock.getPeerCertificate();
         sock.destroy();
-        if (!cert || !cert.subject) return resolve(null);
-        resolve({
+        if (!cert || !cert.subject) return finish(null);
+        finish({
           cn:      cert.subject.CN   || null,
           org:     cert.subject.O    || null,
           issuer:  cert.issuer?.CN   || null,
@@ -435,9 +437,9 @@ async function getTLSCert(ip, port, timeout = 3000) {
           san:     cert.subjectaltname || null,
         });
       });
-      sock.on('error', () => resolve(null));
-      setTimeout(() => { sock.destroy(); resolve(null); }, timeout);
-    } catch { resolve(null); }
+      sock.on('error', () => finish(null));
+      setTimeout(() => { sock.destroy(); finish(null); }, timeout);
+    } catch { finish(null); }
   });
 }
 
@@ -460,7 +462,11 @@ function discoverMDNS(timeoutMs = 3000) {
       '_workstation._tcp.local', '_device-info._tcp.local',
     ];
 
-    sock.on('error', () => resolve(results));
+    sock.on('error', (err) => {
+      console.error('[mDNS] socket error:', err.message);
+      try { sock.close(); } catch {}
+      resolve(results);
+    });
     sock.on('message', (msg, rinfo) => {
       try {
         const txt = msg.toString('binary');
@@ -530,7 +536,11 @@ function discoverSSDP(timeoutMs = 3000) {
       'ST: ssdp:all\r\n\r\n'
     );
 
-    sock.on('error', () => resolve(results));
+    sock.on('error', (err) => {
+      console.error('[SSDP] socket error:', err.message);
+      try { sock.close(); } catch {}
+      resolve(results);
+    });
     sock.on('message', (data, rinfo) => {
       const ip = rinfo.address;
       const txt = data.toString();
@@ -1281,7 +1291,6 @@ async function scanNetwork(progressCallback, opts = {}) {
 
 module.exports = {
   getMac,
-  scanNetwork, analyzeAnomalies,
   scanNetwork, analyzeAnomalies, getAnomalyExplanation,
   quickScan, standardScan, deepScan,
   discoverMDNS, discoverSSDP, lookupNetBIOS,

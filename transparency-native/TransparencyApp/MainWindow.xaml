@@ -1,670 +1,306 @@
 <Window x:Class="TransparencyApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Transparency — Device Monitor"
-        Height="880" Width="1300"
-        MinHeight="700" MinWidth="1000"
-        Background="#101218" Foreground="#E2E4EA"
+        Title="Transparency - Network Intelligence"
+        Height="900" Width="1380" MinHeight="760" MinWidth="1120"
+        Background="#05070A" Foreground="#ECF0FA"
         FontFamily="Segoe UI Variable, Segoe UI"
         WindowStartupLocation="CenterScreen">
 
-    <!-- ═══════════════════════════════ RESOURCES ═══════════════════════════════ -->
     <Window.Resources>
+        <LinearGradientBrush x:Key="BgRoot" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#05070A" Offset="0"/>
+            <GradientStop Color="#081224" Offset="1"/>
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="Glass" Color="#77131D2E"/>
+        <SolidColorBrush x:Key="GlassStrong" Color="#A018243A"/>
+        <SolidColorBrush x:Key="Border" Color="#5A4E658F"/>
+        <SolidColorBrush x:Key="Accent" Color="#3D7FFF"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#A8B6CE"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#6A7C9E"/>
+        <SolidColorBrush x:Key="Danger" Color="#FF607A"/>
+        <SolidColorBrush x:Key="Success" Color="#2FD191"/>
+        <DropShadowEffect x:Key="CardShadow" Color="#90000000" BlurRadius="20" ShadowDepth="0" Opacity="0.45"/>
 
-        <!-- ── Buttons ─────────────────────────────────────────────────────── -->
-        <Style x:Key="NavBtn" TargetType="Button">
-            <Setter Property="Background"              Value="Transparent"/>
-            <Setter Property="Foreground"              Value="#8B90A0"/>
-            <Setter Property="FontSize"                Value="13.5"/>
-            <Setter Property="Padding"                 Value="16,12"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="BorderThickness"         Value="0"/>
-            <Setter Property="Margin"                  Value="0,2"/>
-            <Setter Property="Cursor"                  Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
-                                CornerRadius="10" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#1E212B"/>
-                                <Setter Property="Foreground"                Value="#5B8DEF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="PrimaryBtn" TargetType="Button">
-            <Setter Property="Background"     Value="#5B8DEF"/>
-            <Setter Property="Foreground"     Value="#FFFFFF"/>
-            <Setter Property="FontSize"       Value="13.5"/>
-            <Setter Property="FontWeight"     Value="SemiBold"/>
-            <Setter Property="Padding"        Value="24,11"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor"         Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
-                                CornerRadius="10" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#4A7DE0"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bg" Property="Background" Value="#1E212B"/>
-                                <Setter Property="Foreground"                Value="#565B6E"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="DangerBtn" TargetType="Button">
-            <Setter Property="Background"     Value="#1E1215"/>
-            <Setter Property="Foreground"     Value="#F87171"/>
-            <Setter Property="FontSize"       Value="13.5"/>
-            <Setter Property="FontWeight"     Value="SemiBold"/>
-            <Setter Property="Padding"        Value="24,11"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush"    Value="#3D1D24"/>
-            <Setter Property="Cursor"         Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background"    Value="#F87171"/>
-                                <Setter TargetName="Bg" Property="BorderBrush"   Value="#F87171"/>
-                                <Setter Property="Foreground"                    Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="SmallBtn" TargetType="Button">
-            <Setter Property="Background"     Value="Transparent"/>
-            <Setter Property="Foreground"     Value="#5B8DEF"/>
-            <Setter Property="FontSize"       Value="12.5"/>
-            <Setter Property="Padding"        Value="12,6"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush"    Value="#252830"/>
-            <Setter Property="Cursor"         Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background"  Value="#1E212B"/>
-                                <Setter TargetName="Bg" Property="BorderBrush" Value="#5B8DEF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── Cards / sections ────────────────────────────────────────────── -->
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background"       Value="#1A1D27"/>
-            <Setter Property="CornerRadius"     Value="14"/>
-            <Setter Property="BorderBrush"      Value="#252830"/>
-            <Setter Property="BorderThickness"  Value="1"/>
-            <Setter Property="Padding"          Value="28"/>
+            <Setter Property="Background" Value="{StaticResource Glass}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="22"/>
+            <Setter Property="Padding" Value="22"/>
+            <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
         </Style>
 
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="FontSize"   Value="10.5"/>
+            <Setter Property="FontSize" Value="10.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="#565B6E"/>
-            <Setter Property="Margin"     Value="0,0,0,10"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
 
-        <!-- ── DataGrid ─────────────────────────────────────────────────────── -->
+        <Style x:Key="NavBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#00000000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="16">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#4A17243D"/>
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#88658ECF"/>
+                                <Setter Property="Foreground" Value="#DDE8FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PillBtn" TargetType="Button">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="999">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bg" Property="Opacity" Value="0.9"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Bg" Property="Opacity" Value="0.75"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Bg" Property="Opacity" Value="0.45"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource PillBtn}">
+            <Setter Property="Background" Value="#E03D7FFF"/><Setter Property="BorderBrush" Value="#FF6A9BFF"/><Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style x:Key="SmallBtn" TargetType="Button" BasedOn="{StaticResource PillBtn}">
+            <Setter Property="FontSize" Value="12"/><Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Background" Value="#61172843"/><Setter Property="BorderBrush" Value="#7B638DD1"/><Setter Property="Foreground" Value="#DDE8FF"/>
+        </Style>
+        <Style x:Key="GhostBtn" TargetType="Button" BasedOn="{StaticResource PillBtn}">
+            <Setter Property="Background" Value="#701A2C48"/><Setter Property="BorderBrush" Value="#7C6287C8"/><Setter Property="Foreground" Value="#D9E5FF"/>
+        </Style>
+        <Style x:Key="DangerBtn" TargetType="Button" BasedOn="{StaticResource PillBtn}">
+            <Setter Property="Background" Value="#992A1020"/><Setter Property="BorderBrush" Value="#CCB84463"/><Setter Property="Foreground" Value="#FFD5DE"/>
+        </Style>
+
         <Style x:Key="DGHeader" TargetType="DataGridColumnHeader">
-            <Setter Property="Background"      Value="#101218"/>
-            <Setter Property="Foreground"      Value="#565B6E"/>
-            <Setter Property="FontSize"        Value="10.5"/>
-            <Setter Property="FontWeight"      Value="SemiBold"/>
-            <Setter Property="Padding"         Value="14,11"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
-            <Setter Property="BorderBrush"     Value="#252830"/>
+            <Setter Property="Background" Value="#75122034"/><Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="FontSize" Value="10.5"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="16,12"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/><Setter Property="BorderBrush" Value="#5E3B527A"/>
         </Style>
-
         <Style x:Key="DGCell" TargetType="DataGridCell">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="#E2E4EA"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Padding"         Value="2,0"/>
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#233755"/>
-                    <Setter Property="Foreground" Value="#5B8DEF"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="#ECF0FA"/>
+            <Setter Property="BorderThickness" Value="0"/><Setter Property="FontSize" Value="13"/><Setter Property="Padding" Value="4,2"/>
+            <Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#7C24457A"/><Setter Property="Foreground" Value="#E6F0FF"/></Trigger></Style.Triggers>
         </Style>
-
         <Style x:Key="DGRow" TargetType="DataGridRow">
             <Setter Property="Background" Value="Transparent"/>
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#1E212B"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#233755"/>
-                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#63203657"/></Trigger>
+                <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#7C24457A"/></Trigger>
             </Style.Triggers>
         </Style>
 
-        <!-- ── ListBox (ledger) ──────────────────────────────────────────────── -->
         <Style x:Key="LedgerList" TargetType="ListBox">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontFamily"      Value="Cascadia Code, Consolas"/>
-            <Setter Property="FontSize"        Value="12"/>
-            <Setter Property="Foreground"      Value="#8B90A0"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Cascadia Code, Consolas"/><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
         </Style>
         <Style x:Key="LedgerItem" TargetType="ListBoxItem">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding"         Value="14,9"/>
-            <Setter Property="Foreground"      Value="#8B90A0"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#1E212B"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="Padding" Value="16,10"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#5A1A2D4A"/></Trigger></Style.Triggers>
         </Style>
-
     </Window.Resources>
 
-    <!-- ═══════════════════════════════ LAYOUT ════════════════════════════════ -->
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <Grid Background="{StaticResource BgRoot}">
+        <Grid Margin="20">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="260"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
-        <!-- ── SIDEBAR ─────────────────────────────────────────────────────── -->
-        <Border Grid.Column="0" Background="#14161E"
-                BorderBrush="#252830" BorderThickness="0,0,1,0">
-            <DockPanel>
-
-                <!-- Logo -->
-                <StackPanel DockPanel.Dock="Top" Margin="22,28,22,32">
-                    <TextBlock Text="Transparency"
-                               FontSize="21" FontWeight="SemiBold" Foreground="#5B8DEF"/>
-                    <TextBlock Text="Device Security Monitor"
-                               FontSize="11.5" Foreground="#565B6E" Margin="0,5,0,0"/>
-                </StackPanel>
-
-                <!-- Navigation -->
-                <StackPanel DockPanel.Dock="Top" Margin="10,0">
-                    <TextBlock Text="VIEWS" Style="{StaticResource SectionLabel}" Margin="12,0,0,10"/>
-
-                    <Button Name="NavDashboard" Tag="Dashboard" Click="Nav_Click"
-                            Style="{StaticResource NavBtn}">
-                        <StackPanel Orientation="Horizontal" Margin="0">
-                            <TextBlock Text="[ ]" FontFamily="Cascadia Code, Consolas" FontSize="13"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Dashboard" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Button Name="NavAnomalies" Tag="Anomalies" Click="Nav_Click"
-                            Style="{StaticResource NavBtn}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text=" ! " FontFamily="Cascadia Code, Consolas" FontSize="13"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Anomalies" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Button Name="NavLedger" Tag="Ledger" Click="Nav_Click"
-                            Style="{StaticResource NavBtn}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text=" # " FontFamily="Cascadia Code, Consolas" FontSize="13"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Data Ledger" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Button Name="NavSettings" Tag="Settings" Click="Nav_Click"
-                            Style="{StaticResource NavBtn}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text=" * " FontFamily="Cascadia Code, Consolas" FontSize="13"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Settings" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-
-                <!-- Footer -->
-                <StackPanel DockPanel.Dock="Bottom" Margin="22,0,22,24">
-                    <Border BorderBrush="#252830" BorderThickness="0,1,0,0" Margin="0,0,0,16"/>
-                    <TextBlock Text="v2.0.2  native" Foreground="#565B6E" FontSize="11" FontFamily="Cascadia Code, Consolas"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Ellipse Width="7" Height="7" Fill="#34D399" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                        <TextBlock Text="Online" Foreground="#34D399" FontSize="11"/>
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="18" Background="#B9121B2D">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,2,0,24">
+                        <TextBlock Text="Transparency" FontSize="22" FontWeight="SemiBold" Foreground="#DCE7FF"/>
+                        <TextBlock Text="Network Intelligence Console" FontSize="11.5" Foreground="{StaticResource TextMuted}" Margin="0,6,0,0"/>
                     </StackPanel>
-                </StackPanel>
-
-            </DockPanel>
-        </Border>
-
-        <!-- ── CONTENT AREA ────────────────────────────────────────────────── -->
-        <Grid Grid.Column="1">
-
-            <!-- ════════════ DASHBOARD ════════════ -->
-            <Grid Name="ViewDashboard" Visibility="Visible" Margin="36,30,36,24">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <!-- Header -->
-                <DockPanel Grid.Row="0" Margin="0,0,0,28" LastChildFill="False">
-                    <StackPanel>
-                        <TextBlock Text="Network Dashboard"
-                                   FontSize="24" FontWeight="Bold" Foreground="#E2E4EA"/>
-                        <TextBlock Name="TxtLastScanned"
-                                   Text="Run a scan to discover devices on your network."
-                                   FontSize="12" Foreground="#565B6E" Margin="0,5,0,0"/>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="VIEWS" Style="{StaticResource SectionLabel}" Margin="12,0,0,10"/>
+                        <Button Name="NavDashboard" Tag="Dashboard" Click="Nav_Click" Style="{StaticResource NavBtn}"><StackPanel Orientation="Horizontal"><TextBlock Text="[ ]" FontFamily="Cascadia Code, Consolas" Margin="0,0,10,0"/><TextBlock Text="Dashboard"/></StackPanel></Button>
+                        <Button Name="NavAnomalies" Tag="Anomalies" Click="Nav_Click" Style="{StaticResource NavBtn}"><StackPanel Orientation="Horizontal"><TextBlock Text=" ! " FontFamily="Cascadia Code, Consolas" Margin="0,0,10,0"/><TextBlock Text="Anomalies"/></StackPanel></Button>
+                        <Button Name="NavLedger" Tag="Ledger" Click="Nav_Click" Style="{StaticResource NavBtn}"><StackPanel Orientation="Horizontal"><TextBlock Text=" # " FontFamily="Cascadia Code, Consolas" Margin="0,0,10,0"/><TextBlock Text="Activity Ledger"/></StackPanel></Button>
+                        <Button Name="NavSettings" Tag="Settings" Click="Nav_Click" Style="{StaticResource NavBtn}"><StackPanel Orientation="Horizontal"><TextBlock Text=" * " FontFamily="Cascadia Code, Consolas" Margin="0,0,10,0"/><TextBlock Text="Privacy Settings"/></StackPanel></Button>
                     </StackPanel>
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Name="TxtScanStatus" Foreground="#8B90A0" FontSize="12"
-                                   VerticalAlignment="Center" Margin="0,0,18,0" FontFamily="Cascadia Code, Consolas"/>
-                        <Button Name="ScanBtn" Content="Scan Network"
-                                Click="Scan_Click" Style="{StaticResource PrimaryBtn}"/>
-                    </StackPanel>
+                    <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Background="#7116243D" Padding="14" Margin="0,18,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Live Posture" Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
+                            <TextBlock Name="TxtSidebarPosture" Text="Awaiting scan" FontSize="14" FontWeight="SemiBold" Foreground="#DCE7FF"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0"><Ellipse Width="8" Height="8" Fill="{StaticResource Success}" VerticalAlignment="Center" Margin="0,0,7,0"/><TextBlock Text="Sensor online" FontSize="11" Foreground="{StaticResource TextSecondary}"/></StackPanel>
+                            <TextBlock Text="v3.7.0 native" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,8,0,0" FontFamily="Cascadia Code, Consolas"/>
+                        </StackPanel>
+                    </Border>
                 </DockPanel>
+            </Border>
 
-                <!-- KPI Cards -->
-                <UniformGrid Grid.Row="1" Columns="3" Margin="0,0,0,28">
-                    <Border Style="{StaticResource Card}" Margin="0,0,8,0">
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="14"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Border Grid.Row="0" Style="{StaticResource Card}" Background="#97152339" Padding="22,18">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="TOTAL DEVICES" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Name="TxtTotalDevices" Text="—"
-                                       FontSize="44" FontWeight="Bold" Foreground="#5B8DEF"/>
-                            <TextBlock Text="on this network" FontSize="11" Foreground="#565B6E" Margin="0,4,0,0"/>
+                            <TextBlock Text="Mission Control" FontSize="22" FontWeight="SemiBold"/>
+                            <TextBlock Name="TxtTriageSummary" Text="Run a scan to generate an adaptive triage plan." FontSize="12.5" Foreground="{StaticResource TextSecondary}" Margin="0,6,0,0"/>
                         </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}" Margin="4,0">
-                        <StackPanel>
-                            <TextBlock Text="ACTIVE THREATS" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Name="TxtActiveThreats" Text="—"
-                                       FontSize="44" FontWeight="Bold" Foreground="#F87171"/>
-                            <TextBlock Text="anomalies detected" FontSize="11" Foreground="#565B6E" Margin="0,4,0,0"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Auto Triage" Click="AutoTriage_Click" Style="{StaticResource GhostBtn}" Margin="0,0,10,0"/>
+                            <Button Content="Delete Cloud Data" Click="DeleteData_Click" Style="{StaticResource DangerBtn}"/>
                         </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}" Margin="8,0,0,0">
-                        <StackPanel>
-                            <TextBlock Text="CLOUD SYNCS" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Name="TxtCloudSyncs" Text="—"
-                                       FontSize="44" FontWeight="Bold" Foreground="#34D399"/>
-                            <TextBlock Text="enrichment requests" FontSize="11" Foreground="#565B6E" Margin="0,4,0,0"/>
-                        </StackPanel>
-                    </Border>
-                </UniformGrid>
-
-                <!-- Device list header -->
-                <TextBlock Grid.Row="2" Text="DISCOVERED DEVICES"
-                           Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
-
-                <!-- Device Grid -->
-                <Border Grid.Row="3" Background="#1A1D27" CornerRadius="12"
-                        BorderBrush="#252830" BorderThickness="1" Padding="0">
-                    <DataGrid Name="DeviceGrid"
-                              AutoGenerateColumns="False"
-                              Background="Transparent"
-                              BorderThickness="0"
-                              RowBackground="Transparent"
-                              AlternatingRowBackground="#161821"
-                              GridLinesVisibility="Horizontal"
-                              HorizontalGridLinesBrush="#252830"
-                              IsReadOnly="True"
-                              SelectionMode="Single"
-                              HeadersVisibility="Column"
-                              ColumnHeaderStyle="{StaticResource DGHeader}"
-                              CellStyle="{StaticResource DGCell}"
-                              RowStyle="{StaticResource DGRow}"
-                              RowHeaderWidth="0"
-                              CanUserResizeRows="False">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="IP ADDRESS"   Binding="{Binding IpAddress}"       Width="130"/>
-                            <DataGridTextColumn Header="HOSTNAME"     Binding="{Binding DisplayName}"     Width="*"/>
-                            <DataGridTextColumn Header="MAC ADDRESS"  Binding="{Binding MacAddress}"      Width="160"/>
-                            <DataGridTextColumn Header="OPEN PORTS"   Binding="{Binding OpenPortsDisplay}" Width="*"/>
-                            <DataGridTemplateColumn Header="ACTION" Width="90">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Button Content="Enrich" Click="Enrich_Click"
-                                                Style="{StaticResource SmallBtn}" Margin="6,4"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    </Grid>
                 </Border>
-            </Grid>
 
-            <!-- ════════════ ANOMALIES ════════════ -->
-            <Grid Name="ViewAnomalies" Visibility="Collapsed" Margin="36,30,36,24">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <DockPanel Grid.Row="0" Margin="0,0,0,24">
-                    <StackPanel>
-                        <TextBlock Text="Security Anomalies"
-                                   FontSize="24" FontWeight="Bold" Foreground="#E2E4EA"/>
-                        <TextBlock Text="Each panel shows the detection trace, explanation, and remediation steps."
-                                   FontSize="12" Foreground="#565B6E" Margin="0,5,0,0"/>
-                    </StackPanel>
-                    <TextBlock Name="TxtAnomalyCount" DockPanel.Dock="Right"
-                               Foreground="#565B6E" FontSize="12" VerticalAlignment="Bottom"
-                               FontFamily="Cascadia Code, Consolas"/>
-                </DockPanel>
-
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-
-                        <!-- Empty state -->
-                        <Border Name="AnomalyEmptyState" Background="#1A1D27" CornerRadius="12"
-                                BorderBrush="#252830" BorderThickness="1" Padding="32">
-                            <TextBlock Text="No anomalies detected. Run a scan first."
-                                       Foreground="#565B6E" FontSize="14" HorizontalAlignment="Center"/>
+                <Grid Grid.Row="2">
+                    <Grid Name="ViewDashboard" Visibility="Visible">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border Grid.Row="0" Style="{StaticResource Card}" Background="#9917243B" Padding="24,20" Margin="0,0,0,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel><TextBlock Text="Network Dashboard" FontSize="24" FontWeight="SemiBold"/><TextBlock Name="TxtLastScanned" Text="Run a scan to discover devices on your network." FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,6,0,0"/></StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Name="TxtScanStatus" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,0,14,0" VerticalAlignment="Center" FontFamily="Cascadia Code, Consolas"/><Button Name="ScanBtn" Content="Run Scan" Click="Scan_Click" Style="{StaticResource PrimaryBtn}" Margin="0,0,10,0"/><Button Content="Auto Triage" Click="AutoTriage_Click" Style="{StaticResource GhostBtn}"/></StackPanel>
+                            </Grid>
                         </Border>
+                        <UniformGrid Grid.Row="1" Columns="4" Margin="0,0,0,14">
+                            <Border Style="{StaticResource Card}" Background="#9D18253F" Margin="0,0,9,0"><StackPanel><TextBlock Text="TOTAL DEVICES" Style="{StaticResource SectionLabel}"/><TextBlock Name="TxtTotalDevices" Text="-" FontSize="42" FontWeight="SemiBold" Foreground="{StaticResource Accent}"/><TextBlock Text="discovered in latest pass" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,6,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource Card}" Background="#9C231A30" Margin="3,0,6,0"><StackPanel><TextBlock Text="ACTIVE THREATS" Style="{StaticResource SectionLabel}"/><TextBlock Name="TxtActiveThreats" Text="-" FontSize="42" FontWeight="SemiBold" Foreground="{StaticResource Danger}"/><TextBlock Text="high, medium, or low anomalies" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,6,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource Card}" Background="#9220342C" Margin="6,0,3,0"><StackPanel><TextBlock Text="CLOUD SYNCS" Style="{StaticResource SectionLabel}"/><TextBlock Name="TxtCloudSyncs" Text="-" FontSize="42" FontWeight="SemiBold" Foreground="{StaticResource Success}"/><TextBlock Text="enrichment actions logged" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,6,0,0"/></StackPanel></Border>
+                            <Border Style="{StaticResource Card}" Background="#9A16263F" Margin="9,0,0,0"><StackPanel><TextBlock Text="POSTURE SCORE" Style="{StaticResource SectionLabel}"/><TextBlock Name="TxtPostureScore" Text="100" FontSize="42" FontWeight="SemiBold" Foreground="#BBD5FF"/><TextBlock Text="dynamic score after each scan" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,6,0,0"/></StackPanel></Border>
+                        </UniformGrid>
+                        <Border Grid.Row="2" Style="{StaticResource Card}" Background="#8716263F" Margin="0,0,0,12" Padding="20,14">
+                            <DockPanel LastChildFill="False"><TextBlock Text="DISCOVERED DEVICES" Style="{StaticResource SectionLabel}" Margin="0,0,0,0"/><StackPanel Orientation="Horizontal" DockPanel.Dock="Right"><Button Content="Auto Triage" Click="AutoTriage_Click" Style="{StaticResource SmallBtn}"/></StackPanel></DockPanel>
+                        </Border>
+                        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0" Background="#7D131D30">
+                            <DataGrid Name="DeviceGrid" AutoGenerateColumns="False" Background="Transparent" BorderThickness="0" RowBackground="Transparent" AlternatingRowBackground="#2A12213B" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#3D30496E" IsReadOnly="True" SelectionMode="Single" HeadersVisibility="Column" ColumnHeaderStyle="{StaticResource DGHeader}" CellStyle="{StaticResource DGCell}" RowStyle="{StaticResource DGRow}" RowHeaderWidth="0" CanUserResizeRows="False">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="IP ADDRESS" Binding="{Binding IpAddress}" Width="130"/>
+                                    <DataGridTextColumn Header="HOSTNAME" Binding="{Binding DisplayName}" Width="*"/>
+                                    <DataGridTextColumn Header="MAC ADDRESS" Binding="{Binding MacAddress}" Width="170"/>
+                                    <DataGridTextColumn Header="OPEN PORTS" Binding="{Binding OpenPortsDisplay}" Width="*"/>
+                                    <DataGridTemplateColumn Header="ACTION" Width="100"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="Enrich" Click="Enrich_Click" Style="{StaticResource SmallBtn}" Margin="6,4"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Border>
+                    </Grid>
 
-                        <!-- Anomaly cards -->
-                        <ItemsControl Name="AnomaliesList">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,10" CornerRadius="12" BorderThickness="1">
-                                        <!-- Card border color by severity -->
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background"    Value="#1C1C2E"/>
-                                                <Setter Property="BorderBrush"   Value="#252540"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Severity}" Value="High">
-                                                        <Setter Property="BorderBrush" Value="#3A1020"/>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Severity}" Value="Medium">
-                                                        <Setter Property="BorderBrush" Value="#3A2808"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-
-                                        <StackPanel>
-                                            <!-- ─ Card header ─ -->
-                                            <Grid Margin="20,18,20,12">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-
-                                                <!-- Severity badge -->
-                                                <Border Grid.Column="0"
-                                                        Width="46" Height="46" CornerRadius="10"
-                                                        Margin="0,0,16,0" VerticalAlignment="Top">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="#102210"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Severity}" Value="High">
-                                                                    <Setter Property="Background" Value="#2E0A10"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Severity}" Value="Medium">
-                                                                    <Setter Property="Background" Value="#2E1A04"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <TextBlock HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"
-                                                               FontWeight="Bold" FontSize="16"
-                                                               FontFamily="Cascadia Code, Consolas">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Text"       Value="L"/>
-                                                                <Setter Property="Foreground" Value="#2ED573"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding Severity}" Value="High">
-                                                                        <Setter Property="Text"       Value="H"/>
-                                                                        <Setter Property="Foreground" Value="#FF4757"/>
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding Severity}" Value="Medium">
-                                                                        <Setter Property="Text"       Value="M"/>
-                                                                        <Setter Property="Foreground" Value="#FFA502"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                </Border>
-
-                                                <!-- Title + info -->
-                                                <StackPanel Grid.Column="1">
-                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                                        <TextBlock Text="{Binding Type}"
-                                                                   FontWeight="Bold" FontSize="14"
-                                                                   Foreground="#E2E4EA" VerticalAlignment="Center"/>
-                                                        <Border Margin="10,0,0,0" CornerRadius="4"
-                                                                Padding="7,2" VerticalAlignment="Center">
+                    <Grid Name="ViewAnomalies" Visibility="Collapsed">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border Grid.Row="0" Style="{StaticResource Card}" Background="#951A2038" Padding="24,18" Margin="0,0,0,14">
+                            <DockPanel LastChildFill="False"><StackPanel><TextBlock Text="Security Anomalies" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Detection cards include explanation, remediation, and evidence trace." FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0"/></StackPanel><StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Name="TxtAnomalyCount" FontSize="12" Foreground="{StaticResource TextSecondary}" FontFamily="Cascadia Code, Consolas" Margin="0,0,14,0"/><Button Content="Auto Triage" Click="AutoTriage_Click" Style="{StaticResource SmallBtn}"/></StackPanel></DockPanel>
+                        </Border>
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <Border Name="AnomalyEmptyState" Style="{StaticResource Card}" Padding="34" Margin="0,0,0,10" Background="#7A162236"><TextBlock Text="No anomalies detected. Run a scan first." Foreground="{StaticResource TextSecondary}" FontSize="14" HorizontalAlignment="Center"/></Border>
+                                <ItemsControl Name="AnomaliesList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,12" CornerRadius="18" BorderThickness="1" Background="#88162338" BorderBrush="#60324D7A">
+                                                <StackPanel>
+                                                    <Grid Margin="20,18,20,12"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Width="48" Height="48" CornerRadius="24" Margin="0,0,16,0" VerticalAlignment="Top">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
-                                                                    <Setter Property="Background" Value="#102210"/>
+                                                                    <Setter Property="Background" Value="#102C1F"/>
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding Severity}" Value="High">
-                                                                            <Setter Property="Background" Value="#2E0A10"/>
+                                                                            <Setter Property="Background" Value="#3C1420"/>
                                                                         </DataTrigger>
                                                                         <DataTrigger Binding="{Binding Severity}" Value="Medium">
-                                                                            <Setter Property="Background" Value="#2E1A04"/>
+                                                                            <Setter Property="Background" Value="#3B2A11"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
-                                                            <TextBlock FontSize="10" FontWeight="Bold" FontFamily="Cascadia Code, Consolas">
+                                                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16" FontWeight="Bold" FontFamily="Cascadia Code, Consolas">
                                                                 <TextBlock.Style>
                                                                     <Style TargetType="TextBlock">
-                                                                        <Setter Property="Text"       Value="LOW"/>
-                                                                        <Setter Property="Foreground" Value="#2ED573"/>
+                                                                        <Setter Property="Text" Value="L"/>
+                                                                        <Setter Property="Foreground" Value="#2FD191"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding Severity}" Value="High">
-                                                                                <Setter Property="Text"       Value="HIGH"/>
-                                                                                <Setter Property="Foreground" Value="#FF4757"/>
+                                                                                <Setter Property="Text" Value="H"/>
+                                                                                <Setter Property="Foreground" Value="#FF607A"/>
                                                                             </DataTrigger>
                                                                             <DataTrigger Binding="{Binding Severity}" Value="Medium">
-                                                                                <Setter Property="Text"       Value="MEDIUM"/>
-                                                                                <Setter Property="Foreground" Value="#FFA502"/>
+                                                                                <Setter Property="Text" Value="M"/>
+                                                                                <Setter Property="Foreground" Value="#FFB547"/>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
                                                                 </TextBlock.Style>
                                                             </TextBlock>
                                                         </Border>
-                                                    </StackPanel>
-
-                                                    <TextBlock Text="{Binding DeviceIp}"
-                                                               Foreground="#5B8DEF" FontFamily="Cascadia Code, Consolas"
-                                                               FontSize="12" Margin="0,0,0,6"/>
-                                                    <TextBlock Text="{Binding Description}"
-                                                               Foreground="#B0B3BE" FontSize="13"
-                                                               TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                            </Grid>
-
-                                            <!-- ─ Expandable detail panel ─ -->
-                                            <Expander Margin="20,0,20,18">
-                                                <Expander.Header>
-                                                    <TextBlock Text="Details — Explanation, Remediation &amp; Trace"
-                                                               FontSize="12" Foreground="#565B6E"/>
-                                                </Expander.Header>
-
-                                                <Border Background="#13151C" CornerRadius="8"
-                                                        Padding="20,16" Margin="0,8,0,0">
-                                                    <StackPanel>
-
-                                                        <!-- WHY IT'S RISKY -->
-                                                        <TextBlock Text="WHY IT'S RISKY"
-                                                                   FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#5B8DEF" Margin="0,0,0,6"
-                                                                   FontFamily="Cascadia Code, Consolas"/>
-                                                        <TextBlock Text="{Binding Explanation}"
-                                                                   Foreground="#B0B3BE" FontSize="13"
-                                                                   TextWrapping="Wrap" Margin="0,0,0,18"/>
-
-                                                        <!-- REMEDIATION -->
-                                                        <TextBlock Text="REMEDIATION"
-                                                                   FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#34D399" Margin="0,0,0,6"
-                                                                   FontFamily="Cascadia Code, Consolas"/>
-                                                        <TextBlock Text="{Binding Remediation}"
-                                                                   Foreground="#B0B3BE" FontSize="13"
-                                                                   TextWrapping="Wrap" Margin="0,0,0,18"/>
-
-                                                        <!-- DETECTION TRACE -->
-                                                        <TextBlock Text="DETECTION TRACE"
-                                                                   FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#FFA502" Margin="0,0,0,6"
-                                                                   FontFamily="Cascadia Code, Consolas"/>
-                                                        <Border Background="#101218" CornerRadius="6"
-                                                                Padding="14,10" Margin="0,0,0,14">
-                                                            <TextBlock Text="{Binding TraceSource}"
-                                                                       Foreground="#8B90A0"
-                                                                       FontFamily="Cascadia Code, Consolas" FontSize="12"
-                                                                       TextWrapping="Wrap"/>
+                                                        <StackPanel Grid.Column="1"><TextBlock Text="{Binding Type}" FontWeight="SemiBold" FontSize="14.5"/><TextBlock Text="{Binding DeviceIp}" Foreground="{StaticResource Accent}" FontFamily="Cascadia Code, Consolas" FontSize="12" Margin="0,4,0,6"/><TextBlock Text="{Binding Description}" Foreground="{StaticResource TextSecondary}" FontSize="13" TextWrapping="Wrap"/></StackPanel>
+                                                    </Grid>
+                                                    <Expander Margin="20,0,20,18">
+                                                        <Expander.Header><TextBlock Text="Details - Explanation, Remediation and Trace" FontSize="12" Foreground="{StaticResource TextMuted}"/></Expander.Header>
+                                                        <Border Background="#7B121A2C" CornerRadius="12" Padding="20,16" Margin="0,8,0,0" BorderThickness="1" BorderBrush="#67415D8B">
+                                                            <StackPanel>
+                                                                <TextBlock Text="WHY THIS MATTERS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Accent}" Margin="0,0,0,6" FontFamily="Cascadia Code, Consolas"/>
+                                                                <TextBlock Text="{Binding Explanation}" Foreground="{StaticResource TextSecondary}" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                                                                <TextBlock Text="RECOMMENDED REMEDIATION" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Success}" Margin="0,0,0,6" FontFamily="Cascadia Code, Consolas"/>
+                                                                <TextBlock Text="{Binding Remediation}" Foreground="{StaticResource TextSecondary}" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                                                                <TextBlock Text="DETECTION TRACE" FontSize="10" FontWeight="SemiBold" Foreground="#FFB547" Margin="0,0,0,6" FontFamily="Cascadia Code, Consolas"/>
+                                                                <Border Background="#86101828" CornerRadius="8" Padding="12,10" Margin="0,0,0,12"><TextBlock Text="{Binding TraceSource}" Foreground="{StaticResource TextSecondary}" FontFamily="Cascadia Code, Consolas" FontSize="12" TextWrapping="Wrap"/></Border>
+                                                                <TextBlock Text="AFFECTED PORTS" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}" Margin="0,0,0,6" FontFamily="Cascadia Code, Consolas"/>
+                                                                <TextBlock Text="{Binding AffectedPortsDisplay}" Foreground="{StaticResource TextSecondary}" FontFamily="Cascadia Code, Consolas" FontSize="12"/>
+                                                            </StackPanel>
                                                         </Border>
+                                                    </Expander>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
 
-                                                        <!-- AFFECTED PORTS -->
-                                                        <TextBlock Text="AFFECTED PORTS"
-                                                                   FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#565B6E" Margin="0,0,0,6"
-                                                                   FontFamily="Cascadia Code, Consolas"/>
-                                                        <TextBlock Text="{Binding AffectedPortsDisplay}"
-                                                                   Foreground="#8B90A0"
-                                                                   FontFamily="Cascadia Code, Consolas" FontSize="12"/>
+                    <Grid Name="ViewLedger" Visibility="Collapsed">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border Grid.Row="0" Style="{StaticResource Card}" Background="#90142239" Padding="24,18" Margin="0,0,0,14"><StackPanel><TextBlock Text="Cloud Data Ledger" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Every enrich or purge operation is appended here for auditable traceability." FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0"/></StackPanel></Border>
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="0" Background="#7A131C2E"><ScrollViewer VerticalScrollBarVisibility="Auto"><ListBox Name="LedgerList" Style="{StaticResource LedgerList}" ItemContainerStyle="{StaticResource LedgerItem}"/></ScrollViewer></Border>
+                    </Grid>
 
-                                                    </StackPanel>
-                                                </Border>
-                                            </Expander>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                    </StackPanel>
-                </ScrollViewer>
+                    <Grid Name="ViewSettings" Visibility="Collapsed">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Border Grid.Row="0" Style="{StaticResource Card}" Background="#9418243C" Padding="24,18" Margin="0,0,0,14"><StackPanel><TextBlock Text="Privacy and Settings" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Transparency is local-first: scans stay on-device unless you request enrichment." FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0"/></StackPanel></Border>
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,14" Background="#7F1A2439"><StackPanel><TextBlock Text="HOW YOUR DATA IS USED" Style="{StaticResource SectionLabel}"/><TextBlock FontSize="13" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" LineHeight="22">Transparency scans your local network with ICMP probes and TCP checks. Scan data stays local by default. Clicking Enrich sends limited metadata to this app's local mock cloud service. You can purge that history instantly.</TextBlock></StackPanel></Border>
+                        <Border Grid.Row="2" Style="{StaticResource Card}" Background="#7F211A32"><StackPanel><TextBlock Text="DATA CONTROLS" Style="{StaticResource SectionLabel}"/><TextBlock Text="Remove all cloud-side records at any time." FontSize="13" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,0,0,18"/><StackPanel Orientation="Horizontal"><Button Content="Delete All Cloud Data" Click="DeleteData_Click" Style="{StaticResource DangerBtn}"/></StackPanel></StackPanel></Border>
+                    </Grid>
+                </Grid>
             </Grid>
+        </Grid>
 
-            <!-- ════════════ LEDGER ════════════ -->
-            <Grid Name="ViewLedger" Visibility="Collapsed" Margin="36,30,36,24">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <DockPanel Grid.Row="0" Margin="0,0,0,24">
-                    <StackPanel>
-                        <TextBlock Text="Cloud Data Ledger"
-                                   FontSize="24" FontWeight="Bold" Foreground="#E2E4EA"/>
-                        <TextBlock Text="Every enrichment request and deletion is logged here in real time."
-                                   FontSize="12" Foreground="#565B6E" Margin="0,5,0,0"/>
-                    </StackPanel>
-                </DockPanel>
-
-                <Border Grid.Row="1" Background="#1A1D27" CornerRadius="12"
-                        BorderBrush="#252830" BorderThickness="1" Padding="0">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ListBox Name="LedgerList"
-                                 Style="{StaticResource LedgerList}"
-                                 ItemContainerStyle="{StaticResource LedgerItem}"/>
-                    </ScrollViewer>
-                </Border>
-            </Grid>
-
-            <!-- ════════════ SETTINGS ════════════ -->
-            <Grid Name="ViewSettings" Visibility="Collapsed" Margin="36,30,36,24">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Text="Privacy &amp; Settings"
-                           FontSize="24" FontWeight="Bold" Foreground="#E2E4EA" Margin="0,0,0,28"/>
-
-                <!-- Privacy explanation -->
-                <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,16">
-                    <StackPanel>
-                        <TextBlock Text="HOW YOUR DATA IS USED"
-                                   Style="{StaticResource SectionLabel}"/>
-                        <TextBlock FontSize="13" Foreground="#B0B3BE" TextWrapping="Wrap" LineHeight="22">
-                            Transparency scans your local network by sending ICMP ping probes and attempting
-                            TCP connections to well-known ports. No data leaves your machine during a scan.&#x0A;&#x0A;
-                            When you click <Bold><Run Foreground="#5B8DEF">Enrich</Run></Bold> on a device,
-                            limited metadata (IP address, hostname, open ports) is sent to the mock cloud
-                            enrichment service running on this machine. No data is sent to any external server.&#x0A;&#x0A;
-                            You may request deletion of all enrichment history at any time using the button below.
-                        </TextBlock>
-                    </StackPanel>
-                </Border>
-
-                <!-- Cloud deletion -->
-                <Border Grid.Row="2" Style="{StaticResource Card}">
-                    <StackPanel>
-                        <TextBlock Text="DATA DELETION" Style="{StaticResource SectionLabel}"/>
-                        <TextBlock Text="Request immediate deletion of all device enrichment records stored by the mock cloud service."
-                                   FontSize="13" Foreground="#B0B3BE" TextWrapping="Wrap" Margin="0,0,0,20"/>
-                        <Button Content="Delete All Cloud Data"
-                                Click="DeleteData_Click" Style="{StaticResource DangerBtn}"
-                                HorizontalAlignment="Left"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-        </Grid><!-- end content grid -->
-
-        <!-- ── LOADING OVERLAY ─────────────────────────────────────────────── -->
-        <Border Name="LoadingOverlay" Grid.ColumnSpan="2"
-                Background="#CC101218" Visibility="Collapsed">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                <TextBlock Name="TxtLoadingMsg" Text="Scanning…"
-                           FontSize="20" Foreground="#5B8DEF" HorizontalAlignment="Center"/>
-                <TextBlock Name="TxtLoadingDetail" Text=""
-                           FontSize="12" Foreground="#565B6E" FontFamily="Cascadia Code, Consolas"
-                           HorizontalAlignment="Center" Margin="0,10,0,0"/>
-            </StackPanel>
+        <Border Name="LoadingOverlay" Grid.ColumnSpan="2" Background="#B8050A14" Visibility="Collapsed">
+            <Border Style="{StaticResource Card}" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24" Background="#BE172540">
+                <StackPanel>
+                    <TextBlock Name="TxtLoadingMsg" Text="Scanning..." FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource Accent}" HorizontalAlignment="Center"/>
+                    <TextBlock Name="TxtLoadingDetail" Text="" FontSize="12" Foreground="{StaticResource TextSecondary}" FontFamily="Cascadia Code, Consolas" HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                </StackPanel>
+            </Border>
         </Border>
-
     </Grid>
 </Window>

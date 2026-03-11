@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <mutex>
+#include <cstring>
 
 #include "TabDevices.h"
 #include "MainWindow.h"
@@ -23,6 +24,85 @@ const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
 static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
 };
+
+static wstring EscapeJson(const wstring& text) {
+    wstring out;
+    out.reserve(text.size() + 8);
+    for (wchar_t ch : text) {
+        switch (ch) {
+        case L'\\': out += L"\\\\"; break;
+        case L'"':  out += L"\\\""; break;
+        case L'\r': out += L"\\r"; break;
+        case L'\n': out += L"\\n"; break;
+        case L'\t': out += L"\\t"; break;
+        default:
+            if (ch < 0x20) out += L' ';
+            else out += ch;
+            break;
+        }
+    }
+    return out;
+}
+
+static wstring PortsToJsonArray(const Device& dev) {
+    wstring json = L"[";
+    for (size_t i = 0; i < dev.openPorts.size(); ++i) {
+        if (i > 0) json += L",";
+        json += std::to_wstring(dev.openPorts[i]);
+    }
+    json += L"]";
+    return json;
+}
+
+static wstring BuildDeviceSummaryJson(const Device& dev) {
+    wstring name = dev.customName.empty() ? dev.hostname : dev.customName;
+    if (name.empty()) name = dev.ip;
+
+    wstring json = L"{\r\n";
+    json += L"  \"ip\": \"" + EscapeJson(dev.ip) + L"\",\r\n";
+    json += L"  \"mac\": \"" + EscapeJson(dev.mac) + L"\",\r\n";
+    json += L"  \"hostnameOrCustomName\": \"" + EscapeJson(name) + L"\",\r\n";
+    json += L"  \"vendor\": \"" + EscapeJson(dev.vendor) + L"\",\r\n";
+    json += L"  \"type\": \"" + EscapeJson(dev.deviceType) + L"\",\r\n";
+    json += L"  \"trust\": \"" + EscapeJson(dev.trustState) + L"\",\r\n";
+    json += L"  \"ports\": " + PortsToJsonArray(dev) + L",\r\n";
+    json += L"  \"online\": ";
+    json += dev.online ? L"true" : L"false";
+    json += L",\r\n";
+    json += L"  \"confidence\": " + std::to_wstring(dev.confidence) + L"\r\n";
+    json += L"}";
+    return json;
+}
+
+static bool CopyToClipboard(HWND hwnd, const wstring& text) {
+    if (!OpenClipboard(hwnd)) return false;
+    EmptyClipboard();
+
+    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
+    HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (!hg) {
+        CloseClipboard();
+        return false;
+    }
+
+    void* ptr = GlobalLock(hg);
+    if (!ptr) {
+        GlobalFree(hg);
+        CloseClipboard();
+        return false;
+    }
+    memcpy(ptr, text.c_str(), bytes);
+    GlobalUnlock(hg);
+
+    if (!SetClipboardData(CF_UNICODETEXT, hg)) {
+        GlobalFree(hg);
+        CloseClipboard();
+        return false;
+    }
+
+    CloseClipboard();
+    return true;
+}
 
 bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
@@ -87,30 +167,30 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
     // Search box
-    _hSearch = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+    _hSearch = CreateWindowEx(0, L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_LEFT | ES_AUTOHSCROLL,
-        16, 12, 260, 26, hwnd, (HMENU)IDC_EDIT_SEARCH, hInst, nullptr);
+        16, 12, 280, 28, hwnd, (HMENU)IDC_EDIT_SEARCH, hInst, nullptr);
     SendMessage(_hSearch, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    SendMessage(_hSearch, EM_SETCUEBANNER, FALSE, (LPARAM)L"Search devices...");
+    SendMessage(_hSearch, EM_SETCUEBANNER, FALSE, (LPARAM)L"Search registry...");
     Theme::ApplyDarkEdit(_hSearch);
 
-    // Filter buttons
-    int btnX = 290;
+    // Filter buttons (Premium Pills)
+    int btnX = 312;
     for (int i = 0; i < 6; i++) {
         _hFilterBtns[i] = CreateWindowEx(0, L"BUTTON", FILTER_LABELS[i],
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            btnX, 12, 72, 26, hwnd, (HMENU)(IDC_BTN_FILTER_ALL + i), hInst, nullptr);
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            btnX, 12, 80, 28, hwnd, (HMENU)(IDC_BTN_FILTER_ALL + i), hInst, nullptr);
         SendMessage(_hFilterBtns[i], WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
-        btnX += 76;
+        btnX += 84;
     }
 
     // List view
     int listW = _detailVisible ? cx - DETAIL_WIDTH - 32 : cx - 32;
     _hList = CreateWindowEx(
-        WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
+        0, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS |
-        LVS_SINGLESEL | LVS_NOSORTHEADER | WS_VSCROLL | WS_HSCROLL,
-        16, 48, listW, cy - 64,
+        LVS_SINGLESEL | WS_VSCROLL | WS_HSCROLL,
+        16, 52, listW, cy - 68,
         hwnd, (HMENU)IDC_LIST_DEVICES, hInst, nullptr);
 
     SendMessage(_hList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
@@ -683,6 +763,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
     AppendMenu(hMenu, MF_STRING, 12002, L"Traceroute");
     AppendMenu(hMenu, MF_STRING, 12003, L"Port Scan");
     AppendMenu(hMenu, MF_STRING, 12004, L"Copy IP Address");
+    AppendMenu(hMenu, MF_STRING, 12005, L"Copy Device Summary (JSON)");
     AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
 
     // Trust state options
@@ -746,16 +827,14 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12004: { // Copy IP
-        if (OpenClipboard(hwnd)) {
-            EmptyClipboard();
-            size_t len = (dev.ip.size() + 1) * sizeof(wchar_t);
-            HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len);
-            if (hg) {
-                memcpy(GlobalLock(hg), dev.ip.c_str(), len);
-                GlobalUnlock(hg);
-                SetClipboardData(CF_UNICODETEXT, hg);
-            }
-            CloseClipboard();
+        if (!CopyToClipboard(hwnd, dev.ip)) {
+            MessageBox(hwnd, L"Could not copy IP to clipboard.", L"Clipboard", MB_OK | MB_ICONWARNING);
+        }
+        break;
+    }
+    case 12005: { // Copy device summary JSON
+        if (!CopyToClipboard(hwnd, BuildDeviceSummaryJson(dev))) {
+            MessageBox(hwnd, L"Could not copy device summary to clipboard.", L"Clipboard", MB_OK | MB_ICONWARNING);
         }
         break;
     }

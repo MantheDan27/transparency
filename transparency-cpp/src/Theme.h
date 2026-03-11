@@ -7,35 +7,35 @@
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
 
-// ─── Color Palette (refined professional dark) ───────────────────────────────
+// ─── Color Palette (Premium Obsidian) ───────────────────────────────────────
 namespace Theme {
 
-// Backgrounds — warmer, softer dark tones
-constexpr COLORREF BG_APP       = RGB(16,  18,  24);   // #101218 soft charcoal
-constexpr COLORREF BG_SIDEBAR   = RGB(20,  22,  30);   // #14161e dark slate
-constexpr COLORREF BG_CARD      = RGB(26,  29,  39);   // #1a1d27 card surface
-constexpr COLORREF BG_ELEVATED  = RGB(30,  33,  43);   // #1e212b elevated surface
-constexpr COLORREF BG_INPUT     = RGB(30,  33,  43);   // #1e212b inputs
-constexpr COLORREF BG_ROW_ALT   = RGB(22,  24,  33);   // #161821 alternating row
-constexpr COLORREF BG_ROW_HOV   = RGB(30,  33,  43);   // #1e212b hover
-constexpr COLORREF BG_ROW_SEL   = RGB(35,  55,  85);   // #233755 selected
+// Backgrounds
+constexpr COLORREF BG_APP       = RGB(8,   10,  14);   // #080a0e
+constexpr COLORREF BG_SIDEBAR   = RGB(12,  16,  24);   // #0c1018
+constexpr COLORREF BG_CARD      = RGB(20,  26,  38);   // #141a26
+constexpr COLORREF BG_ELEVATED  = RGB(30,  38,  56);   // #1e2638
+constexpr COLORREF BG_INPUT     = RGB(18,  24,  36);   // #121824
+constexpr COLORREF BG_ROW_ALT   = RGB(13,  17,  25);   // #0d1119
+constexpr COLORREF BG_ROW_HOV   = RGB(36,  45,  67);   // #242d43
+constexpr COLORREF BG_ROW_SEL   = RGB(44,  61,  94);   // #2c3d5e
 
-// Borders — subtle, warm gray
-constexpr COLORREF BORDER         = RGB(37,  40,  48);  // #252830
-constexpr COLORREF SIDEBAR_BORDER = RGB(37,  40,  48);
+// Borders / separators
+constexpr COLORREF BORDER         = RGB(42,  51,  72);  // #2a3348
+constexpr COLORREF SIDEBAR_BORDER = RGB(52,  63,  86);  // #343f56
 
-// Text — warmer, easier on the eyes
-constexpr COLORREF TEXT_PRIMARY   = RGB(226, 228, 234); // #e2e4ea warm white
-constexpr COLORREF TEXT_SECONDARY = RGB(139, 144, 160); // #8b90a0 warm mid
-constexpr COLORREF TEXT_MUTED     = RGB(86,  91,  110); // #565b6e muted
+// Text
+constexpr COLORREF TEXT_PRIMARY   = RGB(236, 242, 250); // #ecf2fa
+constexpr COLORREF TEXT_SECONDARY = RGB(178, 190, 210); // #b2bed2
+constexpr COLORREF TEXT_MUTED     = RGB(126, 140, 165); // #7e8ca5
 
-// Accent colors — refined, less neon
-constexpr COLORREF ACCENT         = RGB(91,  141, 239); // #5b8def refined blue
-constexpr COLORREF ACCENT_GLOW    = RGB(56,  189, 248); // #38bdf8 sky blue
-constexpr COLORREF SUCCESS        = RGB(52,  211, 153); // #34d399 emerald
-constexpr COLORREF DANGER         = RGB(248, 113, 113); // #f87171 soft red
-constexpr COLORREF WARNING        = RGB(251, 191, 36);  // #fbbf24 amber
-constexpr COLORREF WATCHLIST      = RGB(167, 139, 250); // #a78bfa violet
+// Semantic / accent colors
+constexpr COLORREF ACCENT         = RGB(86,  142, 255); // #568eff
+constexpr COLORREF ACCENT_GLOW    = RGB(130, 176, 255); // #82b0ff
+constexpr COLORREF SUCCESS        = RGB(63,  204, 145); // #3fcc91
+constexpr COLORREF DANGER         = RGB(255, 96,  122); // #ff607a
+constexpr COLORREF WARNING        = RGB(232, 185, 75);  // #e8b94b
+constexpr COLORREF WATCHLIST      = RGB(170, 129, 255); // #aa81ff
 
 // ─── Brush Cache ─────────────────────────────────────────────────────────────
 inline HBRUSH BrushApp()       { static HBRUSH b = CreateSolidBrush(BG_APP);       return b; }
@@ -55,45 +55,45 @@ inline HBRUSH BrushInput()     { static HBRUSH b = CreateSolidBrush(BG_INPUT);  
 inline HBRUSH BrushNull()      { static HBRUSH b = (HBRUSH)GetStockObject(NULL_BRUSH); return b; }
 
 // ─── Font Helpers ─────────────────────────────────────────────────────────────
-inline HFONT FontBody() {
-    static HFONT f = CreateFont(
-        -MulDiv(12, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+inline int DpiY() {
+    HDC hdc = GetDC(nullptr);
+    if (!hdc) return 96;
+    int dpi = GetDeviceCaps(hdc, LOGPIXELSY);
+    ReleaseDC(nullptr, hdc);
+    return dpi > 0 ? dpi : 96;
+}
+
+inline HFONT MakeUiFont(int pointSize, int weight) {
+    return CreateFontW(
+        -MulDiv(pointSize, DpiY(), 72),
+        0, 0, 0, weight, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
+}
+
+inline HFONT FontBody() {
+    static HFONT f = MakeUiFont(13, FW_NORMAL);
     return f;
 }
 
 inline HFONT FontBold() {
-    static HFONT f = CreateFont(
-        -MulDiv(12, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
+    static HFONT f = MakeUiFont(13, FW_SEMIBOLD);
     return f;
 }
 
 inline HFONT FontHeader() {
-    static HFONT f = CreateFont(
-        -MulDiv(20, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
+    static HFONT f = MakeUiFont(21, FW_SEMIBOLD);
     return f;
 }
 
 inline HFONT FontSmall() {
-    static HFONT f = CreateFont(
-        -MulDiv(10, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
+    static HFONT f = MakeUiFont(11, FW_NORMAL);
     return f;
 }
 
 inline HFONT FontMono() {
-    static HFONT f = CreateFont(
-        -MulDiv(11, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
+    static HFONT f = CreateFontW(
+        -MulDiv(11, DpiY(), 72),
         0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Cascadia Code");
@@ -101,11 +101,7 @@ inline HFONT FontMono() {
 }
 
 inline HFONT FontBrand() {
-    static HFONT f = CreateFont(
-        -MulDiv(15, GetDeviceCaps(GetDC(NULL), LOGPIXELSY), 72),
-        0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI Variable");
+    static HFONT f = MakeUiFont(16, FW_BOLD);
     return f;
 }
 

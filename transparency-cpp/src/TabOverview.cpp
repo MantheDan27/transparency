@@ -42,10 +42,10 @@ static const wchar_t* KPI_LABELS[] = {
 
 // Accent colors for each KPI tile (top border + sparkline)
 static const COLORREF KPI_ACCENTS[] = {
-    RGB(0, 229, 122),   // Success green  — Devices Online
-    RGB(255, 200, 50),  // Warning amber  — Unknown Devices
-    RGB(255, 64, 96),   // Danger red     — Active Alerts
-    RGB(61, 127, 255),  // Accent blue    — Gateway Latency
+    Theme::SUCCESS,  // Devices Online
+    Theme::WARNING,  // Unknown Devices
+    Theme::DANGER,   // Active Alerts
+    Theme::ACCENT,   // Gateway Latency
 };
 
 bool TabOverview::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -126,17 +126,24 @@ LRESULT TabOverview::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 }
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-static const int TILE_Y  = 120;  // pushed down for NIC selector row
-static const int TILE_H  = 80;  // taller to fit sparkline
-static const int PILL_Y_OFF = 36;
-static const int BTN_H  = 32;
+static const int TILE_Y  = 100;
+static const int TILE_H  = 90;
+static const int PILL_Y_OFF = 40;
+static const int BTN_H  = 36;
 
 static void GetLayoutMetrics(int cx, int cy,
     int& tileW, int& pillY, int& btnY, int& listY) {
-    tileW = (cx - 40) / 4;
+    tileW = (cx - 48) / 4;
     pillY = TILE_Y + TILE_H + PILL_Y_OFF;
-    btnY  = pillY + 34;
-    listY = btnY + BTN_H + 52;
+    btnY  = pillY + 44;
+    listY = btnY + BTN_H + 60;
+}
+
+static void GetBottomSplitMetrics(int cx, int& mapW, int& listX, int& listW) {
+    mapW = (cx - 48) * 6 / 10;
+    if (mapW < 260) mapW = 260;
+    listX = 16 + mapW + 12;
+    listW = cx - listX - 16;
 }
 
 void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
@@ -145,9 +152,9 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
     int tileW, pillY, btnY, listY;
     GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
 
-    // KPI tiles — owner-drawn buttons so we can paint number + sparkline
+    // KPI tiles
     for (int i = 0; i < 4; i++) {
-        int x = 16 + i * (tileW + 8);
+        int x = 16 + i * (tileW + 10);
         _hKpi[i] = CreateWindowEx(0, L"BUTTON", nullptr,
             WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             x, TILE_Y, tileW, TILE_H,
@@ -171,105 +178,79 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
         198, pillY, 75, 24, hwnd, (HMENU)9202, hInst, nullptr);
     SendMessage(_hModeDeep, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
-    _hCheckGentle = CreateWindowEx(0, L"BUTTON", L"Gentle Mode",
-        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-        290, pillY, 110, 24, hwnd, (HMENU)IDC_CHECK_GENTLE, hInst, nullptr);
-    SendMessage(_hCheckGentle, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    // Action buttons (Premium Pills)
+    auto createPill = [&](const wchar_t* lbl, int x, int w, int id) {
+        HWND h = CreateWindowEx(0, L"BUTTON", lbl,
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            x, btnY, w, BTN_H, hwnd, (HMENU)id, hInst, nullptr);
+        SendMessage(h, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        return h;
+    };
 
-    // Action buttons
-    _hBtnQuickScan = CreateWindowEx(0, L"BUTTON", L"Quick Scan",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        16, btnY, 100, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_QUICK, hInst, nullptr);
-    SendMessage(_hBtnQuickScan, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    _hBtnQuickScan = createPill(L"Quick Scan", 16, 110, IDC_BTN_SCAN_QUICK);
+    _hBtnDeepScan  = createPill(L"Deep Scan", 134, 110, IDC_BTN_SCAN_DEEP);
+    _hBtnMonStart  = createPill(L"Start Monitor", 252, 120, IDC_BTN_MONITOR_START);
+    _hBtnMonStop   = createPill(L"Stop Monitor", 380, 120, IDC_BTN_MONITOR_STOP);
+    _hBtnExport    = createPill(L"Export JSON", 508, 120, IDC_BTN_EXPORT);
 
-    _hBtnDeepScan = CreateWindowEx(0, L"BUTTON", L"Deep Scan",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        122, btnY, 100, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_DEEP, hInst, nullptr);
-    SendMessage(_hBtnDeepScan, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-
-    _hBtnMonStart = CreateWindowEx(0, L"BUTTON", L"Start Monitor",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        228, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_START, hInst, nullptr);
-    SendMessage(_hBtnMonStart, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-
-    _hBtnMonStop = CreateWindowEx(0, L"BUTTON", L"Stop Monitor",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        344, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_STOP, hInst, nullptr);
-    SendMessage(_hBtnMonStop, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     EnableWindow(_hBtnMonStop, FALSE);
 
-    _hBtnExport = CreateWindowEx(0, L"BUTTON", L"Export Report",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        460, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_EXPORT, hInst, nullptr);
-    SendMessage(_hBtnExport, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-
-    // Progress / status
-    _hStatusText = CreateWindowEx(0, L"STATIC", L"Ready. Run a scan to discover devices.",
+    // Progress
+    _hStatusText = CreateWindowEx(0, L"STATIC", L"Ready for network assessment.",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        16, btnY + BTN_H + 8, cx - 32, 20,
+        16, btnY + BTN_H + 12, cx - 32, 20,
         hwnd, (HMENU)IDC_STATIC_STATUS, hInst, nullptr);
     SendMessage(_hStatusText, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hProgressBar = CreateWindowEx(0, PROGRESS_CLASS, nullptr,
         WS_CHILD | WS_VISIBLE | PBS_SMOOTH,
-        16, btnY + BTN_H + 32, cx - 32, 8,
+        16, btnY + BTN_H + 36, cx - 32, 6,
         hwnd, nullptr, hInst, nullptr);
     SendMessage(_hProgressBar, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+    SendMessage(_hProgressBar, PBM_SETBKCOLOR, 0, Theme::BG_CARD);
+    SendMessage(_hProgressBar, PBM_SETBARCOLOR, 0, Theme::ACCENT);
 
-    // Network info — NIC selection row
-    _hNetworkInfo = CreateWindowEx(0, L"STATIC", L"Detecting network...",
+    // Header Info
+    _hNetworkInfo = CreateWindowEx(0, L"STATIC", L"Discovering environment...",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
         16, 16, cx - 400, 40,
         hwnd, (HMENU)IDC_STATIC_NET_INFO, hInst, nullptr);
-    SendMessage(_hNetworkInfo, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    SendMessage(_hNetworkInfo, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
 
-    // NIC selector combo
     _hNicCombo = CreateWindowEx(0, L"COMBOBOX", nullptr,
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        16, 44, 380, 160, hwnd, (HMENU)IDC_COMBO_NIC_SELECT, hInst, nullptr);
+        16, 48, 380, 200, hwnd, (HMENU)IDC_COMBO_NIC_SELECT, hInst, nullptr);
     SendMessage(_hNicCombo, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
-    _hNicPin = CreateWindowEx(0, L"BUTTON", L"Pin",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        402, 44, 50, 24, hwnd, (HMENU)IDC_BTN_NIC_PIN, hInst, nullptr);
-    SendMessage(_hNicPin, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
-
-    // NIC reason text
     _hNicReason = CreateWindowEx(0, L"STATIC", L"",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        16, 72, cx - 32, 30,
+        16, 76, cx - 32, 20,
         hwnd, nullptr, hInst, nullptr);
     SendMessage(_hNicReason, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
-    // Right-side changes list  (40% of bottom width)
-    int mapW = (cx - 40) * 6 / 10;
-    int listX = 16 + mapW + 8;
-    int listW = cx - listX - 16;
+    // Changes List
+    int mapW = 0, listX = 0, listW = 0;
+    GetBottomSplitMetrics(cx, mapW, listX, listW);
     int listH = cy - listY - 16;
 
     _hChangesList = CreateWindowEx(
-        WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
+        0, WC_LISTVIEW, nullptr,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL | LVS_NOCOLUMNHEADER,
         listX, listY, std::max(listW, 100), std::max(listH, 50),
         hwnd, (HMENU)IDC_LIST_CHANGES, hInst, nullptr);
 
     SendMessage(_hChangesList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    ListView_SetExtendedListViewStyle(_hChangesList,
-        LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
+    ListView_SetExtendedListViewStyle(_hChangesList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+    ListView_SetBkColor(_hChangesList, Theme::BG_CARD);
+    ListView_SetTextBkColor(_hChangesList, Theme::BG_CARD);
+    ListView_SetTextColor(_hChangesList, Theme::TEXT_PRIMARY);
     Theme::ApplyDarkScrollbar(_hChangesList);
 
     LVCOLUMN col = {};
-    col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
-    col.fmt  = LVCFMT_LEFT;
-
-    col.cx = 85; col.pszText = (LPWSTR)L"Time";
-    ListView_InsertColumn(_hChangesList, 0, &col);
-
-    col.cx = 110; col.pszText = (LPWSTR)L"Change";
-    ListView_InsertColumn(_hChangesList, 1, &col);
-
-    col.cx = 280; col.pszText = (LPWSTR)L"Details";
-    ListView_InsertColumn(_hChangesList, 2, &col);
+    col.mask = LVCF_WIDTH;
+    col.cx = 80;  ListView_InsertColumn(_hChangesList, 0, &col);
+    col.cx = 100; ListView_InsertColumn(_hChangesList, 1, &col);
+    col.cx = 300; ListView_InsertColumn(_hChangesList, 2, &col);
 }
 
 void TabOverview::LayoutControls(int cx, int cy) {
@@ -279,28 +260,34 @@ void TabOverview::LayoutControls(int cx, int cy) {
     GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
 
     for (int i = 0; i < 4; i++) {
-        int x = 16 + i * (tileW + 8);
+        int x = 16 + i * (tileW + 10);
         if (_hKpi[i]) SetWindowPos(_hKpi[i], nullptr, x, TILE_Y, tileW, TILE_H, SWP_NOZORDER);
     }
 
-    if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, btnY + BTN_H + 8,  cx - 32, 20, SWP_NOZORDER);
-    if (_hProgressBar)SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 32, cx - 32,  8, SWP_NOZORDER);
-    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16, cx - 400, 40, SWP_NOZORDER);
-    if (_hNicCombo) SetWindowPos(_hNicCombo, nullptr, 16, 44, 380, 160, SWP_NOZORDER);
-    if (_hNicPin) SetWindowPos(_hNicPin, nullptr, 402, 44, 50, 24, SWP_NOZORDER);
-    if (_hNicReason) SetWindowPos(_hNicReason, nullptr, 16, 72, cx - 32, 30, SWP_NOZORDER);
+    if (_hBtnQuickScan) SetWindowPos(_hBtnQuickScan, nullptr, 16, btnY, 110, BTN_H, SWP_NOZORDER);
+    if (_hBtnDeepScan)  SetWindowPos(_hBtnDeepScan,  nullptr, 134, btnY, 110, BTN_H, SWP_NOZORDER);
+    if (_hBtnMonStart)  SetWindowPos(_hBtnMonStart,  nullptr, 252, btnY, 120, BTN_H, SWP_NOZORDER);
+    if (_hBtnMonStop)   SetWindowPos(_hBtnMonStop,   nullptr, 380, btnY, 120, BTN_H, SWP_NOZORDER);
+    if (_hBtnExport)    SetWindowPos(_hBtnExport,    nullptr, 508, btnY, 120, BTN_H, SWP_NOZORDER);
 
-    // Topology map rect (left 60%)
-    int mapW = (cx - 40) * 6 / 10;
+    if (_hStatusText)  SetWindowPos(_hStatusText,  nullptr, 16, btnY + BTN_H + 12, cx - 32, 20, SWP_NOZORDER);
+    if (_hProgressBar) SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 36, cx - 32, 6, SWP_NOZORDER);
+    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16, cx - 400, 40, SWP_NOZORDER);
+    if (_hNicCombo)    SetWindowPos(_hNicCombo,    nullptr, 16, 48, 380, 200, SWP_NOZORDER);
+    if (_hNicReason)   SetWindowPos(_hNicReason,   nullptr, 16, 76, cx - 32, 20, SWP_NOZORDER);
+
+    int mapW = 0, listX = 0, listW = 0;
+    GetBottomSplitMetrics(cx, mapW, listX, listW);
     int mapH = cy - listY - 16;
     _mapRect = { 16, listY, 16 + mapW, listY + std::max(mapH, 80) };
 
-    // Changes list (right 40%)
-    int listX = 16 + mapW + 8;
-    int listW = cx - listX - 16;
-    if (_hChangesList)
+    if (_hChangesList) {
         SetWindowPos(_hChangesList, nullptr, listX, listY,
                      std::max(listW, 100), std::max(mapH, 50), SWP_NOZORDER);
+        ListView_SetColumnWidth(_hChangesList, 0, 104);
+        ListView_SetColumnWidth(_hChangesList, 1, 120);
+        ListView_SetColumnWidth(_hChangesList, 2, std::max(220, listW - 240));
+    }
 }
 
 LRESULT TabOverview::OnSize(HWND hwnd, int cx, int cy) {
@@ -308,76 +295,104 @@ LRESULT TabOverview::OnSize(HWND hwnd, int cx, int cy) {
     return 0;
 }
 
-// ── Owner-draw KPI tiles ──────────────────────────────────────────────────────
+// ── Owner-draw logic ─────────────────────────────────────────────────────────
 
 LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     if (!dis) return 0;
-    int idx = dis->CtlID - IDC_STATIC_KPI1;
-    if (idx < 0 || idx > 3) return 0;
+    
+    HDC hdc = dis->hDC;
+    RECT rc = dis->rcItem;
+    
+    // KPI Tiles
+    if (dis->CtlID >= IDC_STATIC_KPI1 && dis->CtlID <= IDC_STATIC_KPI4) {
+        int idx = dis->CtlID - IDC_STATIC_KPI1;
+        COLORREF accent = KPI_ACCENTS[idx];
 
-    HDC   hdc = dis->hDC;
-    RECT  rc  = dis->rcItem;
-    COLORREF accent = KPI_ACCENTS[idx];
+        // Background
+        HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
+        HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+        HBRUSH oldB = (HBRUSH)SelectObject(hdc, bgBrush);
+        HPEN oldP = (HPEN)SelectObject(hdc, borderPen);
+        RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, 16, 16);
+        
+        // Top accent pill
+        RECT topBar = { rc.left + 20, rc.top, rc.right - 20, rc.top + 3 };
+        HBRUSH accBrush = CreateSolidBrush(accent);
+        RoundRect(hdc, topBar.left, topBar.top, topBar.right, topBar.bottom, 2, 2);
+        DeleteObject(accBrush);
 
-    // Background
-    HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
-    FillRect(hdc, &rc, bgBrush);
-    DeleteObject(bgBrush);
+        SelectObject(hdc, oldB);
+        SelectObject(hdc, oldP);
+        DeleteObject(bgBrush);
+        DeleteObject(borderPen);
 
-    // 2px top accent border
-    RECT topBar = { rc.left, rc.top, rc.right, rc.top + 2 };
-    HBRUSH accBrush = CreateSolidBrush(accent);
-    FillRect(hdc, &topBar, accBrush);
-    DeleteObject(accBrush);
+        // Value
+        wchar_t valStr[32];
+        if (idx == 3) {
+            if (_kpiVal[3] >= 0) swprintf_s(valStr, L"%dms", _kpiVal[3]);
+            else                 wcscpy_s(valStr, L"--");
+        } else {
+            swprintf_s(valStr, L"%d", _kpiVal[idx]);
+        }
 
-    // Card border
-    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-    MoveToEx(hdc, rc.left,     rc.top,      nullptr);
-    LineTo  (hdc, rc.right - 1, rc.top);
-    LineTo  (hdc, rc.right - 1, rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.top);
-    SelectObject(hdc, oldPen);
-    DeleteObject(borderPen);
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, Theme::TEXT_PRIMARY);
+        HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontHeader());
+        RECT numRc = { rc.left + 4, rc.top + 8, rc.right - 4, rc.top + 48 };
+        DrawText(hdc, valStr, -1, &numRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
-    // Big number
-    wchar_t valStr[32];
-    if (idx == 3) {
-        if (_kpiVal[3] >= 0) swprintf_s(valStr, L"%dms", _kpiVal[3]);
-        else                 wcscpy_s(valStr, L"--");
-    } else {
-        swprintf_s(valStr, L"%d", _kpiVal[idx]);
+        // Label
+        SelectObject(hdc, Theme::FontSmall());
+        SetTextColor(hdc, Theme::TEXT_MUTED);
+        RECT lblRc = { rc.left + 4, rc.top + 50, rc.right - 4, rc.top + 66 };
+        DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
+        // Sparkline
+        const std::vector<int>* hist = nullptr;
+        switch (idx) {
+        case 0: hist = &_devicesOnlineHistory; break;
+        case 1: hist = &_unknownDevHistory;    break;
+        case 2: hist = &_alertHistory;         break;
+        case 3: hist = &_latencyHistory;       break;
+        }
+        if (hist && !hist->empty()) {
+            RECT spRc = { rc.left + 12, rc.top + 70, rc.right - 12, rc.bottom - 8 };
+            DrawSparkline(hdc, spRc, *hist, accent);
+        }
+        SelectObject(hdc, oldFont);
+        return TRUE;
     }
 
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::TEXT_PRIMARY);
-    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontHeader());
-    RECT numRc = { rc.left + 4, rc.top + 4, rc.right - 4, rc.top + 42 };
-    DrawText(hdc, valStr, -1, &numRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-
-    // Label
-    SelectObject(hdc, Theme::FontSmall());
-    SetTextColor(hdc, Theme::TEXT_MUTED);
-    RECT lblRc = { rc.left + 4, rc.top + 44, rc.right - 4, rc.top + 60 };
-    DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-
-    SelectObject(hdc, oldFont);
-
-    // Sparkline (7 bars) in the bottom ~18px of the tile
-    const std::vector<int>* hist = nullptr;
-    switch (idx) {
-    case 0: hist = &_devicesOnlineHistory; break;
-    case 1: hist = &_unknownDevHistory;    break;
-    case 2: hist = &_alertHistory;         break;
-    case 3: hist = &_latencyHistory;       break;
+    // Action Buttons (Pills)
+    if (dis->CtlType == ODT_BUTTON) {
+        bool pushed = (dis->itemState & ODS_SELECTED);
+        bool disabled = (dis->itemState & ODS_DISABLED);
+        
+        COLORREF bg = pushed ? Theme::BG_ROW_SEL : (disabled ? Theme::BG_APP : Theme::BG_CARD);
+        COLORREF brd = pushed ? Theme::ACCENT : Theme::BORDER;
+        
+        HBRUSH bgB = CreateSolidBrush(bg);
+        HPEN brdP = CreatePen(PS_SOLID, 1, brd);
+        HBRUSH oldB = (HBRUSH)SelectObject(hdc, bgB);
+        HPEN oldP = (HPEN)SelectObject(hdc, brdP);
+        
+        RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, rc.bottom - rc.top, rc.bottom - rc.top);
+        
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, disabled ? Theme::TEXT_MUTED : (pushed ? Theme::ACCENT : Theme::TEXT_PRIMARY));
+        
+        wchar_t txt[128];
+        GetWindowText(dis->hwndItem, txt, 128);
+        DrawText(hdc, txt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        
+        SelectObject(hdc, oldB);
+        SelectObject(hdc, oldP);
+        DeleteObject(bgB);
+        DeleteObject(brdP);
+        return TRUE;
     }
-    if (hist && !hist->empty()) {
-        RECT spRc = { rc.left + 6, rc.top + 62, rc.right - 6, rc.bottom - 4 };
-        DrawSparkline(hdc, spRc, *hist, accent);
-    }
 
-    return TRUE;
+    return FALSE;
 }
 
 void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
@@ -649,8 +664,16 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
     {
         int tileW, pillY, btnY, listY;
         GetLayoutMetrics(rc.right, rc.bottom, tileW, pillY, btnY, listY);
-        int mapW = (rc.right - 40) * 6 / 10;
-        int listX = 16 + mapW + 8;
+        int mapW = 0, listX = 0, listW = 0;
+        GetBottomSplitMetrics(rc.right, mapW, listX, listW);
+
+        RECT mapHdrRc = { 16, listY - 18, 16 + mapW, listY - 2 };
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, Theme::TEXT_SECONDARY);
+        HFONT mapOld = (HFONT)SelectObject(hdc, Theme::FontSmall());
+        DrawText(hdc, L"NETWORK TOPOLOGY", -1, &mapHdrRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, mapOld);
 
         RECT hdrRc = { listX, listY - 18, rc.right - 16, listY - 2 };
         SetBkMode(hdc, TRANSPARENT);
