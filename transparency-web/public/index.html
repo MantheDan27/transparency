@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transparency - Network Monitor</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ========== LOGIN PAGE ========== -->
+  <div id="login-page">
+    <div class="login-container">
+      <div class="login-logo">
+        <h1>Transparency<span>.</span></h1>
+        <p>Network monitoring &amp; device intelligence</p>
+      </div>
+
+      <div class="auth-toggle">
+        <button id="login-toggle" class="active">Log In</button>
+        <button id="signup-toggle">Sign Up</button>
+      </div>
+
+      <div class="auth-card">
+        <div id="auth-error" class="auth-error hidden"></div>
+
+        <!-- Login Form -->
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="you@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Your password" required>
+          </div>
+          <button type="submit" class="btn-primary">Log In</button>
+          <a href="#" id="forgot-password" class="forgot-link">Forgot password?</a>
+        </form>
+
+        <!-- Signup Form -->
+        <form id="signup-form" class="hidden">
+          <div class="form-group">
+            <label for="signup-name">Display Name</label>
+            <input type="text" id="signup-name" placeholder="Your name" required>
+          </div>
+          <div class="form-group">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" placeholder="you@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" placeholder="Min 6 characters" required>
+          </div>
+          <button type="submit" class="btn-primary">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== DASHBOARD PAGE ========== -->
+  <div id="dashboard-page" class="hidden">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="topbar-brand">Transparency<span>.</span></div>
+      <div class="topbar-user">
+        <span id="user-display-name"></span>
+        <button id="logout-btn">Log Out</button>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="networks" id="tab-networks">Networks</button>
+      <button class="tab-btn" data-tab="devices" id="tab-devices">Devices</button>
+      <button class="tab-btn" data-tab="alerts" id="tab-alerts">Alerts</button>
+      <button class="tab-btn" data-tab="settings" id="tab-settings">Settings</button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+      <!-- Networks Panel -->
+      <div id="panel-networks" class="tab-panel">
+        <div class="section-header">
+          <h2>Your Networks</h2>
+          <button id="add-network-btn" class="btn-accent">+ Add Network</button>
+        </div>
+        <div id="network-list" class="network-grid">
+          <div class="empty-state">Loading networks...</div>
+        </div>
+      </div>
+
+      <!-- Devices Panel -->
+      <div id="panel-devices" class="tab-panel hidden">
+        <div class="section-header">
+          <h2>Devices <span id="device-count" style="color: var(--text-dim); font-weight: 400; font-size: 14px;">0</span></h2>
+          <button id="upload-scan-btn" class="btn-accent">Upload Scan</button>
+        </div>
+        <div class="devices-toolbar">
+          <select id="network-filter">
+            <option value="all">All Networks</option>
+          </select>
+        </div>
+        <table class="device-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>MAC Address</th>
+              <th>IP Address</th>
+              <th>Vendor</th>
+              <th>Type</th>
+              <th>Trust</th>
+              <th>Last Seen</th>
+            </tr>
+          </thead>
+          <tbody id="device-table-body">
+            <tr><td colspan="7" class="empty-state">Select a network or upload a scan to view devices.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Alerts Panel -->
+      <div id="panel-alerts" class="tab-panel hidden">
+        <div class="section-header">
+          <h2>Alerts</h2>
+        </div>
+        <div id="alert-feed">
+          <div class="empty-state">No alerts yet.</div>
+        </div>
+      </div>
+
+      <!-- Settings Panel -->
+      <div id="panel-settings" class="tab-panel hidden">
+        <div class="section-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="settings-section">
+          <h3>Desktop App Connection</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">API Endpoint</div>
+              <div class="setting-desc">Enter the REST API address of your Transparency desktop app (e.g., http://192.168.1.100:7722)</div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <input type="text" id="setting-api-endpoint" placeholder="http://192.168.1.100:7722">
+          </div>
+          <div class="form-group">
+            <label for="setting-api-key">API Key</label>
+            <input type="password" id="setting-api-key" placeholder="Your desktop app API key">
+          </div>
+          <button class="btn-accent" id="test-connection-btn">Test Connection</button>
+          <button class="btn-accent" id="sync-devices-btn" style="margin-left: 8px;">Sync Devices</button>
+        </div>
+
+        <div class="settings-section">
+          <h3>Account</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Email</div>
+              <div class="setting-desc" id="settings-email">-</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Display Name</div>
+              <div class="setting-desc" id="settings-name">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+  </div><!-- /dashboard-page -->
+
+  <!-- ========== MODALS ========== -->
+
+  <!-- Add Network Modal -->
+  <div id="network-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Add Network</h2>
+      <form id="network-form">
+        <div class="form-group">
+          <label for="net-name">Network Name</label>
+          <input type="text" id="net-name" placeholder="e.g., Home Network" required>
+        </div>
+        <div class="form-group">
+          <label for="net-subnet">Subnet</label>
+          <input type="text" id="net-subnet" placeholder="e.g., 192.168.1.0/24">
+        </div>
+        <div class="form-group">
+          <label for="net-location">Location</label>
+          <input type="text" id="net-location" placeholder="e.g., Office, Home">
+        </div>
+        <div class="form-group">
+          <label for="net-api-endpoint">Desktop App API (optional)</label>
+          <input type="text" id="net-api-endpoint" placeholder="http://192.168.1.100:7722">
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="close-modal" class="btn-cancel">Cancel</button>
+          <button type="submit" class="btn-accent">Add Network</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Upload Scan Modal -->
+  <div id="upload-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Upload Scan Data</h2>
+      <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 16px;">
+        Upload a JSON file exported from the Transparency desktop app. The file should contain an array of device objects.
+      </p>
+      <form id="upload-form">
+        <div class="form-group">
+          <label for="upload-network">Target Network</label>
+          <select id="upload-network" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius);">
+            <option value="">Select a network</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="scan-file">Scan File (JSON)</label>
+          <input type="file" id="scan-file" accept=".json" required style="color: var(--text);">
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="close-upload-modal" class="btn-cancel">Cancel</button>
+          <button type="submit" class="btn-accent">Upload</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts (ES modules via CDN) -->
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

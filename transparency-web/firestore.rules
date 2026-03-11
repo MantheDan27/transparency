@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Scan results belong to a user
+    match /users/{userId}/scans/{scanId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Devices belong to a user
+    match /users/{userId}/devices/{deviceId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Networks belong to a user
+    match /users/{userId}/networks/{networkId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Alerts belong to a user
+    match /users/{userId}/alerts/{alertId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
