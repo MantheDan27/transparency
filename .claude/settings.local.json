@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --build:*)",
+      "Bash(start Transparency.exe)",
+      "Bash(wmic process get name,executablepath)",
+      "Bash(dir:*)",
+      "Bash(tasklist:*)",
+      "Bash(start \"C:\\\\temp\\\\Transparency.exe\")",
+      "Bash(cmd //c start \"\" \"C:\\\\temp\\\\Transparency.exe\")",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(cmake:*)"
+    ]
+  }
+}

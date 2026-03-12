@@ -215,7 +215,7 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hHookList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hHookList,
         LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-    Theme::ApplyDarkScrollbar(_hHookList);
+    Theme::ApplyDarkListView(_hHookList);
     {
         LVCOLUMN col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col.fmt = LVCFMT_LEFT;
         col.cx = 120; col.pszText = (LPWSTR)L"Name";

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparency VERSION 3.6.0 LANGUAGES CXX)
+project(Transparency VERSION 3.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,7 @@ set(SOURCES
     src/TabSmartHome.cpp
     src/Scanner.cpp
     src/Monitor.cpp
+    src/FirebaseClient.cpp
 )
 
 set(HEADERS
@@ -42,6 +43,7 @@ set(HEADERS
     src/TabPrivacy.h
     src/TabLedger.h
     src/TabSmartHome.h
+    src/FirebaseClient.h
 )
 
 add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})
@@ -110,6 +112,7 @@ target_link_libraries(Transparency PRIVATE
     wlanapi
     ntdll
     comdlg32
+    winhttp
 )
 
 set_target_properties(Transparency PROPERTIES

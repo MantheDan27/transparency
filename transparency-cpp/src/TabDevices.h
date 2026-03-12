@@ -30,6 +30,10 @@ private:
     LRESULT OnNotify(HWND hwnd, NMHDR* hdr);
     LRESULT OnScanComplete(HWND hwnd);
 
+    // Custom draw
+    LRESULT HandleListCustomDraw(NMLVCUSTOMDRAW* cd);
+    void    DrawFilterButton(DRAWITEMSTRUCT* dis, int filterIdx);
+
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
     void PopulateList();
@@ -37,6 +41,7 @@ private:
     void HideDetailPanel();
     void UpdateDetailPanel(const Device& dev);
     void ApplyFilter();
+    void UpdateFilterCounts();
     void ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx);
 
     wstring GetPortSummary(const Device& dev);
@@ -53,10 +58,11 @@ private:
 
     // Detail panel
     HWND _hDetailPanel      = nullptr;
-    HWND _hDetailCustomName = nullptr;  // editable custom name
+    HWND _hDetailCustomName = nullptr;
     HWND _hDetailName       = nullptr;
     HWND _hDetailType       = nullptr;
-    HWND _hDetailAlt        = nullptr;  // confidence alternatives
+    HWND _hDetailConfBar    = nullptr;  // owner-draw confidence progress bar
+    HWND _hDetailAlt        = nullptr;
     HWND _hDetailVendor     = nullptr;
     HWND _hDetailMac        = nullptr;
     HWND _hDetailPorts      = nullptr;
@@ -65,29 +71,37 @@ private:
     HWND _hDetailTrust      = nullptr;
     HWND _hDetailMdns       = nullptr;
     HWND _hDetailAnoms      = nullptr;
-    HWND _hDetailIotRisk    = nullptr;  // IoT risk panel
-    HWND _hDetailEvidence   = nullptr;  // classification evidence
-    HWND _hDetailSubnet     = nullptr;  // subnet label
-    HWND _hDetailFirstSeen  = nullptr;  // first seen timestamp
-    HWND _hDetailSightings  = nullptr;  // sighting count
-    HWND _hDetailIpHistory  = nullptr;  // IP history
+    HWND _hDetailIotRisk    = nullptr;
+    HWND _hDetailEvidence   = nullptr;
+    HWND _hDetailSubnet     = nullptr;
+    HWND _hDetailFirstSeen  = nullptr;
+    HWND _hDetailSightings  = nullptr;
+    HWND _hDetailIpHistory  = nullptr;
     HWND _hDetailSave       = nullptr;
     HWND _hDetailClose      = nullptr;
 
-    wstring _detailDeviceIp;            // IP of currently-displayed device
+    wstring _detailDeviceIp;
 
     // Sort state
-    int _sortCol = 0;
+    int  _sortCol = 0;
     bool _sortAsc = true;
 
     // Filter
-    int _filterMode = 0; // 0=All, 1=Online, 2=Unknown, 3=Watchlist, 4=Owned, 5=Changed
+    int _filterMode = 0;           // 0=All,1=Online,2=Unknown,3=Watchlist,4=Owned,5=Changed
+    int _filterCounts[6] = {};     // count per filter category
 
     // Filtered device indices
     std::vector<int> _filteredIndices;
 
     bool _detailVisible = false;
-    int _selectedDevice = -1;
+    int  _selectedDevice = -1;
+
+public:
+    // Confidence bar value (0–100) for currently displayed device
+    // Exposed for DetailPanelSubclassProc (static free function)
+    int  _detailConfidence = 0;
+
+private:
 
     static const wchar_t* s_className;
     static const int DETAIL_WIDTH = 340;

@@ -241,10 +241,7 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
 
     SendMessage(_hChangesList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hChangesList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-    ListView_SetBkColor(_hChangesList, Theme::BG_CARD);
-    ListView_SetTextBkColor(_hChangesList, Theme::BG_CARD);
-    ListView_SetTextColor(_hChangesList, Theme::TEXT_PRIMARY);
-    Theme::ApplyDarkScrollbar(_hChangesList);
+    Theme::ApplyDarkListView(_hChangesList);
 
     LVCOLUMN col = {};
     col.mask = LVCF_WIDTH;
@@ -308,25 +305,18 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
         int idx = dis->CtlID - IDC_STATIC_KPI1;
         COLORREF accent = KPI_ACCENTS[idx];
 
-        // Background
-        HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
-        HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-        HBRUSH oldB = (HBRUSH)SelectObject(hdc, bgBrush);
-        HPEN oldP = (HPEN)SelectObject(hdc, borderPen);
-        RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, 16, 16);
-        
-        // Top accent pill
-        RECT topBar = { rc.left + 20, rc.top, rc.right - 20, rc.top + 3 };
-        HBRUSH accBrush = CreateSolidBrush(accent);
-        RoundRect(hdc, topBar.left, topBar.top, topBar.right, topBar.bottom, 2, 2);
-        DeleteObject(accBrush);
+        // --- Glass card background ---
+        Theme::DrawGlassCard(hdc, rc);
 
-        SelectObject(hdc, oldB);
-        SelectObject(hdc, oldP);
-        DeleteObject(bgBrush);
-        DeleteObject(borderPen);
+        // --- Left-edge accent bar (3px wide, full height inset by 2px top+bottom) ---
+        {
+            HBRUSH accentBrush = CreateSolidBrush(accent);
+            RECT accentBar = { rc.left, rc.top + 10, rc.left + 3, rc.bottom - 10 };
+            FillRect(hdc, &accentBar, accentBrush);
+            DeleteObject(accentBrush);
+        }
 
-        // Value
+        // --- KPI value string ---
         wchar_t valStr[32];
         if (idx == 3) {
             if (_kpiVal[3] >= 0) swprintf_s(valStr, L"%dms", _kpiVal[3]);
@@ -335,19 +325,21 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
             swprintf_s(valStr, L"%d", _kpiVal[idx]);
         }
 
+        // Value in large font — centered in the upper 60% of the card
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, Theme::TEXT_PRIMARY);
-        HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontHeader());
-        RECT numRc = { rc.left + 4, rc.top + 8, rc.right - 4, rc.top + 48 };
+        HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontKPI());
+        int cardInner = rc.left + 12; // offset past accent bar + padding
+        RECT numRc = { cardInner, rc.top + 8, rc.right - 6, rc.top + 54 };
         DrawText(hdc, valStr, -1, &numRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
-        // Label
+        // --- KPI label in small muted font ---
         SelectObject(hdc, Theme::FontSmall());
         SetTextColor(hdc, Theme::TEXT_MUTED);
-        RECT lblRc = { rc.left + 4, rc.top + 50, rc.right - 4, rc.top + 66 };
+        RECT lblRc = { cardInner, rc.top + 55, rc.right - 6, rc.top + 71 };
         DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
-        // Sparkline
+        // --- Sparkline bars at the bottom of the card ---
         const std::vector<int>* hist = nullptr;
         switch (idx) {
         case 0: hist = &_devicesOnlineHistory; break;
@@ -356,35 +348,74 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
         case 3: hist = &_latencyHistory;       break;
         }
         if (hist && !hist->empty()) {
-            RECT spRc = { rc.left + 12, rc.top + 70, rc.right - 12, rc.bottom - 8 };
+            RECT spRc = { rc.left + 10, rc.top + 73, rc.right - 6, rc.bottom - 6 };
             DrawSparkline(hdc, spRc, *hist, accent);
         }
+
         SelectObject(hdc, oldFont);
         return TRUE;
     }
 
-    // Action Buttons (Pills)
+    // Action Buttons (Pills) — differentiate scan buttons (ACCENT) vs monitor/export (BG_ELEVATED)
     if (dis->CtlType == ODT_BUTTON) {
-        bool pushed = (dis->itemState & ODS_SELECTED);
-        bool disabled = (dis->itemState & ODS_DISABLED);
-        
-        COLORREF bg = pushed ? Theme::BG_ROW_SEL : (disabled ? Theme::BG_APP : Theme::BG_CARD);
-        COLORREF brd = pushed ? Theme::ACCENT : Theme::BORDER;
-        
-        HBRUSH bgB = CreateSolidBrush(bg);
-        HPEN brdP = CreatePen(PS_SOLID, 1, brd);
+        bool pushed   = (dis->itemState & ODS_SELECTED) != 0;
+        bool disabled = (dis->itemState & ODS_DISABLED)  != 0;
+
+        // Determine button identity from its ID
+        int ctlId = GetDlgCtrlID(dis->hwndItem);
+        bool isScanBtn   = (ctlId == IDC_BTN_SCAN_QUICK || ctlId == IDC_BTN_SCAN_DEEP);
+        bool isMonStart  = (ctlId == IDC_BTN_MONITOR_START);
+        bool isMonStop   = (ctlId == IDC_BTN_MONITOR_STOP);
+        bool isExport    = (ctlId == IDC_BTN_EXPORT);
+
+        COLORREF bg, brd, fg;
+
+        if (disabled) {
+            bg  = Theme::BG_INPUT;
+            brd = Theme::BORDER;
+            fg  = Theme::TEXT_MUTED;
+        } else if (isScanBtn) {
+            // Primary action: accent-filled pill
+            bg  = pushed ? Theme::BG_ROW_SEL : Theme::ACCENT;
+            brd = Theme::ACCENT;
+            fg  = RGB(255, 255, 255);
+        } else if (isMonStart) {
+            // Secondary action: elevated background
+            bg  = pushed ? Theme::BG_ROW_SEL : Theme::BG_ELEVATED;
+            brd = Theme::BORDER;
+            fg  = Theme::TEXT_PRIMARY;
+        } else if (isMonStop) {
+            // Danger-tinted stop button
+            bg  = pushed ? Theme::BG_ROW_SEL : Theme::BG_ELEVATED;
+            brd = Theme::DANGER;
+            fg  = Theme::DANGER;
+        } else if (isExport) {
+            bg  = pushed ? Theme::BG_ROW_SEL : Theme::BG_ELEVATED;
+            brd = Theme::BORDER;
+            fg  = Theme::TEXT_SECONDARY;
+        } else {
+            bg  = pushed ? Theme::BG_ROW_SEL : Theme::BG_CARD;
+            brd = pushed ? Theme::ACCENT : Theme::BORDER;
+            fg  = Theme::TEXT_PRIMARY;
+        }
+
+        int pillR = (rc.bottom - rc.top); // full height as corner radius for pill shape
+        HBRUSH bgB  = CreateSolidBrush(bg);
+        HPEN   brdP = CreatePen(PS_SOLID, 1, brd);
         HBRUSH oldB = (HBRUSH)SelectObject(hdc, bgB);
-        HPEN oldP = (HPEN)SelectObject(hdc, brdP);
-        
-        RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, rc.bottom - rc.top, rc.bottom - rc.top);
-        
+        HPEN   oldP = (HPEN)SelectObject(hdc, brdP);
+
+        RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, pillR, pillR);
+
         SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, disabled ? Theme::TEXT_MUTED : (pushed ? Theme::ACCENT : Theme::TEXT_PRIMARY));
-        
+        SetTextColor(hdc, fg);
+        HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBold());
+
         wchar_t txt[128];
         GetWindowText(dis->hwndItem, txt, 128);
         DrawText(hdc, txt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        
+
+        SelectObject(hdc, oldFont);
         SelectObject(hdc, oldB);
         SelectObject(hdc, oldP);
         DeleteObject(bgB);
@@ -403,28 +434,45 @@ void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
     int h = rc.bottom - rc.top;
     if (w <= 0 || h <= 0) return;
 
-    // Find max (at least 1)
+    // Find max (at least 1 to avoid divide-by-zero)
     int maxVal = 1;
     for (int v : vals) if (v > maxVal) maxVal = v;
 
-    // 40% opacity blend on BG_CARD (#181d2e)
-    BYTE r = (BYTE)(GetRValue(col) * 40 / 100 + 24 * 60 / 100);
-    BYTE g = (BYTE)(GetGValue(col) * 40 / 100 + 29 * 60 / 100);
-    BYTE b = (BYTE)(GetBValue(col) * 40 / 100 + 46 * 60 / 100);
-    HBRUSH barBrush = CreateSolidBrush(RGB(r, g, b));
+    // Draw a subtle trough background so empty bars are visible
+    {
+        HBRUSH troughBrush = CreateSolidBrush(Theme::BG_INPUT);
+        FillRect(hdc, &rc, troughBrush);
+        DeleteObject(troughBrush);
+    }
 
-    int barW = std::max(2, w / (n + 1));
+    // Dim bar color: 55% accent blended over BG_CARD
+    BYTE r = (BYTE)(GetRValue(col) * 55 / 100 + GetRValue(Theme::BG_CARD) * 45 / 100);
+    BYTE g = (BYTE)(GetGValue(col) * 55 / 100 + GetGValue(Theme::BG_CARD) * 45 / 100);
+    BYTE b = (BYTE)(GetBValue(col) * 55 / 100 + GetBValue(Theme::BG_CARD) * 45 / 100);
+    HBRUSH dimBrush = CreateSolidBrush(RGB(r, g, b));
+
+    // Bright bar for the most recent (last) value
+    HBRUSH brightBrush = CreateSolidBrush(col);
+
+    int slotW = w / n;
+    if (slotW < 1) slotW = 1;
+    int barW = std::max(2, slotW - 2);
 
     for (int i = 0; i < n; i++) {
-        int barH = (vals[i] * h) / maxVal;
-        if (barH < 1 && vals[i] > 0) barH = 1;
-        int x = rc.left + i * (w / n);
-        int bw = w / n - 1;
-        if (bw < 1) bw = 1;
-        RECT barRc = { x, rc.bottom - barH, x + bw, rc.bottom };
-        FillRect(hdc, &barRc, barBrush);
+        int barH = h;
+        if (maxVal > 0) barH = (vals[i] * h) / maxVal;
+        if (barH < 2 && vals[i] > 0) barH = 2;
+        if (barH > h) barH = h;
+
+        int x = rc.left + i * slotW + (slotW - barW) / 2;
+        RECT barRc = { x, rc.bottom - barH, x + barW, rc.bottom };
+
+        // Last bar draws in full accent color, older bars are dim
+        FillRect(hdc, &barRc, (i == n - 1) ? brightBrush : dimBrush);
     }
-    DeleteObject(barBrush);
+
+    DeleteObject(dimBrush);
+    DeleteObject(brightBrush);
 }
 
 // ── Topology Map ──────────────────────────────────────────────────────────────
@@ -436,39 +484,69 @@ static COLORREF DeviceNodeColor(const Device& d) {
     if (d.trustState == L"known")           return Theme::ACCENT;
     if (d.trustState == L"guest")           return Theme::WARNING;
     if (d.trustState == L"blocked")         return Theme::DANGER;
-    if (d.trustState == L"watchlist")       return Theme::WATCHLIST;
+    if (d.trustState == L"watchlist")       return Theme::TRUST_WATCHLIST;
     return RGB(80, 90, 120);
 }
 
+// Helper: draw a filled circle node with a 1px darker border ring
+static void DrawMapNode(HDC hdc, int cx, int cy, int radius, COLORREF fill) {
+    // Outer glow ring — slightly larger, darker blend
+    HBRUSH ringBrush = CreateSolidBrush(RGB(
+        (BYTE)(GetRValue(fill) / 4),
+        (BYTE)(GetGValue(fill) / 4),
+        (BYTE)(GetBValue(fill) / 4)));
+    HPEN   ringPen   = CreatePen(PS_SOLID, 1, fill);
+    HBRUSH ob = (HBRUSH)SelectObject(hdc, ringBrush);
+    HPEN   op = (HPEN)  SelectObject(hdc, ringPen);
+    Ellipse(hdc, cx - radius - 3, cy - radius - 3, cx + radius + 3, cy + radius + 3);
+    SelectObject(hdc, ob);
+    SelectObject(hdc, op);
+    DeleteObject(ringBrush);
+    DeleteObject(ringPen);
+
+    // Filled body
+    HBRUSH nb = CreateSolidBrush(fill);
+    HPEN   np = CreatePen(PS_SOLID, 1, fill);
+    ob = (HBRUSH)SelectObject(hdc, nb);
+    op = (HPEN)  SelectObject(hdc, np);
+    Ellipse(hdc, cx - radius, cy - radius, cx + radius, cy + radius);
+    SelectObject(hdc, ob);
+    SelectObject(hdc, op);
+    DeleteObject(nb);
+    DeleteObject(np);
+}
+
 void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
-    // Background
-    HBRUSH bgBrush = CreateSolidBrush(Theme::BG_CARD);
-    FillRect(hdc, &rc, bgBrush);
-    DeleteObject(bgBrush);
+    // --- Glass card background ---
+    Theme::DrawGlassCard(hdc, rc);
 
-    // Border
-    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-    MoveToEx(hdc, rc.left,      rc.top,      nullptr);
-    LineTo  (hdc, rc.right - 1, rc.top);
-    LineTo  (hdc, rc.right - 1, rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.top);
-
-    // Section label
+    // Card header label — FontBold (13pt semibold) fits the 16px header band cleanly
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::TEXT_MUTED);
-    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    RECT hdrRc = { rc.left + 8, rc.top + 6, rc.right - 8, rc.top + 20 };
-    DrawText(hdc, L"NETWORK MAP", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+    SetTextColor(hdc, Theme::TEXT_SECONDARY);
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBold());
+    RECT hdrRc = { rc.left + 10, rc.top + 6, rc.right - 10, rc.top + 24 };
+    DrawText(hdc, L"NETWORK TOPOLOGY", -1, &hdrRc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+
+    // Thin separator line under header
+    {
+        HPEN sepPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+        HPEN oldP = (HPEN)SelectObject(hdc, sepPen);
+        MoveToEx(hdc, rc.left + 8,  rc.top + 26, nullptr);
+        LineTo  (hdc, rc.right - 8, rc.top + 26);
+        SelectObject(hdc, oldP);
+        DeleteObject(sepPen);
+    }
+
+    HPEN oldPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
 
     if (!_mainWnd) goto cleanup;
     {
         ScanResult r = _mainWnd->GetLastResult();
         if (r.devices.empty()) {
             SetTextColor(hdc, Theme::TEXT_MUTED);
-            RECT noRc = { rc.left, rc.top + 24, rc.right, rc.bottom };
-            DrawText(hdc, L"Run a scan to see the network map.",
+            SelectObject(hdc, Theme::FontBody());
+            RECT noRc = { rc.left, rc.top + 28, rc.right, rc.bottom };
+            DrawText(hdc, L"Run a scan to populate the network map.",
                      -1, &noRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             goto cleanup;
         }
@@ -481,31 +559,41 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             subnetGroups[sub].push_back(i);
         }
 
-        int mapLeft   = rc.left   + 12;
-        int mapTop    = rc.top    + 28;
-        int mapRight  = rc.right  - 12;
-        int mapBottom = rc.bottom - 12;
+        int mapLeft   = rc.left   + 14;
+        int mapTop    = rc.top    + 30;
+        int mapRight  = rc.right  - 14;
+        int mapBottom = rc.bottom - 10;
+
+        // Gateway node parameters
+        const int GW_RADIUS  = 14;
+        const int DEV_RADIUS = 8;
 
         if (subnetGroups.size() <= 1) {
-            // Single subnet — classic radial layout
+            // ── Single subnet: classic radial layout ──────────────────────────
             int cx = (mapLeft + mapRight)  / 2;
             int cy = (mapTop  + mapBottom) / 2;
-            int radius = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 22;
+            int radius = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 24;
             if (radius < 20) radius = 20;
 
             int n = std::min((int)r.devices.size(), 24);
 
-            HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-            SelectObject(hdc, linePen);
-            for (int i = 0; i < n; i++) {
-                double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
-                int nx = cx + (int)(radius * cos(angle));
-                int ny = cy + (int)(radius * sin(angle));
-                MoveToEx(hdc, cx, cy, nullptr);
-                LineTo(hdc, nx, ny);
+            // Draw connection lines first (under nodes)
+            {
+                HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+                HPEN prevPen = (HPEN)SelectObject(hdc, linePen);
+                for (int i = 0; i < n; i++) {
+                    double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
+                    int nx = cx + (int)(radius * cos(angle));
+                    int ny = cy + (int)(radius * sin(angle));
+                    MoveToEx(hdc, cx, cy, nullptr);
+                    LineTo(hdc, nx, ny);
+                }
+                SelectObject(hdc, prevPen);
+                DeleteObject(linePen);
             }
-            DeleteObject(linePen);
 
+            // Draw device nodes and labels
+            SelectObject(hdc, Theme::FontSmall());
             for (int i = 0; i < n; i++) {
                 auto& d = r.devices[i];
                 double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
@@ -513,124 +601,113 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
                 int ny = cy + (int)(radius * sin(angle));
 
                 COLORREF col = DeviceNodeColor(d);
-                HBRUSH nb = CreateSolidBrush(col);
-                HPEN   np = CreatePen(PS_SOLID, 1, col);
-                HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
-                HPEN   op = (HPEN)SelectObject(hdc, np);
-                Ellipse(hdc, nx - 6, ny - 6, nx + 6, ny + 6);
-                SelectObject(hdc, ob); SelectObject(hdc, op);
-                DeleteObject(nb); DeleteObject(np);
+                DrawMapNode(hdc, nx, ny, DEV_RADIUS, col);
 
                 wstring lbl = d.customName.empty()
                     ? (d.hostname.empty() ? d.ip : d.hostname)
                     : d.customName;
-                if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
+                if ((int)lbl.size() > 12) lbl = lbl.substr(0, 12);
 
-                SetTextColor(hdc, Theme::TEXT_MUTED);
-                SelectObject(hdc, Theme::FontSmall());
-                RECT lblRc = { nx - 38, ny + 8, nx + 38, ny + 20 };
+                SetTextColor(hdc, Theme::TEXT_SECONDARY);
+                RECT lblRc = { nx - 40, ny + DEV_RADIUS + 3,
+                               nx + 40, ny + DEV_RADIUS + 15 };
                 DrawText(hdc, lbl.c_str(), -1, &lblRc,
                          DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
             }
 
-            // Gateway center node
-            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
-            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
-            HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
-            HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
-            Ellipse(hdc, cx - 14, cy - 14, cx + 14, cy + 14);
-            SelectObject(hdc, ob2); SelectObject(hdc, op2);
-            DeleteObject(gwb); DeleteObject(gwp);
+            // Gateway center node (larger, accent-glowing)
+            DrawMapNode(hdc, cx, cy, GW_RADIUS, Theme::ACCENT);
 
-            SetTextColor(hdc, Theme::BG_APP);
+            SetTextColor(hdc, RGB(255, 255, 255));
             SelectObject(hdc, Theme::FontSmall());
-            RECT gwRc = { cx - 14, cy - 8, cx + 14, cy + 8 };
+            RECT gwRc = { cx - GW_RADIUS, cy - GW_RADIUS,
+                          cx + GW_RADIUS, cy + GW_RADIUS };
             DrawText(hdc, L"GW", -1, &gwRc,
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
         } else {
-            // Multi-subnet layout — horizontal bands per subnet with gateway at top center
+            // ── Multi-subnet: horizontal bands with gateway at top center ─────
             int gwCx = (mapLeft + mapRight) / 2;
-            int gwCy = mapTop + 16;
+            int gwCy = mapTop + GW_RADIUS + 2;
 
-            // Gateway node
-            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
-            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
-            HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
-            HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
-            Ellipse(hdc, gwCx - 12, gwCy - 12, gwCx + 12, gwCy + 12);
-            SelectObject(hdc, ob2); SelectObject(hdc, op2);
-            DeleteObject(gwb); DeleteObject(gwp);
-
-            SetTextColor(hdc, Theme::BG_APP);
+            // Draw gateway first
+            DrawMapNode(hdc, gwCx, gwCy, GW_RADIUS, Theme::ACCENT);
+            SetTextColor(hdc, RGB(255, 255, 255));
             SelectObject(hdc, Theme::FontSmall());
-            RECT gwRc = { gwCx - 12, gwCy - 7, gwCx + 12, gwCy + 7 };
+            RECT gwRc = { gwCx - GW_RADIUS, gwCy - GW_RADIUS,
+                          gwCx + GW_RADIUS, gwCy + GW_RADIUS };
             DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-            int bandTop = gwCy + 20;
-            int totalH = mapBottom - bandTop;
+            int bandTop    = gwCy + GW_RADIUS + 10;
+            int totalH     = mapBottom - bandTop;
             int numSubnets = std::min((int)subnetGroups.size(), 4);
-            int bandH = totalH / std::max(numSubnets, 1);
+            int bandH      = totalH / std::max(numSubnets, 1);
 
             int subIdx = 0;
             for (auto& [subName, devIndices] : subnetGroups) {
                 if (subIdx >= 4) break;
                 int bTop = bandTop + subIdx * bandH;
                 int bBot = bTop + bandH - 4;
+                int subCx = (mapLeft + mapRight) / 2;
+                int subCy = (bTop + 18 + bBot) / 2;
 
-                // Subnet label
-                SetTextColor(hdc, Theme::ACCENT);
+                // Line from gateway to this subnet midpoint
+                {
+                    HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+                    HPEN prevPen = (HPEN)SelectObject(hdc, linePen);
+                    MoveToEx(hdc, gwCx, gwCy + GW_RADIUS, nullptr);
+                    LineTo(hdc, subCx, bTop + 18);
+                    SelectObject(hdc, prevPen);
+                    DeleteObject(linePen);
+                }
+
+                // Subnet label — FontSmall in accent color for compact band headers
+                SetTextColor(hdc, Theme::ACCENT_BRIGHT);
                 SelectObject(hdc, Theme::FontSmall());
-                RECT subRc = { mapLeft, bTop, mapRight, bTop + 14 };
+                RECT subRc = { mapLeft, bTop + 2, mapRight, bTop + 16 };
                 DrawText(hdc, subName.c_str(), -1, &subRc, DT_LEFT | DT_SINGLELINE);
 
                 // Dashed separator
-                HPEN sepPen = CreatePen(PS_DOT, 1, Theme::BORDER);
-                SelectObject(hdc, sepPen);
-                MoveToEx(hdc, mapLeft, bTop + 15, nullptr);
-                LineTo(hdc, mapRight, bTop + 15);
-                DeleteObject(sepPen);
-
-                // Line from gateway down to this subnet center
-                int subCx = (mapLeft + mapRight) / 2;
-                int subCy = (bTop + 16 + bBot) / 2;
-                HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER);
-                SelectObject(hdc, linePen);
-                MoveToEx(hdc, gwCx, gwCy + 12, nullptr);
-                LineTo(hdc, subCx, bTop + 16);
-                DeleteObject(linePen);
+                {
+                    HPEN sepPen = CreatePen(PS_DOT, 1, Theme::BORDER);
+                    HPEN prevPen = (HPEN)SelectObject(hdc, sepPen);
+                    MoveToEx(hdc, mapLeft, bTop + 17, nullptr);
+                    LineTo(hdc, mapRight, bTop + 17);
+                    SelectObject(hdc, prevPen);
+                    DeleteObject(sepPen);
+                }
 
                 // Devices in this subnet — horizontal spread
-                int n = std::min((int)devIndices.size(), 12);
+                int n     = std::min((int)devIndices.size(), 12);
                 int nodeW = (mapRight - mapLeft) / std::max(n, 1);
+
                 for (int i = 0; i < n; i++) {
                     const Device& d = r.devices[devIndices[i]];
                     int nx = mapLeft + nodeW / 2 + i * nodeW;
                     int ny = subCy;
 
-                    // Line from subnet center
-                    HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER);
-                    SelectObject(hdc, lp2);
-                    MoveToEx(hdc, subCx, bTop + 16, nullptr);
-                    LineTo(hdc, nx, ny);
-                    DeleteObject(lp2);
+                    // Line from subnet band top down to device
+                    {
+                        HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER);
+                        HPEN prevPen = (HPEN)SelectObject(hdc, lp2);
+                        MoveToEx(hdc, subCx, bTop + 18, nullptr);
+                        LineTo(hdc, nx, ny);
+                        SelectObject(hdc, prevPen);
+                        DeleteObject(lp2);
+                    }
 
                     COLORREF col = DeviceNodeColor(d);
-                    HBRUSH nb = CreateSolidBrush(col);
-                    HPEN   np = CreatePen(PS_SOLID, 1, col);
-                    HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
-                    HPEN   op = (HPEN)SelectObject(hdc, np);
-                    Ellipse(hdc, nx - 5, ny - 5, nx + 5, ny + 5);
-                    SelectObject(hdc, ob); SelectObject(hdc, op);
-                    DeleteObject(nb); DeleteObject(np);
+                    DrawMapNode(hdc, nx, ny, DEV_RADIUS, col);
 
                     wstring lbl = d.customName.empty()
                         ? (d.hostname.empty() ? d.ip : d.hostname)
                         : d.customName;
-                    if ((int)lbl.size() > 8) lbl = lbl.substr(0, 8);
+                    if ((int)lbl.size() > 9) lbl = lbl.substr(0, 9);
 
-                    SetTextColor(hdc, Theme::TEXT_MUTED);
+                    SetTextColor(hdc, Theme::TEXT_SECONDARY);
                     SelectObject(hdc, Theme::FontSmall());
-                    RECT lblRc = { nx - 32, ny + 7, nx + 32, ny + 18 };
+                    RECT lblRc = { nx - 34, ny + DEV_RADIUS + 3,
+                                   nx + 34, ny + DEV_RADIUS + 15 };
                     DrawText(hdc, lbl.c_str(), -1, &lblRc,
                              DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
                 }
@@ -643,7 +720,6 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
 cleanup:
     SelectObject(hdc, oldFont);
     SelectObject(hdc, oldPen);
-    DeleteObject(borderPen);
 }
 
 // ── OnPaint ───────────────────────────────────────────────────────────────────
@@ -654,34 +730,110 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
 
     RECT rc;
     GetClientRect(hwnd, &rc);
+
+    // App-level background fill
     FillRect(hdc, &rc, Theme::BrushApp());
 
-    // Topology map (left portion of bottom area)
+    SetBkMode(hdc, TRANSPARENT);
+
+    int tileW, pillY, btnY, listY;
+    GetLayoutMetrics(rc.right, rc.bottom, tileW, pillY, btnY, listY);
+    int mapW = 0, listX = 0, listW = 0;
+    GetBottomSplitMetrics(rc.right, mapW, listX, listW);
+
+    // ── Section label: "NETWORK OVERVIEW" above the KPI tiles ───────────────
+    // Use FontBold (13pt semibold) — fits precisely in the 18px header slot
+    {
+        HFONT oldF = (HFONT)SelectObject(hdc, Theme::FontBold());
+        SetTextColor(hdc, Theme::TEXT_SECONDARY);
+        RECT kpiHdrRc = { 16, TILE_Y - 18, rc.right - 16, TILE_Y - 2 };
+        DrawText(hdc, L"NETWORK OVERVIEW", -1, &kpiHdrRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldF);
+    }
+
+    // ── Section label: "SCAN CONTROLS" above the pill buttons ────────────────
+    {
+        HFONT oldF = (HFONT)SelectObject(hdc, Theme::FontBold());
+        SetTextColor(hdc, Theme::TEXT_SECONDARY);
+        RECT scanHdrRc = { 16, pillY - 18, rc.right - 16, pillY - 2 };
+        DrawText(hdc, L"SCAN CONTROLS", -1, &scanHdrRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldF);
+    }
+
+    // ── Thin separator between scan controls and bottom panels ───────────────
+    {
+        int sepY = listY - 6;
+        HPEN sepPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+        HPEN oldP = (HPEN)SelectObject(hdc, sepPen);
+        MoveToEx(hdc, 16, sepY, nullptr);
+        LineTo(hdc, rc.right - 16, sepY);
+        SelectObject(hdc, oldP);
+        DeleteObject(sepPen);
+    }
+
+    // ── Section label: "NETWORK TOPOLOGY" above the map ─────────────────────
+    {
+        HFONT oldF = (HFONT)SelectObject(hdc, Theme::FontBold());
+        SetTextColor(hdc, Theme::TEXT_PRIMARY);
+        RECT mapHdrRc = { 16, listY - 20, 16 + mapW, listY - 4 };
+        DrawText(hdc, L"NETWORK TOPOLOGY", -1, &mapHdrRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldF);
+    }
+
+    // ── Section label: "RECENT CHANGES" above the changes list ───────────────
+    {
+        HFONT oldF = (HFONT)SelectObject(hdc, Theme::FontBold());
+        SetTextColor(hdc, Theme::TEXT_PRIMARY);
+        RECT hdrRc = { listX, listY - 20, rc.right - 16, listY - 4 };
+        DrawText(hdc, L"RECENT CHANGES", -1, &hdrRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldF);
+    }
+
+    // ── Topology map (left portion of bottom area) ────────────────────────────
     if (_mapRect.right > _mapRect.left && _mapRect.bottom > _mapRect.top)
         DrawTopologyMap(hdc, _mapRect);
 
-    // Section header "RECENT CHANGES" above the changes list
+    // ── Status strip at the very bottom ──────────────────────────────────────
     {
-        int tileW, pillY, btnY, listY;
-        GetLayoutMetrics(rc.right, rc.bottom, tileW, pillY, btnY, listY);
-        int mapW = 0, listX = 0, listW = 0;
-        GetBottomSplitMetrics(rc.right, mapW, listX, listW);
+        const int STRIP_H = 24;
+        RECT stripRc = { 0, rc.bottom - STRIP_H, rc.right, rc.bottom };
 
-        RECT mapHdrRc = { 16, listY - 18, 16 + mapW, listY - 2 };
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, Theme::TEXT_SECONDARY);
-        HFONT mapOld = (HFONT)SelectObject(hdc, Theme::FontSmall());
-        DrawText(hdc, L"NETWORK TOPOLOGY", -1, &mapHdrRc,
-                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        SelectObject(hdc, mapOld);
+        // Background: elevated dark strip
+        HBRUSH stripBrush = CreateSolidBrush(Theme::BG_ELEVATED);
+        FillRect(hdc, &stripRc, stripBrush);
+        DeleteObject(stripBrush);
 
-        RECT hdrRc = { listX, listY - 18, rc.right - 16, listY - 2 };
-        SetBkMode(hdc, TRANSPARENT);
+        // Top border line
+        HPEN stripBorderPen = CreatePen(PS_SOLID, 1, Theme::BORDER);
+        HPEN oldP = (HPEN)SelectObject(hdc, stripBorderPen);
+        MoveToEx(hdc, 0, rc.bottom - STRIP_H, nullptr);
+        LineTo(hdc, rc.right, rc.bottom - STRIP_H);
+        SelectObject(hdc, oldP);
+        DeleteObject(stripBorderPen);
+
+        // Status message — reuse whatever the status text control shows,
+        // or a static "Ready" message if nothing is active
+        wchar_t statusBuf[256] = L"Ready for network assessment.";
+        if (_hStatusText) GetWindowText(_hStatusText, statusBuf, 256);
+
         SetTextColor(hdc, Theme::TEXT_SECONDARY);
-        HFONT old = (HFONT)SelectObject(hdc, Theme::FontSmall());
-        DrawText(hdc, L"RECENT CHANGES", -1, &hdrRc,
-                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        SelectObject(hdc, old);
+        HFONT oldF = (HFONT)SelectObject(hdc, Theme::FontSmall());
+        RECT statusTxtRc = { 12, rc.bottom - STRIP_H, rc.right - 12, rc.bottom };
+        DrawText(hdc, statusBuf, -1, &statusTxtRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        SelectObject(hdc, oldF);
+
+        // Right-side "TRANSPARENCY" branding
+        SetTextColor(hdc, Theme::TEXT_MUTED);
+        HFONT oldF2 = (HFONT)SelectObject(hdc, Theme::FontSmall());
+        RECT brandRc = { rc.right - 160, rc.bottom - STRIP_H, rc.right - 8, rc.bottom };
+        DrawText(hdc, Theme::VERSION_FULL, -1, &brandRc,
+                 DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldF2);
     }
 
     EndPaint(hwnd, &ps);

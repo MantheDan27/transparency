@@ -59,6 +59,7 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushApp()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_NOTIFY:     return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
+    case WM_DRAWITEM:   return self->OnDrawItem(hwnd, reinterpret_cast<DRAWITEMSTRUCT*>(lp));
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
@@ -80,32 +81,32 @@ LRESULT TabAlerts::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
-    // Filter buttons
+    // Filter buttons (owner-draw pills)
     int btnX = 16;
     for (int i = 0; i < 5; i++) {
         _hFilterBtns[i] = CreateWindowEx(0, L"BUTTON", ALERT_FILTER_LABELS[i],
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            btnX, 12, 80, 26, hwnd, (HMENU)(9600 + i), hInst, nullptr);
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            btnX, 12, 72, 28, hwnd, (HMENU)(9600 + i), hInst, nullptr);
         SendMessage(_hFilterBtns[i], WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
-        btnX += 84;
+        btnX += 76;
     }
 
     _hBtnClearAll = CreateWindowEx(0, L"BUTTON", L"Clear All",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx - 100, 12, 84, 26, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        cx - 100, 12, 84, 28, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
     SendMessage(_hBtnClearAll, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
-    // Alert list
+    // Alert list with dark styling
     int alertH = (cy - 80) / 3;
-    _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
+    _hAlertList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
         16, 48, cx - 32, alertH,
         hwnd, (HMENU)IDC_LIST_ALERTS, hInst, nullptr);
 
     SendMessage(_hAlertList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hAlertList,
-        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
-    Theme::ApplyDarkScrollbar(_hAlertList);
+        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+    Theme::ApplyDarkListView(_hAlertList);
 
     struct ColDef { const wchar_t* name; int w; };
     static const ColDef ALERT_COLS[] = {
@@ -185,7 +186,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hRuleList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hRuleList,
         LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_CHECKBOXES);
-    Theme::ApplyDarkScrollbar(_hRuleList);
+    Theme::ApplyDarkListView(_hRuleList);
 
     static const ColDef RULE_COLS[] = {
         { L"Name", 160 }, { L"Event", 160 }, { L"Filter", 100 },
@@ -226,6 +227,57 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     FillRect(hdc, &rc, Theme::BrushApp());
     EndPaint(hwnd, &ps);
     return 0;
+}
+
+LRESULT TabAlerts::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
+    if (!dis || dis->CtlType != ODT_BUTTON) return FALSE;
+
+    HDC hdc = dis->hDC;
+    RECT rc = dis->rcItem;
+    int ctlId = dis->CtlID;
+    bool pushed = (dis->itemState & ODS_SELECTED) != 0;
+    bool focused = (dis->itemState & ODS_FOCUS) != 0;
+
+    // Determine button type and state
+    bool isFilterBtn = (ctlId >= 9600 && ctlId <= 9604);
+    bool isClearBtn = (ctlId == IDC_BTN_CLEAR_ALERTS);
+    bool isActive = isFilterBtn && (_alertFilter == (ctlId - 9600));
+
+    // Colors based on state
+    COLORREF bg, fg, border;
+    if (isActive) {
+        bg = Theme::ACCENT;
+        fg = Theme::TEXT_ON_ACCENT;
+        border = Theme::ACCENT;
+    } else if (isClearBtn) {
+        bg = pushed ? Theme::DANGER_DIM : Theme::BG_ELEVATED;
+        fg = Theme::DANGER;
+        border = Theme::DANGER;
+    } else if (pushed) {
+        bg = Theme::BG_ROW_HOV;
+        fg = Theme::TEXT_PRIMARY;
+        border = Theme::BORDER_LIGHT;
+    } else {
+        bg = Theme::BG_CARD;
+        fg = Theme::TEXT_SECONDARY;
+        border = Theme::BORDER;
+    }
+
+    // Draw pill background
+    int h = rc.bottom - rc.top;
+    Theme::DrawRoundRect(hdc, rc, h, bg, border);
+
+    // Draw text
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, fg);
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+
+    wchar_t txt[64];
+    GetWindowText(dis->hwndItem, txt, 64);
+    DrawText(hdc, txt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    SelectObject(hdc, oldFont);
+    return TRUE;
 }
 
 LRESULT TabAlerts::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {

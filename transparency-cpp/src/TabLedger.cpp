@@ -120,7 +120,7 @@ void TabLedger::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hList, WM_SETFONT, (WPARAM)Theme::FontMono(), TRUE);
     ListView_SetExtendedListViewStyle(_hList,
         LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
-    Theme::ApplyDarkScrollbar(_hList);
+    Theme::ApplyDarkListView(_hList);
 
     {
         LVCOLUMN col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col.fmt = LVCFMT_LEFT;
@@ -175,7 +175,7 @@ void TabLedger::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hDiffList, WM_SETFONT, (WPARAM)Theme::FontMono(), TRUE);
     ListView_SetExtendedListViewStyle(_hDiffList,
         LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
-    Theme::ApplyDarkScrollbar(_hDiffList);
+    Theme::ApplyDarkListView(_hDiffList);
 
     {
         LVCOLUMN col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col.fmt = LVCFMT_LEFT;

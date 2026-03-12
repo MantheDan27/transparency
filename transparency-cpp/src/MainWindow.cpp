@@ -26,6 +26,7 @@
 #include "TabLedger.h"
 #include "TabPrivacy.h"
 #include "TabSmartHome.h"
+#include "FirebaseClient.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -244,7 +245,12 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparency v3.6.0 initialized");
+    // Initialize Firebase with project config
+    FirebaseClient& fb = GetFirebase();
+    fb.SetProjectId(L"transparency-2920f");
+    fb.SetApiKey(L"AIzaSyAIvpRcWnSGyAZdw3kS9P4yTD97SN2w690");
+
+    AddLedgerEntry(L"App Started", std::wstring(L"Transparency ") + Theme::VERSION + L" initialized");
 
     // Check scheduled scans every 60 seconds
     SetTimer(hwnd, 1, 60000, nullptr);
@@ -336,101 +342,246 @@ LRESULT MainWindow::OnSize(HWND hwnd, int cx, int cy) {
 // ─── DrawNavSidebar ──────────────────────────────────────────────────────────
 
 void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
-    // Sidebar background + chrome
+    // ══════════════════════════════════════════════════════════════════════════
+    // SIDEBAR BACKGROUND — Gradient-like effect with subtle depth
+    // ══════════════════════════════════════════════════════════════════════════
     RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, rc.bottom };
     FillRect(hdc, &sidebarRc, Theme::BrushSidebar());
 
-    RECT topAccent = { 0, 0, SIDEBAR_WIDTH, 2 };
-    FillRect(hdc, &topAccent, Theme::BrushAccent());
+    // Subtle inner highlight on left edge (glass effect)
+    RECT leftGlow = { 0, 0, 1, rc.bottom };
+    HBRUSH glowBr = CreateSolidBrush(Theme::Lighten(Theme::BG_SIDEBAR, 12));
+    FillRect(hdc, &leftGlow, glowBr);
+    DeleteObject(glowBr);
 
+    // Right border separator (crisp edge)
     RECT borderRc = { SIDEBAR_WIDTH - 1, 0, SIDEBAR_WIDTH, rc.bottom };
     FillRect(hdc, &borderRc, Theme::BrushBorder());
 
-    // Brand block
-    RECT brandRc = { 0, 24, SIDEBAR_WIDTH, NAV_BTN_TOP - 18 };
+    // ══════════════════════════════════════════════════════════════════════════
+    // TOP ACCENT BAR — Premium 3px gradient-like bar
+    // ══════════════════════════════════════════════════════════════════════════
+    RECT topAccent1 = { 0, 0, SIDEBAR_WIDTH, 1 };
+    RECT topAccent2 = { 0, 1, SIDEBAR_WIDTH, 2 };
+    RECT topAccent3 = { 0, 2, SIDEBAR_WIDTH, 3 };
+    FillRect(hdc, &topAccent1, Theme::BrushAccentBright());
+    FillRect(hdc, &topAccent2, Theme::BrushAccent());
+    HBRUSH dimAccent = CreateSolidBrush(Theme::ACCENT_DIM);
+    FillRect(hdc, &topAccent3, dimAccent);
+    DeleteObject(dimAccent);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // BRAND BLOCK — Logo and tagline with glow effect
+    // ══════════════════════════════════════════════════════════════════════════
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::ACCENT_GLOW);
+
+    // Brand name with accent glow
     HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBrand());
+    SetTextColor(hdc, Theme::ACCENT_BRIGHT);
+    RECT brandRc = { 0, 18, SIDEBAR_WIDTH, 42 };
     DrawText(hdc, L"Transparency", -1, &brandRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-    SelectObject(hdc, Theme::FontSmall());
-    SetTextColor(hdc, Theme::TEXT_MUTED);
-    RECT tagRc = { 0, 50, SIDEBAR_WIDTH, 66 };
+    // Subtitle — dimmer, spaced letters
+    SelectObject(hdc, Theme::FontSubtitle());
+    SetTextColor(hdc, Theme::TEXT_DIM);
+    RECT tagRc = { 0, 44, SIDEBAR_WIDTH, 58 };
     DrawText(hdc, L"NETWORK INTELLIGENCE", -1, &tagRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
     SelectObject(hdc, oldFont);
 
-    // Nav buttons
+    // Separator line below brand block — subtle
+    Theme::DrawSeparator(hdc, 16, NAV_BTN_TOP - 8, SIDEBAR_WIDTH - 16, Theme::BORDER_SUBTLE);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // NAV BUTTONS — Glass-effect buttons with hover states
+    // ══════════════════════════════════════════════════════════════════════════
+    int deviceCount = 0;
+    int alertCount  = 0;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        deviceCount = (int)_lastResult.devices.size();
+        alertCount  = (int)_lastResult.anomalies.size();
+    }
+
     for (int i = 0; i < (int)Tab::COUNT; i++) {
-        int btnY  = NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
-        RECT btnRc = { 12, btnY, SIDEBAR_WIDTH - 12, btnY + NAV_BTN_HEIGHT - 6 };
+        int btnY   = NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
+        RECT btnRc = { 10, btnY, SIDEBAR_WIDTH - 10, btnY + NAV_BTN_HEIGHT - 6 };
 
         bool active  = (_currentTab == (Tab)i);
         bool hovered = (_hoverNav == i && !active);
 
-        COLORREF bg = Theme::BG_SIDEBAR;
-        COLORREF border = Theme::SIDEBAR_BORDER;
+        // Button background with glass effect
+        COLORREF bgColor     = Theme::BG_SIDEBAR;
+        COLORREF borderColor = Theme::BG_SIDEBAR;
         if (active) {
-            bg = Theme::BG_ROW_SEL;
-            border = Theme::ACCENT;
+            bgColor     = Theme::ACCENT_BG;
+            borderColor = Theme::ACCENT;
         } else if (hovered) {
-            bg = Theme::BG_ROW_HOV;
-            border = Theme::BORDER;
+            bgColor     = Theme::BG_ROW_HOV;
+            borderColor = Theme::BORDER_LIGHT;
         }
 
-        HBRUSH bgBrush = CreateSolidBrush(bg);
-        HPEN borderPen = CreatePen(PS_SOLID, 1, border);
-        HBRUSH oldB = (HBRUSH)SelectObject(hdc, bgBrush);
-        HPEN oldP = (HPEN)SelectObject(hdc, borderPen);
-        RoundRect(hdc, btnRc.left, btnRc.top, btnRc.right, btnRc.bottom, 12, 12);
-        SelectObject(hdc, oldB);
-        SelectObject(hdc, oldP);
-        DeleteObject(bgBrush);
-        DeleteObject(borderPen);
+        // Draw rounded button background
+        Theme::DrawRoundRect(hdc, btnRc, 8, bgColor, borderColor);
 
+        // Active state: left accent pill (glowing)
         if (active) {
-            // Active indicator (vertical accent pill)
-            RECT accentRc = { btnRc.left + 6, btnRc.top + 10, btnRc.left + 9, btnRc.bottom - 10 };
-            HBRUSH oldAccentBrush = (HBRUSH)SelectObject(hdc, Theme::BrushAccent());
-            HPEN oldAccentPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
-            RoundRect(hdc, accentRc.left, accentRc.top, accentRc.right, accentRc.bottom, 3, 3);
-            SelectObject(hdc, oldAccentBrush);
-            SelectObject(hdc, oldAccentPen);
+            int pillTop    = btnRc.top + 10;
+            int pillBottom = btnRc.bottom - 10;
+            RECT pillRc = { btnRc.left + 3, pillTop, btnRc.left + 6, pillBottom };
+            Theme::FillRoundRect(hdc, pillRc, 4, Theme::ACCENT_BRIGHT);
         }
 
+        // Text color based on state
         SetBkMode(hdc, TRANSPARENT);
-        COLORREF textColor = active  ? Theme::ACCENT_GLOW
-                           : hovered ? Theme::TEXT_PRIMARY
+        COLORREF textColor = active  ? Theme::TEXT_PRIMARY
+                           : hovered ? Theme::ACCENT_BRIGHT
                            :           Theme::TEXT_SECONDARY;
         SetTextColor(hdc, textColor);
 
+        // Select font based on active state
         HFONT navFont = (HFONT)SelectObject(hdc, active ? Theme::FontBold() : Theme::FontBody());
 
-        // Draw icon
-        RECT iconRc  = { btnRc.left + 16, btnRc.top, btnRc.left + 38, btnRc.bottom };
+        // Icon (using unicode symbols)
+        RECT iconRc = { btnRc.left + 14, btnRc.top, btnRc.left + 34, btnRc.bottom };
         DrawText(hdc, NAV_ITEMS[i].icon, -1, &iconRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
-        // Draw label
-        RECT labelRc = { btnRc.left + 42, btnRc.top, btnRc.right - 8, btnRc.bottom };
+        // Label text
+        RECT labelRc = { btnRc.left + 38, btnRc.top, btnRc.right - 32, btnRc.bottom };
         DrawText(hdc, NAV_ITEMS[i].label, -1, &labelRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
         SelectObject(hdc, navFont);
+
+        // ── Badges: device count on "Devices", alert count on "Alerts" ──
+        int badgeVal = 0;
+        COLORREF badgeBg = Theme::ACCENT_DIM;
+        COLORREF badgeFg = Theme::TEXT_PRIMARY;
+        bool showBadge = false;
+
+        if (NAV_ITEMS[i].tab == Tab::Devices && deviceCount > 0) {
+            badgeVal  = deviceCount;
+            badgeBg   = Theme::ACCENT_DIM;
+            badgeFg   = Theme::TEXT_PRIMARY;
+            showBadge = true;
+        } else if (NAV_ITEMS[i].tab == Tab::Alerts && alertCount > 0) {
+            badgeVal  = alertCount;
+            badgeBg   = Theme::DANGER;
+            badgeFg   = Theme::TEXT_ON_ACCENT;
+            showBadge = true;
+        }
+
+        if (showBadge) {
+            wchar_t badgeTxt[8];
+            swprintf_s(badgeTxt, L"%d", badgeVal);
+
+            int badgeR  = btnRc.right - 10;
+            int badgeCY = (btnRc.top + btnRc.bottom) / 2;
+            int badgeW  = (badgeVal >= 10) ? 24 : 20;
+            int badgeH  = 18;
+            RECT badgeRc = { badgeR - badgeW, badgeCY - badgeH / 2,
+                             badgeR, badgeCY + badgeH / 2 };
+
+            Theme::FillRoundRect(hdc, badgeRc, badgeH, badgeBg);
+
+            HFONT badgeFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+            SetTextColor(hdc, badgeFg);
+            DrawText(hdc, badgeTxt, -1, &badgeRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, badgeFont);
+        }
     }
 
-    // Footer status + version
-    RECT statusDot = { 18, rc.bottom - 54, 26, rc.bottom - 46 };
-    FillRect(hdc, &statusDot, Theme::BrushSuccess());
-    RECT statusRc = { 30, rc.bottom - 56, SIDEBAR_WIDTH - 8, rc.bottom - 44 };
+    // ══════════════════════════════════════════════════════════════════════════
+    // FOOTER — Status indicator and version
+    // ══════════════════════════════════════════════════════════════════════════
+    Theme::DrawSeparator(hdc, 16, rc.bottom - 70, SIDEBAR_WIDTH - 16, Theme::BORDER_SUBTLE);
+
+    // Status indicator with glowing dot
+    int dotCX = 20;
+    int dotCY = rc.bottom - 52;
+    Theme::DrawStatusDot(hdc, dotCX, dotCY, 4, Theme::ONLINE_GREEN, true);
+
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
-    HFONT statusFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"System secure", -1, &statusRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, statusFont);
+    HFONT footFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+    RECT statusRc = { 32, rc.bottom - 62, SIDEBAR_WIDTH - 8, rc.bottom - 42 };
+    DrawText(hdc, L"System Online", -1, &statusRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, footFont);
 
-    RECT verRc = { 4, rc.bottom - 30, SIDEBAR_WIDTH - 4, rc.bottom - 10 };
-    SetTextColor(hdc, Theme::TEXT_MUTED);
-    HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"v3.6.0 premium", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    // Version string — centered, very dim
+    SetTextColor(hdc, Theme::TEXT_DIM);
+    HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontTiny());
+    RECT verRc = { 4, rc.bottom - 28, SIDEBAR_WIDTH - 4, rc.bottom - 8 };
+    DrawText(hdc, Theme::VERSION, -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, verFont);
+}
+
+// ─── DrawTopbar ──────────────────────────────────────────────────────────────
+
+void MainWindow::DrawTopbar(HDC hdc, const RECT& rc) {
+    // Topbar occupies the strip above the tab panels, right of the sidebar.
+    const int TOPBAR_H = NAV_BTN_TOP;
+    if (TOPBAR_H <= 0) return;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // TOPBAR BACKGROUND — Slightly elevated dark strip
+    // ══════════════════════════════════════════════════════════════════════════
+    RECT topbarRc = { SIDEBAR_WIDTH, 0, rc.right, TOPBAR_H };
+    FillRect(hdc, &topbarRc, Theme::BrushTopbar());
+
+    // Top highlight line (subtle glass effect)
+    RECT topLine = { SIDEBAR_WIDTH, 0, rc.right, 1 };
+    HBRUSH hlBr = CreateSolidBrush(Theme::Lighten(Theme::BG_TOPBAR, 8));
+    FillRect(hdc, &topLine, hlBr);
+    DeleteObject(hlBr);
+
+    // Bottom border
+    Theme::DrawSeparator(hdc, SIDEBAR_WIDTH, TOPBAR_H - 1, rc.right, Theme::BORDER);
+
+    SetBkMode(hdc, TRANSPARENT);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // TAB TITLE — Large, prominent header
+    // ══════════════════════════════════════════════════════════════════════════
+    static const wchar_t* TAB_TITLES[] = {
+        L"Overview", L"Devices", L"Alerts",
+        L"Tools",    L"Ledger",  L"Privacy", L"Smart Home"
+    };
+    int tabIdx = (int)_currentTab;
+    const wchar_t* title = (tabIdx >= 0 && tabIdx < (int)Tab::COUNT)
+                         ? TAB_TITLES[tabIdx] : L"";
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontHeader());
+    SetTextColor(hdc, Theme::TEXT_PRIMARY);
+    RECT titleRc = { SIDEBAR_WIDTH + 24, 0, rc.right - 220, TOPBAR_H };
+    DrawText(hdc, title, -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, oldFont);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STATUS INDICATORS — Right side of topbar
+    // ══════════════════════════════════════════════════════════════════════════
+    int indicatorX = rc.right - 200;
+    int indicatorCY = TOPBAR_H / 2;
+
+    if (_monitor.IsRunning()) {
+        // Draw glowing status dot
+        Theme::DrawStatusDot(hdc, indicatorX, indicatorCY, 5, Theme::ONLINE_GREEN, true);
+
+        // Label with green text
+        HFONT monFont = (HFONT)SelectObject(hdc, Theme::FontSmallBold());
+        SetTextColor(hdc, Theme::ONLINE_GREEN);
+        RECT monRc = { indicatorX + 14, 0, rc.right - 16, TOPBAR_H };
+        DrawText(hdc, L"MONITORING ACTIVE", -1, &monRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, monFont);
+    } else {
+        // Show idle state
+        Theme::DrawStatusDot(hdc, indicatorX, indicatorCY, 4, Theme::TEXT_DIM, false);
+
+        HFONT monFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+        SetTextColor(hdc, Theme::TEXT_DIM);
+        RECT monRc = { indicatorX + 14, 0, rc.right - 16, TOPBAR_H };
+        DrawText(hdc, L"MONITORING IDLE", -1, &monRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, monFont);
+    }
 }
 
 // ─── OnPaint ─────────────────────────────────────────────────────────────────
@@ -444,6 +595,7 @@ LRESULT MainWindow::OnPaint(HWND hwnd) {
 
     FillRect(hdc, &rc, Theme::BrushApp());
     DrawNavSidebar(hdc, rc);
+    DrawTopbar(hdc, rc);
 
     EndPaint(hwnd, &ps);
     return 0;
