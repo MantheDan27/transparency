@@ -10,7 +10,10 @@
       "Bash(cmd //c start \"\" \"C:\\\\temp\\\\Transparency.exe\")",
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
-      "Bash(cmake:*)"
+      "Bash(cmake:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)"
     ]
   }
 }

@@ -78,6 +78,10 @@ public:
     wstring  _apiKey;
     HANDLE   _apiThread   = nullptr;
 
+    // Firebase auth state
+    bool     _isLoggedIn  = false;
+    wstring  _userEmail;
+
     Tab _currentTab = Tab::Overview;
 
 private:

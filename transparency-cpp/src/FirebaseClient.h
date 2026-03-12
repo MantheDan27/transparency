@@ -43,6 +43,20 @@ public:
     bool SaveAlert(const Anomaly& alert);
     bool LoadAlerts(std::vector<Anomaly>& alerts);
 
+    // Alert rules
+    bool SaveAlertRules(const std::vector<AlertRule>& rules);
+    bool LoadAlertRules(std::vector<AlertRule>& rules);
+
+    // User settings
+    bool SaveUserSettings(const std::wstring& settingsJson);
+    bool LoadUserSettings(std::wstring& settingsJson);
+
+    // Sync all user data (devices with custom names/notes/trust)
+    bool SyncUserDeviceData(std::vector<Device>& devices);
+
+    // Logout
+    void Logout();
+
 private:
     std::wstring _projectId;
     std::wstring _apiKey;

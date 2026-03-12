@@ -27,6 +27,7 @@
 #include "TabPrivacy.h"
 #include "TabSmartHome.h"
 #include "FirebaseClient.h"
+#include "LoginDialog.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -50,6 +51,19 @@ static const NavItem NAV_ITEMS[] = {
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 bool MainWindow::Create(HINSTANCE hInstance) {
+    // Initialize Firebase with project config FIRST
+    FirebaseClient& fb = GetFirebase();
+    fb.SetProjectId(L"transparency-2920f");
+    fb.SetApiKey(L"AIzaSyAIvpRcWnSGyAZdw3kS9P4yTD97SN2w690");
+
+    // Show login dialog before main window
+    LoginResult loginResult = LoginDialog::Show(nullptr);
+
+    // If user cancelled, exit app
+    if (loginResult == LoginResult::Cancelled) {
+        return false;
+    }
+
     WNDCLASSEX wc = {};
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_HREDRAW | CS_VREDRAW;
@@ -71,6 +85,10 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     auto* self = new MainWindow();
     self->_hInstance = hInstance;
     s_instance = self;
+
+    // Store login state
+    self->_isLoggedIn = LoginDialog::IsLoggedIn();
+    self->_userEmail = LoginDialog::GetUserEmail();
 
     HWND hwnd = CreateWindowEx(
         0, L"TransparencyMainWnd",
@@ -245,12 +263,14 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    // Initialize Firebase with project config
-    FirebaseClient& fb = GetFirebase();
-    fb.SetProjectId(L"transparency-2920f");
-    fb.SetApiKey(L"AIzaSyAIvpRcWnSGyAZdw3kS9P4yTD97SN2w690");
-
-    AddLedgerEntry(L"App Started", std::wstring(L"Transparency ") + Theme::VERSION + L" initialized");
+    // Log startup with login status
+    std::wstring startupMsg = std::wstring(L"Transparency ") + Theme::VERSION + L" initialized";
+    if (_isLoggedIn) {
+        startupMsg += L" - Signed in as " + _userEmail;
+    } else {
+        startupMsg += L" - Offline mode";
+    }
+    AddLedgerEntry(L"App Started", startupMsg);
 
     // Check scheduled scans every 60 seconds
     SetTimer(hwnd, 1, 60000, nullptr);
@@ -1111,6 +1131,23 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
         std::lock_guard<std::mutex> lk(_dataMutex);
         _lastResult = *result;
     }
+
+    // Sync device data with Firebase if logged in
+    if (_isLoggedIn) {
+        FirebaseClient& fb = GetFirebase();
+        if (fb.IsAuthenticated()) {
+            std::vector<Device> devices;
+            {
+                std::lock_guard<std::mutex> lk(_dataMutex);
+                devices = _lastResult.devices;
+            }
+            // Sync in background thread to not block UI
+            std::thread([devices]() mutable {
+                GetFirebase().SyncUserDeviceData(devices);
+            }).detach();
+        }
+    }
+
     delete result;
 
     if (_tabOverview && _tabOverview->GetHwnd())

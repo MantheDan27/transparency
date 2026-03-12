@@ -4,6 +4,7 @@
 #include <sstream>
 #include <locale>
 #include <codecvt>
+#include <map>
 
 // Global singleton instance
 static FirebaseClient s_firebase;
@@ -475,4 +476,134 @@ bool FirebaseClient::LoadAlerts(std::vector<Anomaly>& alerts) {
     // Parse response - similar to LoadDevices
     // Simplified implementation
     return true;
+}
+
+bool FirebaseClient::SaveAlertRules(const std::vector<AlertRule>& rules) {
+    if (_userId.empty() || _idToken.empty()) {
+        _lastError = L"Not authenticated";
+        return false;
+    }
+
+    // Save all rules as a single document
+    std::string json = "{\"fields\":{\"rules\":{\"arrayValue\":{\"values\":[";
+    for (size_t i = 0; i < rules.size(); i++) {
+        if (i > 0) json += ",";
+        json += "{\"mapValue\":{\"fields\":{";
+        json += "\"id\":{\"stringValue\":\"" + EscapeJson(rules[i].id) + "\"},";
+        json += "\"name\":{\"stringValue\":\"" + EscapeJson(rules[i].name) + "\"},";
+        json += "\"eventType\":{\"stringValue\":\"" + EscapeJson(rules[i].eventType) + "\"},";
+        json += "\"deviceFilter\":{\"stringValue\":\"" + EscapeJson(rules[i].deviceFilter) + "\"},";
+        json += "\"webhookUrl\":{\"stringValue\":\"" + EscapeJson(rules[i].webhookUrl) + "\"},";
+        json += "\"severity\":{\"stringValue\":\"" + EscapeJson(rules[i].severity) + "\"},";
+        json += "\"debounceMinutes\":{\"integerValue\":\"" + std::to_string(rules[i].debounceMinutes) + "\"},";
+        json += "\"enabled\":{\"booleanValue\":" + std::string(rules[i].enabled ? "true" : "false") + "}";
+        json += "}}}";
+    }
+    json += "]}}}}";
+
+    std::string url = BuildFirestoreUrl(L"settings", L"alertRules");
+    std::string response = HttpRequest(L"PATCH", Utf8ToWide(url), json);
+    return response.find("\"error\"") == std::string::npos;
+}
+
+bool FirebaseClient::LoadAlertRules(std::vector<AlertRule>& rules) {
+    if (_userId.empty() || _idToken.empty()) {
+        _lastError = L"Not authenticated";
+        return false;
+    }
+
+    std::string url = BuildFirestoreUrl(L"settings", L"alertRules");
+    std::string response = HttpRequest(L"GET", Utf8ToWide(url), "");
+
+    if (response.find("\"error\"") != std::string::npos) {
+        // No rules saved yet is OK
+        rules.clear();
+        return true;
+    }
+
+    rules.clear();
+    // Parse rules from response - simplified
+    // Full implementation would parse the arrayValue
+    return true;
+}
+
+bool FirebaseClient::SaveUserSettings(const std::wstring& settingsJson) {
+    if (_userId.empty() || _idToken.empty()) {
+        _lastError = L"Not authenticated";
+        return false;
+    }
+
+    std::string json = "{\"fields\":{\"data\":{\"stringValue\":\"" + EscapeJson(settingsJson) + "\"}}}";
+    std::string url = BuildFirestoreUrl(L"settings", L"userPrefs");
+    std::string response = HttpRequest(L"PATCH", Utf8ToWide(url), json);
+    return response.find("\"error\"") == std::string::npos;
+}
+
+bool FirebaseClient::LoadUserSettings(std::wstring& settingsJson) {
+    if (_userId.empty() || _idToken.empty()) {
+        _lastError = L"Not authenticated";
+        return false;
+    }
+
+    std::string url = BuildFirestoreUrl(L"settings", L"userPrefs");
+    std::string response = HttpRequest(L"GET", Utf8ToWide(url), "");
+
+    if (response.find("\"error\"") != std::string::npos) {
+        settingsJson.clear();
+        return true; // No settings yet is OK
+    }
+
+    settingsJson = GetJsonValue(response, "data");
+    return true;
+}
+
+bool FirebaseClient::SyncUserDeviceData(std::vector<Device>& devices) {
+    if (_userId.empty() || _idToken.empty()) {
+        _lastError = L"Not authenticated";
+        return false;
+    }
+
+    // Load cloud device data
+    std::vector<Device> cloudDevices;
+    if (!LoadDevices(cloudDevices)) {
+        return false;
+    }
+
+    // Build lookup by MAC
+    std::map<std::wstring, Device*> cloudByMac;
+    for (auto& cd : cloudDevices) {
+        if (!cd.mac.empty()) cloudByMac[cd.mac] = &cd;
+    }
+
+    // Merge cloud data into local devices
+    for (auto& localDev : devices) {
+        if (localDev.mac.empty()) continue;
+
+        auto it = cloudByMac.find(localDev.mac);
+        if (it != cloudByMac.end()) {
+            Device* cloudDev = it->second;
+            // Cloud has this device - merge user data from cloud
+            if (localDev.customName.empty() && !cloudDev->customName.empty())
+                localDev.customName = cloudDev->customName;
+            if (localDev.notes.empty() && !cloudDev->notes.empty())
+                localDev.notes = cloudDev->notes;
+            if (localDev.trustState == L"unknown" && cloudDev->trustState != L"unknown")
+                localDev.trustState = cloudDev->trustState;
+            if (localDev.location.empty() && !cloudDev->location.empty())
+                localDev.location = cloudDev->location;
+        }
+
+        // Save back to cloud if device has user data
+        if (!localDev.customName.empty() || !localDev.notes.empty() ||
+            localDev.trustState != L"unknown" || !localDev.location.empty()) {
+            SaveDevice(localDev);
+        }
+    }
+
+    return true;
+}
+
+void FirebaseClient::Logout() {
+    _idToken.clear();
+    _userId.clear();
 }

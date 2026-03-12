@@ -829,10 +829,26 @@ LRESULT TabDevices::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
 
             // Save to Firebase if authenticated
             FirebaseClient& fb = GetFirebase();
-            if (fb.IsAuthenticated() && savedDevice) {
-                if (!fb.SaveDevice(*savedDevice)) {
-                    MessageBox(hwnd, (L"Cloud save failed: " + fb.GetLastError()).c_str(),
-                        L"Firebase", MB_OK | MB_ICONWARNING);
+            if (savedDevice) {
+                if (fb.IsAuthenticated()) {
+                    if (fb.SaveDevice(*savedDevice)) {
+                        // Success - show brief confirmation
+                        // (no popup needed, just a visual cue would be nice)
+                    } else {
+                        MessageBox(hwnd, (L"Cloud save failed: " + fb.GetLastError()).c_str(),
+                            L"Firebase", MB_OK | MB_ICONWARNING);
+                    }
+                } else {
+                    // Not logged in - inform user data is only saved locally
+                    static bool shownOfflineWarning = false;
+                    if (!shownOfflineWarning) {
+                        MessageBox(hwnd,
+                            L"You are not signed in.\n\n"
+                            L"Your changes are saved locally but won't sync to the cloud.\n"
+                            L"Sign in to sync your data across devices.",
+                            L"Offline Mode", MB_OK | MB_ICONINFORMATION);
+                        shownOfflineWarning = true;
+                    }
                 }
             }
 

@@ -9,7 +9,7 @@
 #pragma comment(lib, "dwmapi.lib")
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TRANSPARENCY v3.7.0 — Premium Glassmorphism Theme
+// TRANSPARENCY v4.0.0 — Premium Glassmorphism Theme
 // ═══════════════════════════════════════════════════════════════════════════════
 // A polished dark theme with high-contrast text, subtle glass effects,
 // and professional gradients for a network intelligence dashboard.
@@ -409,7 +409,7 @@ inline COLORREF GetTrustColor(const wchar_t* trust) {
 }
 
 // ─── App Version ──────────────────────────────────────────────────────────────
-constexpr const wchar_t* VERSION = L"v3.7.0";
-constexpr const wchar_t* VERSION_FULL = L"Transparency v3.7.0";
+constexpr const wchar_t* VERSION = L"v4.0.0";
+constexpr const wchar_t* VERSION_FULL = L"Transparency v4.0.0";
 
 } // namespace Theme
