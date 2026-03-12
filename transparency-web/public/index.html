@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transparency - Network Monitor</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link href="https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1/dist/fonts/geist-mono/style.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ========== LOGIN PAGE ========== -->
+  <div id="login-page">
+    <div class="login-container">
+      <div class="login-logo">
+        <h1>Transparency<span>.</span></h1>
+        <p>Network monitoring &amp; device intelligence</p>
+      </div>
+
+      <div class="auth-toggle">
+        <button id="login-toggle" class="active">Log In</button>
+        <button id="signup-toggle">Sign Up</button>
+      </div>
+
+      <div class="auth-card">
+        <div id="auth-error" class="auth-error hidden"></div>
+
+        <!-- Login Form -->
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="you@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Your password" required>
+          </div>
+          <button type="submit" class="btn-primary">Log In</button>
+          <a href="#" id="forgot-password" class="forgot-link">Forgot password?</a>
+        </form>
+
+        <!-- Signup Form -->
+        <form id="signup-form" class="hidden">
+          <div class="form-group">
+            <label for="signup-name">Display Name</label>
+            <input type="text" id="signup-name" placeholder="Your name" required>
+          </div>
+          <div class="form-group">
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" placeholder="you@example.com" required>
+          </div>
+          <div class="form-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" placeholder="Min 6 characters" required>
+          </div>
+          <button type="submit" class="btn-primary">Create Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== DASHBOARD ========== -->
+  <div id="dashboard-page" class="hidden">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h1>Transparency<span>.</span></h1>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="overview">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>Overview</span>
+        </button>
+        <button class="nav-item" data-tab="networks">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span>Networks</span>
+        </button>
+        <button class="nav-item" data-tab="devices">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Devices</span>
+        </button>
+        <button class="nav-item" data-tab="alerts">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span>Alerts</span>
+          <span id="alert-badge" class="nav-badge hidden">0</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar" id="user-avatar">U</div>
+          <div class="user-info">
+            <span class="user-name" id="user-display-name">User</span>
+            <span class="user-email" id="user-email">user@example.com</span>
+          </div>
+        </div>
+        <button id="logout-btn" class="btn-logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+
+      <!-- ===== OVERVIEW PANEL ===== -->
+      <div id="panel-overview" class="tab-panel">
+        <h1 class="page-title">Overview</h1>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-label">Total Devices</span>
+            <span class="kpi-value" id="kpi-devices">—</span>
+            <span class="kpi-sub" id="kpi-devices-sub">across all networks</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Networks</span>
+            <span class="kpi-value" id="kpi-networks">—</span>
+            <span class="kpi-sub" id="kpi-networks-sub">monitored</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Alerts</span>
+            <span class="kpi-value" id="kpi-alerts">—</span>
+            <span class="kpi-sub" id="kpi-alerts-sub">active</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Desktop Sync</span>
+            <span class="kpi-value" id="kpi-sync">—</span>
+            <span class="kpi-sub" id="kpi-sync-sub">not connected</span>
+          </div>
+        </div>
+
+        <!-- Trust Breakdown + Recent Alerts -->
+        <div class="overview-grid">
+          <div class="overview-card">
+            <h2 class="section-title">Device Trust Breakdown</h2>
+            <div id="trust-breakdown" class="trust-bars">
+              <div class="trust-row">
+                <span class="trust-label"><span class="trust-dot trust-owned"></span>Trusted</span>
+                <div class="trust-bar-track"><div class="trust-bar-fill trust-fill-green" id="trust-bar-owned" style="width: 0%"></div></div>
+                <span class="trust-count mono" id="trust-count-owned">0</span>
+              </div>
+              <div class="trust-row">
+                <span class="trust-label"><span class="trust-dot trust-known"></span>Known</span>
+                <div class="trust-bar-track"><div class="trust-bar-fill trust-fill-blue" id="trust-bar-known" style="width: 0%"></div></div>
+                <span class="trust-count mono" id="trust-count-known">0</span>
+              </div>
+              <div class="trust-row">
+                <span class="trust-label"><span class="trust-dot trust-guest"></span>Guest</span>
+                <div class="trust-bar-track"><div class="trust-bar-fill trust-fill-amber" id="trust-bar-guest" style="width: 0%"></div></div>
+                <span class="trust-count mono" id="trust-count-guest">0</span>
+              </div>
+              <div class="trust-row">
+                <span class="trust-label"><span class="trust-dot trust-unknown"></span>Unknown</span>
+                <div class="trust-bar-track"><div class="trust-bar-fill trust-fill-gray" id="trust-bar-unknown" style="width: 0%"></div></div>
+                <span class="trust-count mono" id="trust-count-unknown">0</span>
+              </div>
+              <div class="trust-row">
+                <span class="trust-label"><span class="trust-dot trust-blocked"></span>Blocked</span>
+                <div class="trust-bar-track"><div class="trust-bar-fill trust-fill-red" id="trust-bar-blocked" style="width: 0%"></div></div>
+                <span class="trust-count mono" id="trust-count-blocked">0</span>
+              </div>
+              <div class="trust-row">
+                <span class="trust-label"><span class="trust-dot trust-watchlist"></span>Watchlist</span>
+                <div class="trust-bar-track"><div class="trust-bar-fill trust-fill-purple" id="trust-bar-watchlist" style="width: 0%"></div></div>
+                <span class="trust-count mono" id="trust-count-watchlist">0</span>
+              </div>
+            </div>
+          </div>
+          <div class="overview-card">
+            <h2 class="section-title">Recent Alerts</h2>
+            <div id="overview-alerts" class="overview-alert-list">
+              <div class="empty-state-sm">No recent alerts</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Devices -->
+        <div class="overview-card overview-card-full">
+          <div class="card-header-row">
+            <h2 class="section-title">Recently Seen Devices</h2>
+            <button class="btn-text" id="view-all-devices-btn">View all</button>
+          </div>
+          <table class="device-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>MAC Address</th>
+                <th>IP Address</th>
+                <th>Type</th>
+                <th>Trust</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="overview-device-body">
+              <tr><td colspan="6" class="empty-state-sm">No devices yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== NETWORKS PANEL ===== -->
+      <div id="panel-networks" class="tab-panel hidden">
+        <div class="page-header">
+          <h1 class="page-title">Networks</h1>
+          <button id="add-network-btn" class="btn-primary-action">+ Add Network</button>
+        </div>
+        <div id="network-list" class="network-grid">
+          <div class="empty-state">Loading networks...</div>
+        </div>
+      </div>
+
+      <!-- ===== DEVICES PANEL ===== -->
+      <div id="panel-devices" class="tab-panel hidden">
+        <div class="page-header">
+          <h1 class="page-title">Devices <span class="page-title-count" id="device-count">0</span></h1>
+          <button id="upload-scan-btn" class="btn-primary-action">Upload Scan</button>
+        </div>
+        <div class="devices-toolbar">
+          <select id="network-filter">
+            <option value="all">All Networks</option>
+          </select>
+          <div class="toolbar-search">
+            <input type="text" id="device-search" placeholder="Search devices...">
+          </div>
+        </div>
+        <div class="device-table-wrapper">
+          <table class="device-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>MAC Address</th>
+                <th>IP Address</th>
+                <th>Vendor</th>
+                <th>Type</th>
+                <th>Trust</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="device-table-body">
+              <tr><td colspan="7" class="empty-state">Select a network or upload a scan to view devices.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Device Detail Slide-out -->
+        <div id="device-detail" class="detail-panel hidden">
+          <div class="detail-header">
+            <div class="detail-title-row">
+              <h2 id="detail-name">Device Name</h2>
+              <span id="detail-trust-badge" class="trust-badge trust-unknown">UNKNOWN</span>
+            </div>
+            <button id="detail-close" class="btn-icon" aria-label="Close detail panel">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="detail-body">
+            <div class="detail-section">
+              <h3 class="detail-section-title">Identity</h3>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <span class="detail-label">MAC ADDRESS</span>
+                  <span class="detail-value mono" id="detail-mac">—</span>
+                </div>
+                <div class="detail-field">
+                  <span class="detail-label">IP ADDRESS</span>
+                  <span class="detail-value mono" id="detail-ip">—</span>
+                </div>
+                <div class="detail-field">
+                  <span class="detail-label">VENDOR</span>
+                  <span class="detail-value" id="detail-vendor">—</span>
+                </div>
+                <div class="detail-field">
+                  <span class="detail-label">TYPE</span>
+                  <span class="detail-value" id="detail-type">—</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-section">
+              <h3 class="detail-section-title">Classification</h3>
+              <div class="detail-field">
+                <span class="detail-label">REASON</span>
+                <span class="detail-value" id="detail-reason" style="line-height: 1.5">—</span>
+              </div>
+            </div>
+            <div class="detail-section">
+              <h3 class="detail-section-title">History</h3>
+              <div class="detail-grid">
+                <div class="detail-field">
+                  <span class="detail-label">FIRST SEEN</span>
+                  <span class="detail-value mono" id="detail-first-seen">—</span>
+                </div>
+                <div class="detail-field">
+                  <span class="detail-label">LAST SEEN</span>
+                  <span class="detail-value mono" id="detail-last-seen">—</span>
+                </div>
+                <div class="detail-field">
+                  <span class="detail-label">SIGHTINGS</span>
+                  <span class="detail-value mono" id="detail-sightings">—</span>
+                </div>
+              </div>
+            </div>
+            <div class="detail-section" id="detail-ports-section">
+              <h3 class="detail-section-title">Open Ports</h3>
+              <div class="detail-ports" id="detail-ports">
+                <span class="empty-state-sm">No ports detected</span>
+              </div>
+            </div>
+            <div class="detail-actions">
+              <button class="btn-positive btn-action" id="detail-trust-btn">Trust</button>
+              <button class="btn-secondary btn-action" id="detail-watch-btn">Watchlist</button>
+              <button class="btn-destructive btn-action" id="detail-block-btn">Block</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ALERTS PANEL ===== -->
+      <div id="panel-alerts" class="tab-panel hidden">
+        <h1 class="page-title">Alerts</h1>
+        <div id="alert-feed">
+          <div class="empty-state">No alerts yet.</div>
+        </div>
+      </div>
+
+      <!-- ===== SETTINGS PANEL ===== -->
+      <div id="panel-settings" class="tab-panel hidden">
+        <h1 class="page-title">Settings</h1>
+
+        <div class="settings-section">
+          <h3>Desktop App Connection</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">API Endpoint</div>
+              <div class="setting-desc">Enter the REST API address of your Transparency desktop app (e.g., http://192.168.1.100:7722)</div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 12px;">
+            <input type="text" id="setting-api-endpoint" placeholder="http://192.168.1.100:7722">
+          </div>
+          <div class="form-group">
+            <label for="setting-api-key">API Key</label>
+            <input type="password" id="setting-api-key" placeholder="Your desktop app API key">
+          </div>
+          <div class="settings-actions">
+            <button class="btn-primary-action" id="test-connection-btn">Test Connection</button>
+            <button class="btn-secondary" id="sync-devices-btn">Sync Devices</button>
+          </div>
+          <div id="connection-status" class="connection-status hidden"></div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Account</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Email</div>
+              <div class="setting-desc" id="settings-email">—</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Display Name</div>
+              <div class="setting-desc" id="settings-name">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section settings-danger">
+          <h3>Data Management</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Export Data</div>
+              <div class="setting-desc">Download all your device and network data as JSON</div>
+            </div>
+            <button class="btn-secondary btn-sm" id="export-data-btn">Export</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ========== MODALS ========== -->
+
+  <!-- Add Network Modal -->
+  <div id="network-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Add Network</h2>
+      <form id="network-form">
+        <div class="form-group">
+          <label for="net-name">Network Name</label>
+          <input type="text" id="net-name" placeholder="e.g., Home Network" required>
+        </div>
+        <div class="form-group">
+          <label for="net-subnet">Subnet</label>
+          <input type="text" id="net-subnet" placeholder="e.g., 192.168.1.0/24">
+        </div>
+        <div class="form-group">
+          <label for="net-location">Location</label>
+          <input type="text" id="net-location" placeholder="e.g., Office, Home">
+        </div>
+        <div class="form-group">
+          <label for="net-api-endpoint">Desktop App API (optional)</label>
+          <input type="text" id="net-api-endpoint" placeholder="http://192.168.1.100:7722">
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="close-modal" class="btn-cancel">Cancel</button>
+          <button type="submit" class="btn-primary-action">Add Network</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Upload Scan Modal -->
+  <div id="upload-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Upload Scan Data</h2>
+      <p class="modal-desc">
+        Upload a JSON file exported from the Transparency desktop app. The file should contain an array of device objects.
+      </p>
+      <form id="upload-form">
+        <div class="form-group">
+          <label for="upload-network">Target Network</label>
+          <select id="upload-network">
+            <option value="">Select a network</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="scan-file">Scan File (JSON)</label>
+          <input type="file" id="scan-file" accept=".json" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="close-upload-modal" class="btn-cancel">Cancel</button>
+          <button type="submit" class="btn-primary-action">Upload</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts (ES modules via CDN) -->
+  <script type="module" src="js/firebase-config.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
