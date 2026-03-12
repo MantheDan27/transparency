@@ -204,7 +204,6 @@ INT_PTR CALLBACK LoginDialog::DlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case IDCANCEL:
             s_result = LoginResult::Cancelled;
             DestroyWindow(hwnd);
-            PostQuitMessage(0);
             return TRUE;
         }
         break;
@@ -252,7 +251,6 @@ INT_PTR CALLBACK LoginDialog::DlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CLOSE:
         s_result = LoginResult::Cancelled;
         DestroyWindow(hwnd);
-        PostQuitMessage(0);
         return TRUE;
 
     case WM_DESTROY:
@@ -293,7 +291,6 @@ void LoginDialog::OnLogin(HWND hwnd) {
         s_userId = fb.GetUserId();
         s_result = LoginResult::LoggedIn;
         DestroyWindow(hwnd);
-        PostQuitMessage(0);
     } else {
         std::wstring err = fb.GetLastError();
         if (err.empty()) err = L"Sign in failed. Please check your credentials.";
@@ -331,7 +328,6 @@ void LoginDialog::OnSignUp(HWND hwnd) {
         s_userId = fb.GetUserId();
         s_result = LoginResult::LoggedIn;
         DestroyWindow(hwnd);
-        PostQuitMessage(0);
     } else {
         std::wstring err = fb.GetLastError();
         if (err.empty()) err = L"Account creation failed. Please try again.";
@@ -354,7 +350,6 @@ void LoginDialog::OnSkip(HWND hwnd) {
         s_loggedIn = false;
         s_result = LoginResult::Skipped;
         DestroyWindow(hwnd);
-        PostQuitMessage(0);
     }
 }
 

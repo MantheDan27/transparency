@@ -13,7 +13,8 @@
       "Bash(cmake:*)",
       "Bash(git pull:*)",
       "Bash(git stash:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(start \"\" \"C:/temp/transparency-build/Release/Transparency.exe\")"
     ]
   }
 }
