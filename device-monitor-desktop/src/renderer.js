@@ -45,6 +45,11 @@ let cloudEnrichEnabled = true;
 let pendingEnrichDevice = null;
 let currentScanMode  = 'standard';
 let editingRuleId    = null;
+let commandPaletteState = {
+  items: [],
+  filtered: [],
+  selected: 0,
+};
 
 // ── DOM helper ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -86,6 +91,147 @@ function getDeviceKey(dev) {
   return (dev.mac && dev.mac !== 'Unknown') ? `mac:${dev.mac}` : `ip:${dev.ip}`;
 }
 
+function setAlertFilterMode(mode) {
+  alertFilter = mode;
+  document.querySelectorAll('.filter-btn[data-alert-filter]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.alertFilter === mode);
+  });
+  renderAlerts();
+}
+
+function setDeviceFilterMode(mode) {
+  currentFilter = mode;
+  document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === mode);
+  });
+  applyDeviceFilter(mode);
+}
+
+function runQuickTriage() {
+  const highCount = allAnomalies.filter(a => (a.severity || '').toLowerCase() === 'high').length;
+  const unknownCount = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
+
+  if (highCount > 0) {
+    switchTab('alerts');
+    setAlertFilterMode('high');
+    showToast(`Triage complete: ${highCount} high-severity alert(s) prioritized.`, 'error');
+    return;
+  }
+
+  if (unknownCount > 0) {
+    switchTab('devices');
+    setDeviceFilterMode('unknown');
+    showToast(`Triage complete: ${unknownCount} unknown device(s) ready for review.`, 'info');
+    return;
+  }
+
+  switchTab('overview');
+  showToast('Triage complete: no high-severity alerts or unknown devices.', 'success');
+}
+window.runQuickTriage = runQuickTriage;
+
+function buildCommandPaletteActions() {
+  const actions = [
+    { label: 'Run Quick Scan',            meta: 'Scan · Quick',        keywords: 'scan quick',             run: () => runScan('quick') },
+    { label: 'Run Standard Scan',         meta: 'Scan · Standard',     keywords: 'scan standard',          run: () => runScan('standard') },
+    { label: 'Run Deep Scan',             meta: 'Scan · Deep',         keywords: 'scan deep',              run: () => runScan('deep') },
+    { label: 'Auto Triage',               meta: 'Smart Response',      keywords: 'triage response',        run: () => runQuickTriage() },
+    { label: 'Focus Unknown Devices',     meta: 'Devices · Filter',    keywords: 'devices unknown',        run: () => { switchTab('devices'); setDeviceFilterMode('unknown'); } },
+    { label: 'Open Overview',             meta: 'Navigate',            keywords: 'overview home',          run: () => switchTab('overview') },
+    { label: 'Open Devices',              meta: 'Navigate',            keywords: 'devices',                run: () => switchTab('devices') },
+    { label: 'Open Topology',             meta: 'Navigate',            keywords: 'map topology',           run: () => switchTab('map') },
+    { label: 'Open Alerts',               meta: 'Navigate',            keywords: 'alerts',                 run: () => switchTab('alerts') },
+    { label: 'Open Diagnostics',          meta: 'Navigate',            keywords: 'tools diagnostics',      run: () => switchTab('tools') },
+    { label: 'Open Ledger',               meta: 'Navigate',            keywords: 'ledger data',            run: () => switchTab('ledger') },
+    { label: 'Open Security Review',      meta: 'Navigate',            keywords: 'privacy security',       run: () => switchTab('privacy') },
+    { label: 'Save Snapshot',             meta: 'Data',                keywords: 'snapshot save',          run: () => window.saveSnapshot() },
+    { label: 'Open Snapshot Diff',        meta: 'Analysis',            keywords: 'snapshot diff compare',  run: () => window.openSnapshotDiff() },
+    { label: 'Export Report JSON',        meta: 'Export',              keywords: 'export report json',     run: () => window.exportReport() },
+    { label: 'Create Alert Rule',         meta: 'Alerts',              keywords: 'rule alert',             run: () => $('ruleBuilderModal')?.classList.remove('hidden') },
+    { label: 'Toggle Live Monitor',       meta: 'Monitoring',          keywords: 'monitor start stop',     run: () => window.toggleMonitoring?.() },
+  ];
+
+  return actions;
+}
+
+function renderCommandPalette(query = '') {
+  const list = $('commandPaletteList');
+  if (!list) return;
+
+  const q = query.trim().toLowerCase();
+  commandPaletteState.filtered = commandPaletteState.items.filter(action => {
+    if (!q) return true;
+    return action.label.toLowerCase().includes(q)
+      || action.meta.toLowerCase().includes(q)
+      || action.keywords.toLowerCase().includes(q);
+  });
+
+  if (commandPaletteState.selected >= commandPaletteState.filtered.length) {
+    commandPaletteState.selected = 0;
+  }
+
+  if (!commandPaletteState.filtered.length) {
+    list.innerHTML = '<div class="empty-state-sm">No matching command.</div>';
+    return;
+  }
+
+  list.innerHTML = commandPaletteState.filtered.map((action, idx) => `
+    <button type="button" class="command-item ${idx === commandPaletteState.selected ? 'active' : ''}" data-command-index="${idx}">
+      <span class="command-label">${escHtml(action.label)}</span>
+      <span class="command-meta">${escHtml(action.meta)}</span>
+    </button>
+  `).join('');
+
+  list.querySelectorAll('[data-command-index]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      commandPaletteState.selected = parseInt(btn.dataset.commandIndex, 10) || 0;
+      runSelectedCommand();
+    });
+  });
+}
+
+function openCommandPalette(initialQuery = '') {
+  const modal = $('commandPaletteModal');
+  const input = $('commandPaletteInput');
+  if (!modal || !input) return;
+
+  commandPaletteState.items = buildCommandPaletteActions();
+  commandPaletteState.selected = 0;
+  modal.classList.remove('hidden');
+  input.value = initialQuery;
+  renderCommandPalette(initialQuery);
+
+  setTimeout(() => {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, 0);
+}
+window.openCommandPalette = openCommandPalette;
+
+function closeCommandPalette(restoreFocus = false) {
+  const modal = $('commandPaletteModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  if (restoreFocus) $('commandPaletteBtn')?.focus();
+}
+window.closeCommandPalette = closeCommandPalette;
+
+function moveCommandSelection(delta) {
+  if (!commandPaletteState.filtered.length) return;
+  const len = commandPaletteState.filtered.length;
+  commandPaletteState.selected = (commandPaletteState.selected + delta + len) % len;
+  renderCommandPalette($('commandPaletteInput')?.value || '');
+}
+
+function runSelectedCommand() {
+  const action = commandPaletteState.filtered[commandPaletteState.selected];
+  if (!action) return;
+  closeCommandPalette();
+  Promise.resolve(action.run()).catch(err => {
+    showToast(`Command failed: ${err?.message || err}`, 'error');
+  });
+}
+
 // ── Tab navigation ────────────────────────────────────────────────────────────
 function switchTab(tabName, filter) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -94,6 +240,16 @@ function switchTab(tabName, filter) {
   if (btn) btn.classList.add('active');
   const tab = $(`tab-${tabName}`);
   if (tab) tab.classList.add('active');
+  const titleByTab = {
+    overview: 'Overview',
+    devices: 'Device Registry',
+    map: 'Topology',
+    alerts: 'Alerts',
+    tools: 'Diagnostics',
+    ledger: 'Ledger',
+    privacy: 'Security',
+  };
+  if ($('topbarTitle')) $('topbarTitle').textContent = titleByTab[tabName] || 'Overview';
   if (tabName === 'ledger')  refreshLedger();
   if (tabName === 'alerts')  loadAlerts();
   if (tabName === 'privacy') loadDataStats();
@@ -203,6 +359,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Command palette + quick actions
+  $('commandPaletteBtn')?.addEventListener('click', () => openCommandPalette());
+  $('overviewCommandBtn')?.addEventListener('click', () => openCommandPalette());
+  $('quickTriageBtn')?.addEventListener('click', () => runQuickTriage());
+  $('focusUnknownBtn')?.addEventListener('click', () => {
+    switchTab('devices');
+    setDeviceFilterMode('unknown');
+    showToast('Showing unknown devices.', 'info');
+  });
+  $('privacyAuditBtn')?.addEventListener('click', () => {
+    switchTab('privacy');
+    showToast('Opened security review.', 'info');
+  });
+  $('commandPaletteClose')?.addEventListener('click', () => closeCommandPalette(true));
+  $('commandPaletteModal')?.addEventListener('click', e => {
+    if (e.target === $('commandPaletteModal')) closeCommandPalette(true);
+  });
+  $('commandPaletteInput')?.addEventListener('input', e => {
+    commandPaletteState.selected = 0;
+    renderCommandPalette(e.target.value);
+  });
+
   // Detail panel close
   $('detailPanelClose').addEventListener('click', closeDetailPanel);
   $('detailPanelBackdrop').addEventListener('click', closeDetailPanel);
@@ -248,11 +426,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
+    const cpModal = $('commandPaletteModal');
+    const isCmdPaletteOpen = !!cpModal && !cpModal.classList.contains('hidden');
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      openCommandPalette();
+      return;
+    }
+
+    if (isCmdPaletteOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveCommandSelection(1);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveCommandSelection(-1);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        runSelectedCommand();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeCommandPalette(true);
+        return;
+      }
+    }
+
     if (e.key === 'Escape') {
       $('enrichModal').classList.add('hidden');
       $('previewModal').classList.add('hidden');
       $('ruleBuilderModal').classList.add('hidden');
       $('bulkTagModal').classList.add('hidden');
+      closeCommandPalette();
       closeDetailPanel();
       pendingEnrichDevice = null;
     }
@@ -885,7 +1096,16 @@ async function handleContextMenuAction(action, dev) {
       showToast('Wake-on-LAN requires a known MAC address.', 'error');
       return;
     }
-    showToast(`WOL magic packet sent to ${dev.mac}. Device must support WOL.`, 'info');
+    try {
+      const result = await window.electronAPI.sendWOL(dev.mac);
+      if (result && result.success) {
+        showToast(`WOL magic packet sent to ${dev.mac}.`, 'success');
+      } else {
+        showToast(`WOL failed: ${result?.error || 'Unknown error'}`, 'error');
+      }
+    } catch (e) {
+      showToast(`WOL error: ${e.message}`, 'error');
+    }
     return;
   }
   if (action === 'monitor-closely') {
@@ -1327,14 +1547,23 @@ window.enrichCurrentDevice = function() {
   if (currentDetailDev) enrichDevice(currentDetailDev);
 };
 
-window.wolCurrentDevice = function() {
+window.wolCurrentDevice = async function() {
   if (!currentDetailDev) return;
   const dev = currentDetailDev;
   if (!dev.mac || dev.mac === 'Unknown') {
     showToast('Wake-on-LAN requires a known MAC address.', 'error');
     return;
   }
-  showToast(`WOL magic packet sent to ${dev.mac}. Ensure device has WOL enabled.`, 'info');
+  try {
+    const result = await window.electronAPI.sendWOL(dev.mac);
+    if (result && result.success) {
+      showToast(`WOL magic packet sent to ${dev.mac}.`, 'success');
+    } else {
+      showToast(`WOL failed: ${result?.error || 'Unknown error'}`, 'error');
+    }
+  } catch (e) {
+    showToast(`WOL error: ${e.message}`, 'error');
+  }
 };
 window.openAlertSettingsForDevice = function() {
   switchTab('alerts');
@@ -3115,6 +3344,152 @@ function renderAlerts() {
 
   container.innerHTML = filtered.map(a => renderAlertWithGuidance(a)).join('');
 }
+
+// ── Privacy Monitor Config ─────────────────────────────────────────────────────
+window.savePrivacyMonitorConfig = async function() {
+  const intervalEl   = $('privMonitorInterval');
+  const quietStartEl = $('privQuietStart');
+  const quietEndEl   = $('privQuietEnd');
+  const alertOutage  = $('privAlertOutage')?.checked ?? true;
+  const alertGwMac   = $('privAlertGwMac')?.checked ?? true;
+  const alertDns     = $('privAlertDns')?.checked ?? true;
+  const alertLatency = $('privAlertLatency')?.checked ?? false;
+
+  const intervalMin = parseInt(intervalEl?.value, 10) || 5;
+  if (intervalMin < 1 || intervalMin > 60) {
+    showToast('Scan interval must be between 1 and 60 minutes.', 'error');
+    return;
+  }
+
+  const config = {
+    intervalMinutes: intervalMin,
+    quietHoursStart: quietStartEl?.value || '',
+    quietHoursEnd:   quietEndEl?.value   || '',
+    alertOnOutage:   alertOutage,
+    alertOnGwMac:    alertGwMac,
+    alertOnDns:      alertDns,
+    alertOnLatency:  alertLatency,
+  };
+
+  try {
+    await window.electronAPI.updateMonitorConfig(config);
+    showToast('Monitoring configuration saved.', 'success');
+  } catch (e) {
+    showToast(`Failed to save configuration: ${e.message}`, 'error');
+  }
+};
+
+// ── Network Segment Builder ────────────────────────────────────────────────────
+let customSegments = [];
+
+window.openSegmentBuilder = function() {
+  const modal = $('segmentBuilderModal');
+  if (!modal) return;
+  // Clear previous values
+  const nameEl    = $('segName');
+  const subnetEl  = $('segSubnet');
+  const gatewayEl = $('segGateway');
+  const enabledEl = $('segEnabled');
+  if (nameEl)    nameEl.value    = '';
+  if (subnetEl)  subnetEl.value  = '';
+  if (gatewayEl) gatewayEl.value = '';
+  if (enabledEl) enabledEl.checked = true;
+  modal.classList.remove('hidden');
+};
+
+window.saveSegment = function() {
+  const name    = $('segName')?.value.trim()    || '';
+  const subnet  = $('segSubnet')?.value.trim()  || '';
+  const gateway = $('segGateway')?.value.trim() || '';
+  const enabled = $('segEnabled')?.checked      ?? true;
+
+  if (!name) {
+    showToast('Segment name is required.', 'error');
+    return;
+  }
+  if (!subnet) {
+    showToast('Subnet (CIDR) is required.', 'error');
+    return;
+  }
+  // Basic CIDR format validation
+  if (!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(subnet)) {
+    showToast('Subnet must be in CIDR format (e.g. 192.168.10.0/24).', 'error');
+    return;
+  }
+
+  const segment = {
+    id:      `seg-${Date.now()}`,
+    name,
+    subnet,
+    gateway,
+    enabled,
+    createdAt: new Date().toISOString(),
+  };
+
+  customSegments.push(segment);
+  renderSegmentList();
+  $('segmentBuilderModal').classList.add('hidden');
+  showToast(`Segment "${name}" added.`, 'success');
+};
+
+function renderSegmentList() {
+  const list = $('segmentList');
+  if (!list) return;
+  if (!customSegments.length) {
+    list.innerHTML = '<div class="empty-state-sm">No custom segments defined. The app scans all detected subnets automatically.</div>';
+    return;
+  }
+  list.innerHTML = customSegments.map(seg => `
+    <div class="schedule-item">
+      <label class="toggle-switch-sm">
+        <input type="checkbox" ${seg.enabled ? 'checked' : ''}
+          onchange="window.toggleSegment('${escHtml(seg.id)}', this.checked)">
+        <span class="toggle-knob-sm"></span>
+      </label>
+      <div class="schedule-item-info">
+        <div class="schedule-item-name">${escHtml(seg.name)}</div>
+        <div class="schedule-item-desc">${escHtml(seg.subnet)}${seg.gateway ? ' · GW: ' + escHtml(seg.gateway) : ''}</div>
+      </div>
+      <button class="btn btn-danger btn-xs" onclick="window.deleteSegment('${escHtml(seg.id)}')">Remove</button>
+    </div>`).join('');
+}
+
+window.toggleSegment = function(id, enabled) {
+  const seg = customSegments.find(s => s.id === id);
+  if (seg) seg.enabled = enabled;
+};
+
+window.deleteSegment = function(id) {
+  if (!confirm('Remove this segment?')) return;
+  customSegments = customSegments.filter(s => s.id !== id);
+  renderSegmentList();
+  showToast('Segment removed.', 'success');
+};
+
+// ── Device Location ────────────────────────────────────────────────────────────
+window.saveDeviceLocation = async function() {
+  if (!currentDetailDev) {
+    $('locationModal')?.classList.add('hidden');
+    return;
+  }
+  const dev       = currentDetailDev;
+  const selectEl  = $('locationSelect');
+  const customEl  = $('locationCustom');
+  const location  = (customEl?.value.trim()) || (selectEl?.value) || '';
+
+  try {
+    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { location });
+    if (dev.meta) dev.meta.location = location;
+    $('locationModal')?.classList.add('hidden');
+    showToast(location ? `Location set to "${location}".` : 'Location cleared.', 'success');
+    // Refresh detail panel if open
+    if (currentDetailDev?.ip === dev.ip) {
+      openDetailPanel(dev, detailActiveTab);
+    }
+  } catch (e) {
+    showToast(`Failed to save location: ${e.message}`, 'error');
+  }
+};
 
 // ── Privacy page: load all new sections when tab switches ──────────────────────
 const _origSwitchTab = switchTab;

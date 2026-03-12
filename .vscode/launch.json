@@ -1,0 +1,108 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // ============================================
+        // C++ Transparency App (CMake/MSVC)
+        // ============================================
+        {
+            "name": "C++ Transparency (Debug)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/transparency-cpp/build/Debug/Transparency.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/transparency-cpp",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "C++ Transparency (Release)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/transparency-cpp/build/Release/Transparency.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/transparency-cpp",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Release"
+        },
+        {
+            "name": "C++ Tests - ScannerTest",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/transparency-cpp/build/Debug/ScannerTest.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/transparency-cpp",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "C++ Tests - TestScannerAnomalies",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/transparency-cpp/build/Debug/TestScannerAnomalies.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/transparency-cpp",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        // ============================================
+        // C# WPF Transparency App (.NET)
+        // ============================================
+        {
+            "name": "C# TransparencyApp (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "dotnet: build TransparencyApp",
+            "program": "${workspaceFolder}/transparency-native/TransparencyApp/bin/Debug/net10.0-windows/win-x64/TransparencyApp.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/transparency-native/TransparencyApp",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "C# TransparencyApp (Attach)",
+            "type": "coreclr",
+            "request": "attach",
+            "processName": "TransparencyApp"
+        },
+        // ============================================
+        // Electron Device Monitor (Node.js)
+        // ============================================
+        {
+            "name": "Electron Main Process",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/device-monitor-desktop",
+            "runtimeExecutable": "${workspaceFolder}/device-monitor-desktop/node_modules/.bin/electron",
+            "windows": {
+                "runtimeExecutable": "${workspaceFolder}/device-monitor-desktop/node_modules/.bin/electron.cmd"
+            },
+            "args": [
+                "."
+            ],
+            "outputCapture": "std",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Electron Renderer Process",
+            "type": "chrome",
+            "request": "attach",
+            "port": 9222,
+            "webRoot": "${workspaceFolder}/device-monitor-desktop"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Electron: All (Main + Renderer)",
+            "configurations": ["Electron Main Process", "Electron Renderer Process"],
+            "stopAll": true
+        }
+    ]
+}

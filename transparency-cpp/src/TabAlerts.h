@@ -27,6 +27,7 @@ private:
     LRESULT OnCreate(HWND hwnd, LPCREATESTRUCT cs);
     LRESULT OnSize(HWND hwnd, int cx, int cy);
     LRESULT OnPaint(HWND hwnd);
+    LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
     LRESULT OnCommand(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnNotify(HWND hwnd, NMHDR* hdr);
     LRESULT OnScanComplete(HWND hwnd);

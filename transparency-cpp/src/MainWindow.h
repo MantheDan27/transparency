@@ -78,6 +78,10 @@ public:
     wstring  _apiKey;
     HANDLE   _apiThread   = nullptr;
 
+    // Firebase auth state
+    bool     _isLoggedIn  = false;
+    wstring  _userEmail;
+
     Tab _currentTab = Tab::Overview;
 
 private:
@@ -114,6 +118,7 @@ private:
     void LayoutChildren(int cx, int cy);
     void ShowActivePanel();
     void DrawNavSidebar(HDC hdc, const RECT& rc);
+    void DrawTopbar(HDC hdc, const RECT& rc);
 
     static const int SIDEBAR_WIDTH  = 210;
     static const int NAV_BTN_HEIGHT = 46;

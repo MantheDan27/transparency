@@ -33,6 +33,8 @@ const execFilePromise = util.promisify(execFile);
 const dnsLookup   = util.promisify(dns.lookup);
 const dnsReverse  = util.promisify(dns.reverse);
 const dnsResolve4 = util.promisify(dns.resolve4);
+const dnsResolve6 = util.promisify(dns.resolve6);
+const dnsResolve  = util.promisify(dns.resolve);
 
 let mainWindow;
 let cloudServer;
@@ -147,19 +149,21 @@ async function checkInternetConnectivity() {
     const latencyMs = Date.now() - start;
     const wasOffline = !internetStatus.online;
     internetStatus = { online: true, lastCheck: new Date().toISOString(), latencyMs };
-    if (wasOffline) {
-      triggerAlert('monitor-internet-restored', 'Internet Restored', 'low',
-        'Internet is back', 'Internet connectivity has been restored.', 'internet', {});
-      mainWindow?.webContents?.send('internet-status', internetStatus);
-    }
-    if (monitoringConfig.alertOnHighLatency && latencyMs > monitoringConfig.highLatencyThresholdMs) {
-      triggerAlert('monitor-high-latency', 'High Gateway Latency', 'low',
-        'High internet latency', `Internet latency is ${latencyMs}ms (threshold: ${monitoringConfig.highLatencyThresholdMs}ms).`, 'internet', { latencyMs });
+    if (!isInQuietHours()) {
+      if (wasOffline) {
+        triggerAlert('monitor-internet-restored', 'Internet Restored', 'low',
+          'Internet is back', 'Internet connectivity has been restored.', 'internet', {});
+        mainWindow?.webContents?.send('internet-status', internetStatus);
+      }
+      if (monitoringConfig.alertOnHighLatency && latencyMs > monitoringConfig.highLatencyThresholdMs) {
+        triggerAlert('monitor-high-latency', 'High Gateway Latency', 'low',
+          'High internet latency', `Internet latency is ${latencyMs}ms (threshold: ${monitoringConfig.highLatencyThresholdMs}ms).`, 'internet', { latencyMs });
+      }
     }
   } catch {
     const wasOnline = internetStatus.online;
     internetStatus = { online: false, lastCheck: new Date().toISOString(), latencyMs: null };
-    if (wasOnline && monitoringConfig.alertOnOutage) {
+    if (wasOnline && monitoringConfig.alertOnOutage && !isInQuietHours()) {
       triggerAlert('monitor-outage', 'Internet Outage', 'high',
         'Internet outage detected', 'No internet connectivity — could be ISP issue or gateway problem.', 'internet', {});
       mainWindow?.webContents?.send('internet-status', internetStatus);
@@ -195,7 +199,7 @@ async function checkGatewayMacChange() {
       if (macM) gwMac = macM[0].toLowerCase().replace(/-/g, ':');
     } catch { /* ignore */ }
 
-    if (gwMac && lastGatewayMac && gwMac !== lastGatewayMac) {
+    if (gwMac && lastGatewayMac && gwMac !== lastGatewayMac && !isInQuietHours()) {
       triggerAlert('monitor-gateway-mac', 'Gateway MAC Changed', 'high',
         'Possible rogue access point', `Gateway ${gwIp} MAC changed from ${lastGatewayMac} to ${gwMac}. Possible evil-twin or ARP spoofing.`,
         gwIp, { oldMac: lastGatewayMac, newMac: gwMac });
@@ -207,7 +211,7 @@ async function checkGatewayMacChange() {
 function checkDnsServerChange() {
   if (!monitoringConfig.alertOnDnsChange) return;
   const currentDns = dns.getServers().sort().join(',');
-  if (lastDnsServers && currentDns !== lastDnsServers) {
+  if (lastDnsServers && currentDns !== lastDnsServers && !isInQuietHours()) {
     triggerAlert('monitor-dns-changed', 'DNS Servers Changed', 'high',
       'DNS server change detected', `DNS servers changed from [${lastDnsServers}] to [${currentDns}]. Possible DNS hijacking.`,
       'network', { oldDns: lastDnsServers, newDns: currentDns });
@@ -323,7 +327,7 @@ function triggerAlert(ruleId, ruleName, severity, title, message, deviceIp, data
 
   // Fire webhook if configured
   if (rule?.actions?.webhook) {
-    axios.post(rule.actions.webhook, alert, { timeout: 5000 }).catch(() => {});
+    axios.post(rule.actions.webhook, alert, { timeout: 5000 }).catch(err => console.error('[webhook]', err.message));
   }
 }
 
@@ -650,9 +654,17 @@ ipcMain.handle('traceroute-host', async (_e, host) => {
 ipcMain.handle('dns-lookup', async (_e, host, type = 'A') => {
   try {
     const resolveFunc = {
-      'A':    () => dnsResolve4(host),
-      'PTR':  () => dnsReverse(host),
-      'ANY':  () => new Promise((res, rej) => dns.resolve(host, 'ANY', (e, r) => e ? rej(e) : res(r))),
+      'A':       () => dnsResolve4(host),
+      'AAAA':    () => dnsResolve6(host),
+      'MX':      () => dnsResolve(host, 'MX'),
+      'TXT':     () => dnsResolve(host, 'TXT'),
+      'CNAME':   () => dnsResolve(host, 'CNAME'),
+      'NS':      () => dnsResolve(host, 'NS'),
+      'SOA':     () => dnsResolve(host, 'SOA'),
+      'SRV':     () => dnsResolve(host, 'SRV'),
+      'PTR':     () => dnsReverse(host),
+      'reverse': () => dnsReverse(host),
+      'ANY':     () => new Promise((res, rej) => dns.resolve(host, 'ANY', (e, r) => e ? rej(e) : res(r))),
     }[type] || (() => dnsResolve4(host));
     const result = await resolveFunc();
     return { success: true, result, host, type };
@@ -1171,16 +1183,20 @@ function computeNextRun(freq, time) {
   return next.toISOString();
 }
 
-function scheduleNextRun(s) {
+function scheduleNextRun(s, _depth = 0) {
   if (scheduleTimers[s.id]) { clearTimeout(scheduleTimers[s.id]); delete scheduleTimers[s.id]; }
   if (!s.enabled) return;
 
   const nextMs = new Date(s.nextRun).getTime() - Date.now();
   if (nextMs < 0) {
-    // Update nextRun
+    if (_depth >= 5) {
+      console.error('[scheduler] scheduleNextRun hit max recursion depth for schedule', s.id, '– skipping');
+      return;
+    }
+    // Update nextRun and retry
     s.nextRun = computeNextRun(s.freq, s.time);
     saveJSON('schedules.json', scheduledScans);
-    return scheduleNextRun(s);
+    return scheduleNextRun(s, _depth + 1);
   }
 
   scheduleTimers[s.id] = setTimeout(async () => {
@@ -1280,14 +1296,6 @@ function runScriptHooks(event, payload = {}) {
       const childArgs = args.slice(1);
 
       const child = execFile(file, childArgs, { timeout: 15000 }, (err) => {
-      // Parse command string into file and args (simplified parsing)
-      const parts = h.cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-      if (parts.length === 0) continue;
-
-      const execName = parts[0].replace(/"/g, '');
-      const execArgs = parts.slice(1).map(p => p.replace(/"/g, ''));
-
-      const child = execFile(execName, execArgs, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
       });
       child.stdin.on('error', () => { /* ignore EPIPE */ });

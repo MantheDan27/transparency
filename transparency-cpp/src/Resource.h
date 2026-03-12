@@ -154,6 +154,9 @@
 #define IDC_NAV_SMARTHOME   2007
 #define IDC_PANEL_SMARTHOME 3007
 
+// Confidence bar owner-draw static
+#define IDC_CONF_BAR            9010
+
 // WM_USER custom messages
 #define WM_SCAN_COMPLETE        (WM_USER + 1)
 #define WM_SCAN_PROGRESS        (WM_USER + 2)

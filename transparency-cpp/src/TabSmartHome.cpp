@@ -164,11 +164,11 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     y += 24;
 
     _hDeviceList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_VSCROLL,
         16, y, cx - 32, 140, hwnd, (HMENU)(INT_PTR)IDC_SMART_DEVICE_LIST, hInst, nullptr);
     SendMessage(_hDeviceList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hDeviceList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
-    Theme::ApplyDarkScrollbar(_hDeviceList);
+    Theme::ApplyDarkListView(_hDeviceList);
 
     // Add columns
     LVCOLUMN col = {};
@@ -255,11 +255,11 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     y += 36;
 
     _hTriggerList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER | WS_VSCROLL,
         16, y, cx - 32, 100, hwnd, (HMENU)(INT_PTR)IDC_SMART_TRIGGER_LIST, hInst, nullptr);
     SendMessage(_hTriggerList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hTriggerList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-    Theme::ApplyDarkScrollbar(_hTriggerList);
+    Theme::ApplyDarkListView(_hTriggerList);
 
     col.pszText = (LPWSTR)L"Event";  col.cx = 180; ListView_InsertColumn(_hTriggerList, 0, &col);
     col.pszText = (LPWSTR)L"Action"; col.cx = 200; ListView_InsertColumn(_hTriggerList, 1, &col);
@@ -277,11 +277,11 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     y += 34;
 
     _hSceneList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER | WS_VSCROLL,
         16, y, cx - 32, 90, hwnd, (HMENU)(INT_PTR)IDC_SMART_SCENE_LIST, hInst, nullptr);
     SendMessage(_hSceneList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hSceneList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-    Theme::ApplyDarkScrollbar(_hSceneList);
+    Theme::ApplyDarkListView(_hSceneList);
 
     col.pszText = (LPWSTR)L"Scene";    col.cx = 200; ListView_InsertColumn(_hSceneList, 0, &col);
     col.pszText = (LPWSTR)L"Devices";  col.cx = 120; ListView_InsertColumn(_hSceneList, 1, &col);
