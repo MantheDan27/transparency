@@ -19,6 +19,7 @@ const signupToggle = document.getElementById("signup-toggle");
 const logoutBtn = document.getElementById("logout-btn");
 const authError = document.getElementById("auth-error");
 const userDisplayName = document.getElementById("user-display-name");
+const userEmail = document.getElementById("user-email");
 const forgotPasswordLink = document.getElementById("forgot-password");
 
 let currentUser = null;
@@ -125,6 +126,7 @@ onAuthStateChanged(auth, (user) => {
     loginPage.classList.add("hidden");
     dashboardPage.classList.remove("hidden");
     userDisplayName.textContent = user.displayName || user.email;
+    if (userEmail) userEmail.textContent = user.email || "";
     // Load dashboard data
     if (window.loadDashboard) window.loadDashboard(user);
   } else {
