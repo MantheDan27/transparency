@@ -22,7 +22,7 @@
     publicKeyToken='6595b64144ccf1df' \
     language='*'\"")
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(UNICODE)
 int WINAPI wWinMain(
     HINSTANCE hInstance,
     HINSTANCE /*hPrevInstance*/,

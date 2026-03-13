@@ -96,7 +96,11 @@ void test_MultipleRisks() {
     assert(risk.find(L"HIGH: FTP") != wstring::npos);
 }
 
-int main() {
+#if defined(_MSC_VER) || defined(UNICODE)
+int wmain(int argc, wchar_t** argv) {
+#else
+int main(int argc, char** argv) {
+#endif
     std::cout << "Running Scanner tests...\n";
 
     test_NoRiskPorts();

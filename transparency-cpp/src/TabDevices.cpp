@@ -730,13 +730,24 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     if (cmd == 0) return;
 
+    // Validate IP string for command injection prevention
+    bool isValidIp = true;
+    for (wchar_t c : dev.ip) {
+        if (!iswalnum(c) && c != L'.' && c != L':' && c != L'-') {
+            isValidIp = false;
+            break;
+        }
+    }
+
     switch (cmd) {
     case 12001: { // Ping
+        if (!isValidIp) break;
         wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12002: { // Traceroute
+        if (!isValidIp) break;
         wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -801,6 +812,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
+        if (!isValidIp) break;
         wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -824,6 +836,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
+        if (!isValidIp) break;
         wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
