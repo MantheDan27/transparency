@@ -51,7 +51,7 @@ add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
 if(MSVC)
     set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 elseif(MINGW OR CYGWIN)
-    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole")
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
 endif()
 target_include_directories(TransparencyTests PRIVATE src)
 target_compile_definitions(TransparencyTests PRIVATE
@@ -187,7 +187,7 @@ add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
 if(MSVC)
     set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 elseif(MINGW OR CYGWIN)
-    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "-mconsole")
+    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
 endif()
 target_compile_definitions(ScannerTest PRIVATE
     UNICODE
