@@ -1875,3 +1875,12 @@ std::future<ScanResult> ScanEngine::DeepScan(
         return BuildResult(liveIPs, arp, mdns, ssdp, "deep", ports, false, true, progressCb);
     });
 }
+
+bool ScanEngine::IsSafeIP(const std::wstring& ip) {
+    if (ip.empty()) return false;
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    if (InetPtonW(AF_INET, ip.c_str(), &sa.sin_addr) == 1) return true;
+    if (InetPtonW(AF_INET6, ip.c_str(), &sa6.sin6_addr) == 1) return true;
+    return false;
+}
