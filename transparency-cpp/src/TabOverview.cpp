@@ -42,10 +42,10 @@ static const wchar_t* KPI_LABELS[] = {
 
 // Accent colors for each KPI tile (top border + sparkline) — from design system
 static const COLORREF KPI_ACCENTS[] = {
-    Theme::ACCENT_BLUE_GREEN,   // Devices Online  — success/healthy
-    Theme::ACCENT_BLUE_AMBER,   // Unknown Devices — warning/caution
-    Theme::ACCENT_BLUE_RED,     // Active Alerts   — critical
-    Theme::ACCENT_BLUE_BLUE,    // Gateway Latency — primary/info
+    Theme::ACCENT_GREEN,   // Devices Online  — success/healthy
+    Theme::ACCENT_AMBER,   // Unknown Devices — warning/caution
+    Theme::ACCENT_RED,     // Active Alerts   — critical
+    Theme::ACCENT_BLUE,    // Gateway Latency — primary/info
 };
 
 bool TabOverview::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -329,7 +329,7 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     DeleteObject(accBrush);
 
     // Card border — border_default
-    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT_DEFAULT);
+    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
     HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
     MoveToEx(hdc, rc.left,     rc.top,      nullptr);
     LineTo  (hdc, rc.right - 1, rc.top);
@@ -412,12 +412,12 @@ void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
 
 static COLORREF DeviceNodeColor(const Device& d) {
     if (!d.online)                          return Theme::TEXT_TERTIARY;
-    if (d.iotRisk)                          return Theme::ACCENT_BLUE_AMBER;
-    if (d.trustState == L"owned")           return Theme::ACCENT_BLUE_GREEN;
-    if (d.trustState == L"known")           return Theme::ACCENT_BLUE_BLUE;
-    if (d.trustState == L"guest")           return Theme::ACCENT_BLUE_AMBER;
-    if (d.trustState == L"blocked")         return Theme::ACCENT_BLUE_RED;
-    if (d.trustState == L"watchlist")       return Theme::ACCENT_BLUE_PURPLE;
+    if (d.iotRisk)                          return Theme::ACCENT_AMBER;
+    if (d.trustState == L"owned")           return Theme::ACCENT_GREEN;
+    if (d.trustState == L"known")           return Theme::ACCENT_BLUE;
+    if (d.trustState == L"guest")           return Theme::ACCENT_AMBER;
+    if (d.trustState == L"blocked")         return Theme::ACCENT_RED;
+    if (d.trustState == L"watchlist")       return Theme::ACCENT_PURPLE;
     return Theme::TEXT_SECONDARY;
 }
 
@@ -426,7 +426,7 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
     FillRect(hdc, &rc, Theme::BrushElevated());
 
     // Card border — border_default
-    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT_DEFAULT);
+    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
     HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
     MoveToEx(hdc, rc.left,      rc.top,      nullptr);
     LineTo  (hdc, rc.right - 1, rc.top);
@@ -513,8 +513,8 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             }
 
             // Gateway center node
-            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_BLUE_GLOW);
-            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_BLUE_GLOW);
+            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
+            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
             HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
             HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
             Ellipse(hdc, cx - 14, cy - 14, cx + 14, cy + 14);
@@ -532,8 +532,8 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             int gwCy = mapTop + 16;
 
             // Gateway node
-            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_BLUE_GLOW);
-            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_BLUE_GLOW);
+            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
+            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
             HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
             HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
             Ellipse(hdc, gwCx - 12, gwCy - 12, gwCx + 12, gwCy + 12);
