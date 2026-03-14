@@ -67,7 +67,7 @@ const wchar_t* MainWindow::NavIcon(int i) {
 bool MainWindow::Create(HINSTANCE hInstance) {
     WNDCLASSEX wc = {};
     wc.cbSize        = sizeof(wc);
-    wc.style         = CS_HREDRAW | CS_VREDRAW;
+    wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
     wc.hbrBackground = Theme::BrushApp();
@@ -90,7 +90,7 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     HWND hwnd = CreateWindowEx(
         0, L"TransparencyMainWnd",
         L"Transparency - Network Monitor",
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         wx, wy, ww, wh,
         nullptr, nullptr, hInstance, self);
 
@@ -129,13 +129,9 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_PAINT:
         return self->OnPaint(hwnd);
 
-    case WM_ERASEBKGND: {
-        HDC hdc = (HDC)wp;
-        RECT rc;
-        GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, Theme::BrushApp());
+    case WM_ERASEBKGND:
+        // Suppress — OnPaint handles all drawing via double buffer
         return 1;
-    }
 
     case WM_LBUTTONDOWN:
         return self->OnLButtonDown(hwnd, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
@@ -273,8 +269,8 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     AddLedgerEntry(L"App Started", L"Transparency v4.1.0 initialized");
     SetTimer(hwnd, 1, 60000, nullptr);
 
-    // Refresh status bar every 1 second
-    SetTimer(hwnd, 2, 1000, nullptr);
+    // Refresh status bar every 5 seconds (avoid excessive repaints)
+    SetTimer(hwnd, 2, 5000, nullptr);
 
     StartQuickScan();
     return 0;
@@ -585,10 +581,14 @@ void MainWindow::DrawContentHeader(HDC hdc, int cx, int cy) {
     RECT titleRc = { sw + 20, hdrTop, sw + 200, hdrTop + CONTENT_HDR_H };
     DrawText(hdc, viewTitle, -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
-    // Item count — mono 11px
-    ScanResult r = GetLastResult();
+    // Item count — mono 11px (read count directly, no full copy)
+    int itemCount = 0;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        itemCount = (int)_lastResult.devices.size();
+    }
     wchar_t countStr[32];
-    swprintf_s(countStr, L"%d found", (int)r.devices.size());
+    swprintf_s(countStr, L"%d found", itemCount);
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
     SelectObject(hdc, Theme::FontMono());
     RECT countRc = { sw + 120, hdrTop, sw + 240, hdrTop + CONTENT_HDR_H };
@@ -659,35 +659,53 @@ void MainWindow::DrawStatusBar(HDC hdc, int cx, int cy) {
         x += 50;
     }
 
-    // Network info
-    auto nets = ScanEngine::GetLocalNetworks();
-    if (!nets.empty()) {
-        wstring netInfo = nets[0].localIp + L"/" + nets[0].cidr;
+    // Network info — use cached data to avoid expensive calls during paint
+    static wstring s_cachedNetInfo;
+    static DWORD s_netCacheTick = 0;
+    DWORD now = GetTickCount();
+    if (now - s_netCacheTick > 10000 || s_cachedNetInfo.empty()) {
+        auto nets = ScanEngine::GetLocalNetworks();
+        s_cachedNetInfo = nets.empty() ? L"" : nets[0].localIp + L"/" + nets[0].cidr;
+        s_netCacheTick = now;
+    }
+    if (!s_cachedNetInfo.empty()) {
         RECT netRc = { x, sbTop, x + 140, cy };
-        DrawText(hdc, netInfo.c_str(), -1, &netRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        DrawText(hdc, s_cachedNetInfo.c_str(), -1, &netRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         x += 150;
     }
 
-    // Device count
-    ScanResult r = GetLastResult();
+    // Device + alert count — read counts directly (fast, no copy)
+    int devCount = 0, anomCount = 0;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        devCount = (int)_lastResult.devices.size();
+        anomCount = (int)_lastResult.anomalies.size();
+    }
     wchar_t devStr[32];
-    swprintf_s(devStr, L"%d devices", (int)r.devices.size());
+    swprintf_s(devStr, L"%d devices", devCount);
     RECT devRc = { x, sbTop, x + 80, cy };
     DrawText(hdc, devStr, -1, &devRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     x += 90;
 
     // Alert count
     wchar_t alertStr[32];
-    swprintf_s(alertStr, L"%d alerts", (int)r.anomalies.size());
+    swprintf_s(alertStr, L"%d alerts", anomCount);
     RECT alertRc = { x, sbTop, x + 70, cy };
     DrawText(hdc, alertStr, -1, &alertRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
-    // Right side: gateway, latency
-    int rx = cx - 14;
-    if (!nets.empty() && !nets[0].gateway.empty()) {
-        wstring gwStr = L"GW: " + nets[0].gateway;
+    // Right side: gateway — cached
+    static wstring s_cachedGw;
+    if (now - s_netCacheTick < 1000) {
+        // Use same cache cycle — already refreshed above
+    } else if (s_cachedGw.empty()) {
+        auto nets2 = ScanEngine::GetLocalNetworks();
+        if (!nets2.empty() && !nets2[0].gateway.empty())
+            s_cachedGw = L"GW: " + nets2[0].gateway;
+    }
+    if (!s_cachedGw.empty()) {
+        int rx = cx - 14;
         RECT gwRc = { rx - 160, sbTop, rx, cy };
-        DrawText(hdc, gwStr.c_str(), -1, &gwRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+        DrawText(hdc, s_cachedGw.c_str(), -1, &gwRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
     }
 
     SelectObject(hdc, old);
@@ -697,20 +715,33 @@ void MainWindow::DrawStatusBar(HDC hdc, int cx, int cy) {
 
 LRESULT MainWindow::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
+    HDC hdcScreen = BeginPaint(hwnd, &ps);
 
     RECT rc;
     GetClientRect(hwnd, &rc);
     int cx = rc.right, cy = rc.bottom;
+    if (cx <= 0 || cy <= 0) { EndPaint(hwnd, &ps); return 0; }
+
+    // Double buffer — paint to offscreen bitmap, then blit
+    HDC hdc = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cx, cy);
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdc, hBmp);
 
     // Fill entire background
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushRoot());
 
     // Draw the 4 shell zones
     DrawTitleBar(hdc, cx);
     DrawNavSidebar(hdc, rc);
     DrawContentHeader(hdc, cx, cy);
     DrawStatusBar(hdc, cx, cy);
+
+    // Blit to screen
+    BitBlt(hdcScreen, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
+
+    SelectObject(hdc, hOldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(hdc);
 
     EndPaint(hwnd, &ps);
     return 0;
