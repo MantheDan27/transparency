@@ -26,7 +26,7 @@ bool TabAlerts::Create(HWND parent, int x, int y, int w, int h, MainWindow* main
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushApp();
+    wc.hbrBackground = Theme::BrushSurface();
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
@@ -56,15 +56,15 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushApp()); return 1; }
+    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_NOTIFY:     return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
         SetTextColor((HDC)wp, Theme::TEXT_PRIMARY);
-        SetBkColor((HDC)wp, Theme::BG_APP);
-        return (LRESULT)Theme::BrushApp();
+        SetBkColor((HDC)wp, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
     }
     case WM_SCAN_COMPLETE: return self->OnScanComplete(hwnd);
     default: return DefWindowProc(hwnd, msg, wp, lp);
@@ -223,7 +223,7 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushSurface());
     EndPaint(hwnd, &ps);
     return 0;
 }
@@ -331,18 +331,18 @@ LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
         case CDDS_ITEMPREPAINT: {
             int row = (int)cd->nmcd.dwItemSpec;
             // Color by severity
-            COLORREF bg = Theme::BG_APP;
+            COLORREF bg = Theme::BG_SURFACE;
             if (_mainWnd) {
                 ScanResult r = _mainWnd->GetLastResult();
                 int visible = 0;
                 for (auto& a : r.anomalies) {
                     if (visible == row) {
                         if (a.severity == L"critical" || a.severity == L"high")
-                            bg = RGB(50, 20, 20);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 8);
                         else if (a.severity == L"medium")
-                            bg = RGB(50, 35, 10);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 8);
                         else
-                            bg = RGB(10, 40, 20);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 8);
                         break;
                     }
                     visible++;

@@ -7,11 +7,11 @@
 #include <vector>
 #include <memory>
 #include <mutex>
-#include "Models.h"
-#include "Scanner.h"
-#include "Monitor.h"
-#include "Resource.h"
-#include "Theme.h"
+#include "transparency/models.h"
+#include "net/scan_engine.h"
+#include "net/monitor.h"
+#include "ui/resource.h"
+#include "ui/win32/win32_theme.h"
 
 // Forward declare tab panel classes
 class TabOverview;

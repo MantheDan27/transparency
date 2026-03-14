@@ -33,7 +33,7 @@ bool TabSmartHome::Create(HWND parent, int x, int y, int w, int h, MainWindow* m
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushApp();
+    wc.hbrBackground = Theme::BrushSurface();
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
@@ -80,13 +80,13 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
     case WM_CTLCOLORBTN: {
         HDC hdc = (HDC)wp;
         SetTextColor(hdc, Theme::TEXT_PRIMARY);
-        SetBkColor(hdc, Theme::BG_APP);
-        return (LRESULT)Theme::BrushApp();
+        SetBkColor(hdc, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
     }
     case WM_ERASEBKGND: {
         HDC hdc = (HDC)wp;
         RECT rc; GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, Theme::BrushApp());
+        FillRect(hdc, &rc, Theme::BrushSurface());
         return 1;
     }
     default:
@@ -110,7 +110,7 @@ LRESULT TabSmartHome::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushSurface());
 
     // Draw title
     SetBkMode(hdc, TRANSPARENT);

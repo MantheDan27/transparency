@@ -7,24 +7,32 @@
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
 
-// ─── Design System: Transparency v3.6 ───────────────────────────────────────
-// Single source of truth for all visual tokens. See design-system.md for spec.
+#include "ui/ui_theme.h"
+
+// ─── Win32 Design System: Transparency ──────────────────────────────────────
+// Wraps platform-agnostic tokens from ui_theme.h for Win32 GDI usage.
+// All COLORREF values are derived from theme:: ARGB constants.
 // Rule: NEVER hardcode colors, fonts, sizes, or spacing inline.
 
 namespace Theme {
 
+// ── ARGB → COLORREF conversion ──────────────────────────────────────────────
+inline constexpr COLORREF to_colorref(uint32_t argb) {
+    return RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF);
+}
+
 // ── Backgrounds (4-layer depth system — never skip layers) ──────────────────
-constexpr COLORREF BG_ROOT      = RGB(10,  12,  16);   // #0A0C10 — Layer 1: app background, sidebar
-constexpr COLORREF BG_SURFACE   = RGB(18,  21,  28);   // #12151C — Layer 2: content area, panels
-constexpr COLORREF BG_ELEVATED  = RGB(26,  30,  40);   // #1A1E28 — Layer 3: cards, hover states
-constexpr COLORREF BG_OVERLAY   = RGB(34,  40,  56);   // #222838 — Layer 4: modals, dropdowns, popovers
+constexpr COLORREF BG_ROOT      = to_colorref(theme::bg_root);
+constexpr COLORREF BG_SURFACE   = to_colorref(theme::bg_surface);
+constexpr COLORREF BG_ELEVATED  = to_colorref(theme::bg_elevated);
+constexpr COLORREF BG_OVERLAY   = to_colorref(theme::bg_overlay);
 
 // Derived background states
-constexpr COLORREF BG_INPUT     = RGB(10,  12,  16);   // inputs use root layer
-constexpr COLORREF BG_ROW_ALT   = RGB(14,  17,  22);   // subtle alternation on root
-constexpr COLORREF BG_ROW_HOV   = RGB(26,  30,  40);   // hover = elevated layer
-constexpr COLORREF BG_ROW_SEL   = RGB(24,  37,  62);   // accent_blue @ 15% on surface
-constexpr COLORREF BG_NAV_ACTIVE= RGB(18,  29,  52);   // accent_blue @ 15% on root
+constexpr COLORREF BG_INPUT     = to_colorref(theme::bg_input);
+constexpr COLORREF BG_ROW_ALT   = to_colorref(theme::bg_row_alt);
+constexpr COLORREF BG_ROW_HOV   = to_colorref(theme::bg_row_hov);
+constexpr COLORREF BG_ROW_SEL   = to_colorref(theme::bg_row_sel);
+constexpr COLORREF BG_NAV_ACTIVE= to_colorref(theme::bg_nav_active);
 
 // Backward compatibility aliases
 constexpr COLORREF BG_APP     = BG_ROOT;
@@ -32,29 +40,29 @@ constexpr COLORREF BG_SIDEBAR = BG_ROOT;
 constexpr COLORREF BG_CARD    = BG_ELEVATED;
 
 // ── Borders ──────────────────────────────────────────────────────────────────
-constexpr COLORREF BORDER_DEFAULT = RGB(42,  48,  64);  // #2A3040 — card borders, dividers
-constexpr COLORREF BORDER_SUBTLE  = RGB(30,  35,  48);  // #1E2330 — subtle separators
-constexpr COLORREF BORDER_FOCUS   = RGB(61,  127, 255); // #3D7FFF — focus rings, active borders
+constexpr COLORREF BORDER_DEFAULT = to_colorref(theme::border_default);
+constexpr COLORREF BORDER_SUBTLE  = to_colorref(theme::border_subtle);
+constexpr COLORREF BORDER_FOCUS   = to_colorref(theme::border_focus);
 
 // Backward compatibility
 constexpr COLORREF BORDER         = BORDER_DEFAULT;
 constexpr COLORREF SIDEBAR_BORDER = BORDER_SUBTLE;
 
 // ── Text ─────────────────────────────────────────────────────────────────────
-constexpr COLORREF TEXT_PRIMARY   = RGB(232, 236, 244); // #E8ECF4 — headings, primary content
-constexpr COLORREF TEXT_SECONDARY = RGB(136, 146, 168); // #8892A8 — body text, descriptions
-constexpr COLORREF TEXT_TERTIARY  = RGB(85,  94,  114); // #555E72 — disabled, hints, timestamps
+constexpr COLORREF TEXT_PRIMARY   = to_colorref(theme::text_primary);
+constexpr COLORREF TEXT_SECONDARY = to_colorref(theme::text_secondary);
+constexpr COLORREF TEXT_TERTIARY  = to_colorref(theme::text_tertiary);
 
 // Backward compatibility
 constexpr COLORREF TEXT_MUTED = TEXT_TERTIARY;
 
 // ── Accents (each has ONE semantic role — do not mix) ────────────────────────
-constexpr COLORREF ACCENT_BLUE   = RGB(61,  127, 255); // #3D7FFF — primary actions, links, focus
-constexpr COLORREF ACCENT_CYAN   = RGB(0,   229, 255); // #00E5FF — confidence scores, power user
-constexpr COLORREF ACCENT_GREEN  = RGB(0,   229, 122); // #00E57A — trusted, healthy, success
-constexpr COLORREF ACCENT_AMBER  = RGB(255, 200, 50);  // #FFC832 — warning, caution, unknown
-constexpr COLORREF ACCENT_RED    = RGB(255, 64,  96);  // #FF4060 — critical, blocked, destructive
-constexpr COLORREF ACCENT_PURPLE = RGB(168, 85,  247); // #A855F7 — premium, rare, watchlist
+constexpr COLORREF ACCENT_BLUE   = to_colorref(theme::accent_blue);
+constexpr COLORREF ACCENT_CYAN   = to_colorref(theme::accent_cyan);
+constexpr COLORREF ACCENT_GREEN  = to_colorref(theme::accent_green);
+constexpr COLORREF ACCENT_AMBER  = to_colorref(theme::accent_amber);
+constexpr COLORREF ACCENT_RED    = to_colorref(theme::accent_red);
+constexpr COLORREF ACCENT_PURPLE = to_colorref(theme::accent_purple);
 
 // Backward compatibility
 constexpr COLORREF ACCENT      = ACCENT_BLUE;
@@ -65,31 +73,32 @@ constexpr COLORREF WARNING     = ACCENT_AMBER;
 constexpr COLORREF WATCHLIST   = ACCENT_PURPLE;
 
 // ── Spacing (base-4 system — all multiples of 4) ────────────────────────────
-constexpr int SP1  = 4;
-constexpr int SP2  = 8;
-constexpr int SP3  = 12;
-constexpr int SP4  = 16;
-constexpr int SP5  = 20;
-constexpr int SP6  = 24;
-constexpr int SP8  = 32;
-constexpr int SP10 = 40;
-constexpr int SP12 = 48;
-constexpr int SP16 = 64;
+constexpr int SP1  = theme::sp1;
+constexpr int SP2  = theme::sp2;
+constexpr int SP3  = theme::sp3;
+constexpr int SP4  = theme::sp4;
+constexpr int SP5  = theme::sp5;
+constexpr int SP6  = theme::sp6;
+constexpr int SP8  = theme::sp8;
+constexpr int SP10 = theme::sp10;
+constexpr int SP12 = theme::sp12;
+constexpr int SP16 = theme::sp16;
 
 // ── Border Radii (in pixels) ─────────────────────────────────────────────────
-constexpr int RADIUS_SM   = 6;    // badges, chips, small buttons
-constexpr int RADIUS_MD   = 10;   // cards, inputs, dropdowns
-constexpr int RADIUS_LG   = 14;   // modals, panels
-constexpr int RADIUS_XL   = 20;   // feature sections
+constexpr int RADIUS_SM   = theme::radius_sm;
+constexpr int RADIUS_MD   = theme::radius_md;
+constexpr int RADIUS_LG   = theme::radius_lg;
+constexpr int RADIUS_XL   = theme::radius_xl;
+constexpr int RADIUS_FULL = theme::radius_full;
 
 // ── Layout Constants ─────────────────────────────────────────────────────────
-constexpr int SIDEBAR_W       = 260;  // sidebar fixed width
-constexpr int CONTENT_MAX_W   = 1200; // content area max width
-constexpr int CARD_PADDING    = 20;   // card inner padding
-constexpr int GRID_GAP        = 16;   // grid gap between cards
-constexpr int PAGE_PADDING    = 32;   // page-level padding
-constexpr int MODAL_MAX_W     = 520;  // modal max width
-constexpr int MIN_TARGET      = 44;   // minimum interactive target size
+constexpr int SIDEBAR_W       = theme::sidebar_w;
+constexpr int CONTENT_MAX_W   = theme::content_max_w;
+constexpr int CARD_PADDING    = theme::card_padding;
+constexpr int GRID_GAP        = theme::grid_gap;
+constexpr int PAGE_PADDING    = theme::page_padding;
+constexpr int MODAL_MAX_W     = theme::modal_max_w;
+constexpr int MIN_TARGET      = theme::min_target;
 
 // ── Alpha blend helper ───────────────────────────────────────────────────────
 inline COLORREF AlphaBlend(COLORREF fg, COLORREF bg, int alphaPct) {
