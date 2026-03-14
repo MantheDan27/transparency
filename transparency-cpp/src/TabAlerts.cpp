@@ -224,6 +224,26 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section labels — caption style (uppercase, tertiary)
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+
+    RECT hdr1 = { 16, 36, 200, 48 };
+    DrawText(hdc, L"ACTIVE ALERTS", -1, &hdr1, DT_LEFT | DT_SINGLELINE);
+
+    int alertH = (rc.bottom - 80) / 3;
+    int rulesY = 48 + alertH * 2 + 18;
+    RECT hdr2 = { 16, rulesY - 36, 200, rulesY - 24 };
+    DrawText(hdc, L"ALERT RULES", -1, &hdr2, DT_LEFT | DT_SINGLELINE);
+
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }
@@ -338,11 +358,11 @@ LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
                 for (auto& a : r.anomalies) {
                     if (visible == row) {
                         if (a.severity == L"critical" || a.severity == L"high")
-                            bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 8);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 10);
                         else if (a.severity == L"medium")
-                            bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 8);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 10);
                         else
-                            bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 8);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 10);
                         break;
                     }
                     visible++;
@@ -583,9 +603,7 @@ void TabAlerts::ShowRuleDialog(const AlertRule* existing) {
     for (auto* s : sevs) SendMessage(hSev, CB_ADDSTRING, 0, (LPARAM)s);
     SendMessage(hSev, CB_SETCURSEL, 1, 0);
 
-    // Dark theme
-    SetWindowLongPtr(dlgWnd, GWL_STYLE, GetWindowLong(dlgWnd, GWL_STYLE));
-
+    // Dark theme with glassmorphism-inspired styling
     Theme::SetDarkTitlebar(dlgWnd);
     ShowWindow(dlgWnd, SW_SHOW);
     UpdateWindow(dlgWnd);

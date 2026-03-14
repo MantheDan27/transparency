@@ -244,7 +244,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparency v3.6.0 initialized");
+    AddLedgerEntry(L"App Started", L"Transparency v4.1.0 initialized");
 
     // Check scheduled scans every 60 seconds
     SetTimer(hwnd, 1, 60000, nullptr);
@@ -366,15 +366,15 @@ void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
 
         // Active: accent_blue @ 15% on root; Hover: bg_elevated; Default: transparent
         if (active)
-            FillRect(hdc, &btnRc, Theme::BrushNavActive());
+            Theme::DrawRoundedCard(hdc, btnRc, Theme::RADIUS_SM, Theme::BG_NAV_ACTIVE, Theme::BORDER_SUBTLE, 0);
         else if (hovered)
-            FillRect(hdc, &btnRc, Theme::BrushElevated());
+            Theme::DrawRoundedCard(hdc, btnRc, Theme::RADIUS_SM, Theme::BG_ELEVATED, Theme::BORDER_SUBTLE, 0);
         // else: transparent (root shows through)
 
-        // Active accent bar (3px left indicator)
+        // Active accent pill (4px rounded left indicator)
         if (active) {
-            RECT accent = { btnRc.left, btnRc.top + Theme::SP2, btnRc.left + 3, btnRc.bottom - Theme::SP2 };
-            FillRect(hdc, &accent, Theme::BrushAccentBlue());
+            RECT accent = { btnRc.left + 2, btnRc.top + Theme::SP2 + 2, btnRc.left + 5, btnRc.bottom - Theme::SP2 - 2 };
+            Theme::DrawRoundedCard(hdc, accent, 2, Theme::ACCENT_BLUE, Theme::ACCENT_BLUE, 0);
         }
 
         SetBkMode(hdc, TRANSPARENT);
@@ -400,7 +400,7 @@ void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
     RECT verRc = { Theme::SP2, rc.bottom - Theme::SP8, SIDEBAR_WIDTH - Theme::SP2, rc.bottom - Theme::SP2 };
     HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontCaption());
-    DrawText(hdc, L"V3.6.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawText(hdc, L"V4.1.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, verFont);
 }
 
@@ -829,7 +829,7 @@ DWORD WINAPI MainWindow::LocalApiThreadProc(LPVOID param) {
         };
 
         if (route("/api/health")) {
-            body = "{\"status\":\"ok\",\"version\":\"3.5.0\"}\r\n";
+            body = "{\"status\":\"ok\",\"version\":\"4.1.0\"}\r\n";
             found = true;
         } else if (route("/api/status")) {
             body = "{\"devices\":" + std::to_string(r.devices.size()) +

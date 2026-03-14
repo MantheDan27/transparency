@@ -215,8 +215,19 @@ LRESULT TabLedger::OnPaint(HWND hwnd) {
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Separator
     RECT sep = { 16, 44, rc.right - 16, 45 };
-    FillRect(hdc, &sep, Theme::BrushBorder());
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section label — caption style
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    RECT hdr = { 16, 54, 200, 66 };
+    DrawText(hdc, L"EVENT LOG", -1, &hdr, DT_LEFT | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }

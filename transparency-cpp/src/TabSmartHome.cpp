@@ -112,20 +112,25 @@ LRESULT TabSmartHome::OnPaint(HWND hwnd) {
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
 
-    // Draw title
+    // Title — H2 (24px SemiBold)
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_PRIMARY);
-    HFONT old = (HFONT)SelectObject(hdc, Theme::FontHeader());
-    RECT titleRc = { 20, 10, rc.right - 20, 45 };
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontH2());
+    RECT titleRc = { Theme::SP4, Theme::SP3, rc.right - Theme::SP4, 42 };
     DrawText(hdc, L"Smart Home", -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old);
 
-    SetTextColor(hdc, Theme::TEXT_MUTED);
-    old = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    RECT subRc = { 20, 42, rc.right - 20, 58 };
+    // Subtitle — Body Small, text_secondary
+    SetTextColor(hdc, Theme::TEXT_SECONDARY);
+    old = (HFONT)SelectObject(hdc, Theme::FontBodySm());
+    RECT subRc = { Theme::SP4, 42, rc.right - Theme::SP4, 58 };
     DrawText(hdc, L"Control smart devices, set up automations, and manage integrations", -1, &subRc,
              DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old);
+
+    // Separator
+    RECT sep2 = { Theme::SP4, 62, rc.right - Theme::SP4, 63 };
+    FillRect(hdc, &sep2, Theme::BrushBorderSubtle());
 
     EndPaint(hwnd, &ps);
     return 0;

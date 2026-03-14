@@ -319,25 +319,9 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     RECT  rc  = dis->rcItem;
     COLORREF accent = KPI_ACCENTS[idx];
 
-    // Card fill — bg_elevated (Layer 3)
-    FillRect(hdc, &rc, Theme::BrushElevated());
-
-    // 3px top accent border
-    RECT topBar = { rc.left, rc.top, rc.right, rc.top + 3 };
-    HBRUSH accBrush = CreateSolidBrush(accent);
-    FillRect(hdc, &topBar, accBrush);
-    DeleteObject(accBrush);
-
-    // Card border — border_default
-    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
-    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-    MoveToEx(hdc, rc.left,     rc.top,      nullptr);
-    LineTo  (hdc, rc.right - 1, rc.top);
-    LineTo  (hdc, rc.right - 1, rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.top);
-    SelectObject(hdc, oldPen);
-    DeleteObject(borderPen);
+    // Rounded card with top accent bar — design system radius_md
+    Theme::DrawAccentCard(hdc, rc, Theme::RADIUS_MD, Theme::BG_ELEVATED,
+                         Theme::BORDER_DEFAULT, accent);
 
     // Big number
     wchar_t valStr[32];
@@ -403,7 +387,11 @@ void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
         int bw = w / n - 1;
         if (bw < 1) bw = 1;
         RECT barRc = { x, rc.bottom - barH, x + bw, rc.bottom };
-        FillRect(hdc, &barRc, barBrush);
+        if (barH > 4) {
+            Theme::DrawRoundedCard(hdc, barRc, 2, barCol, barCol, 0);
+        } else {
+            FillRect(hdc, &barRc, barBrush);
+        }
     }
     DeleteObject(barBrush);
 }
@@ -422,22 +410,17 @@ static COLORREF DeviceNodeColor(const Device& d) {
 }
 
 void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
-    // Card fill — bg_elevated (Layer 3)
-    FillRect(hdc, &rc, Theme::BrushElevated());
+    // Rounded card — design system radius_md
+    Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, Theme::BG_ELEVATED,
+                          Theme::BORDER_DEFAULT);
 
-    // Card border — border_default
     HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
     HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-    MoveToEx(hdc, rc.left,      rc.top,      nullptr);
-    LineTo  (hdc, rc.right - 1, rc.top);
-    LineTo  (hdc, rc.right - 1, rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.bottom - 1);
-    LineTo  (hdc, rc.left,      rc.top);
 
     // Section label
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
-    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontCaption());
     RECT hdrRc = { rc.left + 8, rc.top + 6, rc.right - 8, rc.top + 20 };
     DrawText(hdc, L"NETWORK MAP", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
 
@@ -649,7 +632,7 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
         RECT hdrRc = { listX, listY - 18, rc.right - 16, listY - 2 };
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, Theme::TEXT_SECONDARY);
-        HFONT old = (HFONT)SelectObject(hdc, Theme::FontSmall());
+        HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
         DrawText(hdc, L"RECENT CHANGES", -1, &hdrRc,
                  DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SelectObject(hdc, old);

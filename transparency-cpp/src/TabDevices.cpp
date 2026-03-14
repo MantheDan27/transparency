@@ -262,6 +262,19 @@ LRESULT TabDevices::OnPaint(HWND hwnd) {
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator under toolbar
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section label — caption style
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    RECT hdr = { 16, 34, 200, 46 };
+    DrawText(hdc, L"DEVICE LIST", -1, &hdr, DT_LEFT | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }
@@ -375,6 +388,30 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
                     }
                     cd->clrText = online ? Theme::SUCCESS : Theme::TEXT_MUTED;
                     return CDRF_NEWFONT;
+                }
+                // Monospace for IP (col 2), MAC (col 3), Ports (col 7)
+                if (cd->iSubItem == 2 || cd->iSubItem == 3 || cd->iSubItem == 7) {
+                    SelectObject(cd->nmcd.hdc, Theme::FontMono());
+                    cd->clrText = Theme::TEXT_SECONDARY;
+                    return CDRF_NEWFONT;
+                }
+                // Trust column color-coded (col 6)
+                if (cd->iSubItem == 6 && _mainWnd) {
+                    int row = (int)cd->nmcd.dwItemSpec;
+                    if (row < (int)_filteredIndices.size()) {
+                        ScanResult r = _mainWnd->GetLastResult();
+                        int idx = _filteredIndices[row];
+                        if (idx < (int)r.devices.size()) {
+                            auto& trust = r.devices[idx].trustState;
+                            if (trust == L"owned")          cd->clrText = Theme::ACCENT_GREEN;
+                            else if (trust == L"known")     cd->clrText = Theme::ACCENT_BLUE;
+                            else if (trust == L"guest")     cd->clrText = Theme::ACCENT_AMBER;
+                            else if (trust == L"blocked")   cd->clrText = Theme::ACCENT_RED;
+                            else if (trust == L"watchlist") cd->clrText = Theme::ACCENT_PURPLE;
+                            else                            cd->clrText = Theme::TEXT_TERTIARY;
+                            return CDRF_NEWFONT;
+                        }
+                    }
                 }
                 return CDRF_DODEFAULT;
             }
