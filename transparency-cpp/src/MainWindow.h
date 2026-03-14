@@ -62,14 +62,14 @@ public:
     Monitor     _monitor;
 
     ScanResult              _lastResult;
-    ScanResult              _previousResult;  // for anomaly comparison across scans
+    ScanResult              _previousResult;
     std::vector<AlertRule>  _alertRules;
     std::vector<LedgerEntry> _ledger;
-    std::vector<ScanResult> _snapshots;       // historical scan snapshots for diff
-    std::vector<PluginHook> _pluginHooks;     // script hooks
+    std::vector<ScanResult> _snapshots;
+    std::vector<PluginHook> _pluginHooks;
     ScheduledScan           _scheduledScan;
-    std::vector<NicPreference> _nicPrefs;     // pinned NIC per network
-    std::wstring            _selectedNicName;  // user-selected NIC (empty = auto)
+    std::vector<NicPreference> _nicPrefs;
+    std::wstring            _selectedNicName;
     mutable std::mutex      _dataMutex;
 
     // REST API
@@ -79,6 +79,10 @@ public:
     HANDLE   _apiThread   = nullptr;
 
     Tab _currentTab = Tab::Overview;
+
+    // Layout state
+    bool _sidebarExpanded = true;
+    bool _monitorActive   = false;
 
 private:
     HWND _hwnd = nullptr;
@@ -95,7 +99,12 @@ private:
 
     // Hover tracking
     int  _hoverNav       = -1;
+    int  _hoverTitleBtn  = -1;  // title bar button hover
+    int  _hoverWinBtn    = -1;  // window control hover (-1=none, 0=min, 1=max, 2=close)
     bool _trackingMouse  = false;
+
+    // Last scan timestamp for content header
+    DWORD _lastScanTick  = 0;
 
     // Message handlers
     LRESULT OnCreate(HWND hwnd, LPCREATESTRUCT cs);
@@ -104,18 +113,38 @@ private:
     LRESULT OnDestroy(HWND hwnd);
     LRESULT OnCommand(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnLButtonDown(HWND hwnd, int x, int y);
+    LRESULT OnLButtonUp(HWND hwnd, int x, int y);
     LRESULT OnMouseMove(HWND hwnd, int x, int y);
     LRESULT OnScanComplete(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnScanProgress(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnMonitorTick(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnInternetStatus(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnGatewayChanged(HWND hwnd, WPARAM wp, LPARAM lp);
+    LRESULT OnNcHitTest(HWND hwnd, int x, int y);
 
     void LayoutChildren(int cx, int cy);
     void ShowActivePanel();
-    void DrawNavSidebar(HDC hdc, const RECT& rc);
 
-    static const int SIDEBAR_WIDTH  = 260;   // Design system: 260px fixed
-    static const int NAV_BTN_HEIGHT = 48;   // >= 44px min interactive target
-    static const int NAV_BTN_TOP    = 72;   // base-4 spacing
+    // Drawing
+    void DrawTitleBar(HDC hdc, int cx);
+    void DrawNavSidebar(HDC hdc, const RECT& rc);
+    void DrawContentHeader(HDC hdc, int cx, int cy);
+    void DrawStatusBar(HDC hdc, int cx, int cy);
+
+    // Layout constants — layout architecture spec
+    static const int TITLEBAR_H     = 38;
+    static const int CONTENT_HDR_H  = 40;
+    static const int STATUSBAR_H    = 26;
+    static const int SIDEBAR_W_EXPANDED  = 200;
+    static const int SIDEBAR_W_COLLAPSED = 52;
+    static const int NAV_BTN_HEIGHT = 36;
+    static const int NAV_BTN_TOP    = 44;   // below collapse toggle
+
+    int GetSidebarWidth() const { return _sidebarExpanded ? SIDEBAR_W_EXPANDED : SIDEBAR_W_COLLAPSED; }
+    int GetContentTop() const { return TITLEBAR_H; }
+    int GetContentBottom(int cy) const { return cy - STATUSBAR_H; }
+
+    // Nav item labels
+    static const wchar_t* NavLabel(int i);
+    static const wchar_t* NavIcon(int i);
 };
