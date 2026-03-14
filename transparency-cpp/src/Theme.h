@@ -6,6 +6,7 @@
 #include <dwmapi.h>
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
+#include <objbase.h>
 #include <gdiplus.h>
 #pragma comment(lib, "gdiplus.lib")
 
