@@ -64,6 +64,59 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_NOTIFY:     return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
+    case WM_DRAWITEM: {
+        auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
+        if (dis && dis->CtlID >= IDC_BTN_FILTER_ALL && dis->CtlID <= IDC_BTN_FILTER_CHANGED) {
+            HDC hdc = dis->hDC;
+            RECT rc = dis->rcItem;
+            bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            int filterIdx = dis->CtlID - IDC_BTN_FILTER_ALL;
+            bool active = (filterIdx == self->_filterMode);
+
+            if (active) {
+                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_NAV_ACTIVE, Theme::ACCENT_BLUE);
+            } else if (pressed) {
+                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT);
+            } else {
+                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
+            }
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, active ? Theme::ACCENT_BLUE : Theme::TEXT_SECONDARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        // Save/Close buttons
+        if (dis && (dis->CtlID == IDC_BTN_DEVICE_SAVE || dis->CtlID == 9500)) {
+            HDC hdc = dis->hDC;
+            RECT rc = dis->rcItem;
+            bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
+
+            if (isSave) {
+                COLORREF top = pressed ? RGB(41,96,217) : RGB(61,127,255);
+                COLORREF bot = RGB(41, 96, 217);
+                Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_MD, top, bot);
+            } else {
+                COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
+                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, Theme::BORDER_DEFAULT);
+            }
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, isSave ? RGB(255,255,255) : Theme::TEXT_PRIMARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
@@ -94,13 +147,12 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hSearch, EM_SETCUEBANNER, FALSE, (LPARAM)L"Search devices...");
     Theme::ApplyDarkEdit(_hSearch);
 
-    // Filter buttons
+    // Filter buttons — owner-drawn pill style
     int btnX = 290;
     for (int i = 0; i < 6; i++) {
         _hFilterBtns[i] = CreateWindowEx(0, L"BUTTON", FILTER_LABELS[i],
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            btnX, 12, 72, 26, hwnd, (HMENU)(IDC_BTN_FILTER_ALL + i), hInst, nullptr);
-        SendMessage(_hFilterBtns[i], WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            btnX, 10, 72, 30, hwnd, (HMENU)(IDC_BTN_FILTER_ALL + i), hInst, nullptr);
         btnX += 76;
     }
 
@@ -221,16 +273,14 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"blocked");
     dy += 30;
 
-    // Save + Close buttons
+    // Save + Close buttons — owner-drawn
     _hDetailSave = CreateWindowEx(0, L"BUTTON", L"Save",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        8, dy, 80, 26, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
-    SendMessage(_hDetailSave, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        8, dy, 100, 36, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
 
     _hDetailClose = CreateWindowEx(0, L"BUTTON", L"Close",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        DETAIL_WIDTH - 90, dy, 82, 26, _hDetailPanel, (HMENU)9500, hInst, nullptr);
-    SendMessage(_hDetailClose, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        DETAIL_WIDTH - 108, dy, 100, 36, _hDetailPanel, (HMENU)9500, hInst, nullptr);
 }
 
 void TabDevices::LayoutControls(int cx, int cy) {

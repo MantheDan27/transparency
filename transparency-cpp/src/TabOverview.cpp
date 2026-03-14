@@ -127,9 +127,9 @@ LRESULT TabOverview::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 static const int TILE_Y  = 120;  // pushed down for NIC selector row
-static const int TILE_H  = 80;  // taller to fit sparkline
+static const int TILE_H  = 110; // taller for Display-size numbers + sparkline
 static const int PILL_Y_OFF = 36;
-static const int BTN_H  = 32;
+static const int BTN_H  = 44;  // min interactive target per design system
 
 static void GetLayoutMetrics(int cx, int cy,
     int& tileW, int& pillY, int& btnY, int& listY) {
@@ -176,32 +176,27 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
         290, pillY, 110, 24, hwnd, (HMENU)IDC_CHECK_GENTLE, hInst, nullptr);
     SendMessage(_hCheckGentle, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
-    // Action buttons
+    // Action buttons — owner-drawn for design system styling
     _hBtnQuickScan = CreateWindowEx(0, L"BUTTON", L"Quick Scan",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        16, btnY, 100, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_QUICK, hInst, nullptr);
-    SendMessage(_hBtnQuickScan, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        Theme::SP4, btnY, 120, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_QUICK, hInst, nullptr);
 
     _hBtnDeepScan = CreateWindowEx(0, L"BUTTON", L"Deep Scan",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        122, btnY, 100, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_DEEP, hInst, nullptr);
-    SendMessage(_hBtnDeepScan, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        Theme::SP4 + 128, btnY, 120, BTN_H, hwnd, (HMENU)IDC_BTN_SCAN_DEEP, hInst, nullptr);
 
     _hBtnMonStart = CreateWindowEx(0, L"BUTTON", L"Start Monitor",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        228, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_START, hInst, nullptr);
-    SendMessage(_hBtnMonStart, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        Theme::SP4 + 256, btnY, 130, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_START, hInst, nullptr);
 
     _hBtnMonStop = CreateWindowEx(0, L"BUTTON", L"Stop Monitor",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        344, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_STOP, hInst, nullptr);
-    SendMessage(_hBtnMonStop, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        Theme::SP4 + 394, btnY, 130, BTN_H, hwnd, (HMENU)IDC_BTN_MONITOR_STOP, hInst, nullptr);
     EnableWindow(_hBtnMonStop, FALSE);
 
     _hBtnExport = CreateWindowEx(0, L"BUTTON", L"Export Report",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        460, btnY, 110, BTN_H, hwnd, (HMENU)IDC_BTN_EXPORT, hInst, nullptr);
-    SendMessage(_hBtnExport, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        Theme::SP4 + 532, btnY, 130, BTN_H, hwnd, (HMENU)IDC_BTN_EXPORT, hInst, nullptr);
 
     // Progress / status
     _hStatusText = CreateWindowEx(0, L"STATIC", L"Ready. Run a scan to discover devices.",
@@ -312,6 +307,48 @@ LRESULT TabOverview::OnSize(HWND hwnd, int cx, int cy) {
 
 LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     if (!dis) return 0;
+
+    // Owner-drawn action buttons
+    if (dis->CtlID == IDC_BTN_SCAN_QUICK || dis->CtlID == IDC_BTN_SCAN_DEEP ||
+        dis->CtlID == IDC_BTN_MONITOR_START || dis->CtlID == IDC_BTN_MONITOR_STOP ||
+        dis->CtlID == IDC_BTN_EXPORT) {
+
+        HDC hdc = dis->hDC;
+        RECT rc = dis->rcItem;
+        bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+        bool disabled = (dis->itemState & ODS_DISABLED) != 0;
+
+        // Primary buttons get gradient, secondary get elevated bg
+        bool isPrimary = (dis->CtlID == IDC_BTN_SCAN_QUICK);
+
+        if (disabled) {
+            Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD,
+                Theme::BG_ELEVATED, Theme::BORDER_SUBTLE);
+        } else if (isPrimary) {
+            // Primary: gradient #3D7FFF → #2960D9
+            COLORREF gradTop = RGB(61, 127, 255);
+            COLORREF gradBot = RGB(41, 96, 217);
+            if (pressed) { gradTop = gradBot; }
+            Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_MD, gradTop, gradBot);
+        } else {
+            // Secondary: bg_elevated + border
+            COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
+            Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, Theme::BORDER_DEFAULT);
+        }
+
+        // Button text
+        wchar_t text[64] = {};
+        GetWindowText(dis->hwndItem, text, 64);
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, disabled ? Theme::TEXT_TERTIARY :
+                          isPrimary ? RGB(255,255,255) : Theme::TEXT_PRIMARY);
+        HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive()); // 13px SemiBold
+        DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, old);
+
+        return TRUE;
+    }
+
     int idx = dis->CtlID - IDC_STATIC_KPI1;
     if (idx < 0 || idx > 3) return 0;
 
@@ -319,11 +356,14 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     RECT  rc  = dis->rcItem;
     COLORREF accent = KPI_ACCENTS[idx];
 
+    // Card shadow (subtle depth)
+    Theme::DrawCardShadow(hdc, rc, Theme::RADIUS_MD);
+
     // Rounded card with top accent bar — design system radius_md
     Theme::DrawAccentCard(hdc, rc, Theme::RADIUS_MD, Theme::BG_ELEVATED,
                          Theme::BORDER_DEFAULT, accent);
 
-    // Big number
+    // Hero number — Display font (48px Bold) per design system
     wchar_t valStr[32];
     if (idx == 3) {
         if (_kpiVal[3] >= 0) swprintf_s(valStr, L"%dms", _kpiVal[3]);
@@ -333,20 +373,20 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     }
 
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::TEXT_PRIMARY);
-    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontHeader());
-    RECT numRc = { rc.left + 4, rc.top + 4, rc.right - 4, rc.top + 42 };
-    DrawText(hdc, valStr, -1, &numRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    SetTextColor(hdc, accent);  // Number in accent color
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontDisplay());
+    RECT numRc = { rc.left + Theme::SP4, rc.top + Theme::SP2, rc.right - Theme::SP4, rc.top + 58 };
+    DrawText(hdc, valStr, -1, &numRc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
-    // Label
-    SelectObject(hdc, Theme::FontSmall());
+    // Label — Caption style (11px, uppercase, wide tracking)
+    SelectObject(hdc, Theme::FontCaption());
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
-    RECT lblRc = { rc.left + 4, rc.top + 44, rc.right - 4, rc.top + 60 };
-    DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    RECT lblRc = { rc.left + Theme::SP4, rc.top + 60, rc.right - Theme::SP4, rc.top + 76 };
+    DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     SelectObject(hdc, oldFont);
 
-    // Sparkline (7 bars) in the bottom ~18px of the tile
+    // Sparkline (7 bars) in the bottom area of the tile
     const std::vector<int>* hist = nullptr;
     switch (idx) {
     case 0: hist = &_devicesOnlineHistory; break;
@@ -355,7 +395,7 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     case 3: hist = &_latencyHistory;       break;
     }
     if (hist && !hist->empty()) {
-        RECT spRc = { rc.left + 6, rc.top + 62, rc.right - 6, rc.bottom - 4 };
+        RECT spRc = { rc.left + Theme::SP4, rc.top + 80, rc.right - Theme::SP4, rc.bottom - Theme::SP2 };
         DrawSparkline(hdc, spRc, *hist, accent);
     }
 
