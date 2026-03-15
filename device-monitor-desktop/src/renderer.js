@@ -1341,7 +1341,17 @@ window.openAlertSettingsForDevice = function() {
   openRuleBuilder();
 };
 
-// ── Map ───────────────────────────────────────────────────────────────────────
+// ── Interactive Map ────────────────────────────────────────────────────────────
+// Map interaction state
+let mapZoom = 1;
+let mapPanX = 0;
+let mapPanY = 0;
+let mapDragging = false;
+let mapDragStartX = 0;
+let mapDragStartY = 0;
+let mapDragNode = null;
+let mapNodePositions = new Map(); // ip -> {x, y}
+
 function renderMap() {
   const mapEl    = $('networkMap');
   const emptyEl  = $('mapEmptyState');
@@ -1362,22 +1372,18 @@ function renderMap() {
   const cx = W / 2;
   const internetY = 60, routerY = 160;
 
-  // Find gateway (first device or one with port 80/443)
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
-
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
 
-  // ── Distance tiers based on latency ──
-  // Bucket devices into Near / Mid / Far tiers by latency from router
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
   const withoutLatency = devices.filter(d => latencyOf(d) === null);
 
-  const TIER_NEAR = { label: 'Near', minY: 280, color: 'var(--success, #22c55e)' };
-  const TIER_MID  = { label: 'Mid',  minY: 380, color: 'var(--warning, #f59e0b)' };
-  const TIER_FAR  = { label: 'Far',  minY: 480, color: 'var(--danger,  #ef4444)' };
-  const TIER_UNK  = { label: '?',    minY: 480, color: 'var(--text-muted)' };
+  const TIER_NEAR = { label: 'Near', minY: 280, color: '#34d399' };
+  const TIER_MID  = { label: 'Mid',  minY: 380, color: '#ffbe2e' };
+  const TIER_FAR  = { label: 'Far',  minY: 480, color: '#ff5c75' };
+  const TIER_UNK  = { label: '?',    minY: 480, color: '#5a6a8a' };
 
   function tierFor(ms) {
     if (ms <= 5)  return TIER_NEAR;
@@ -1385,19 +1391,16 @@ function renderMap() {
     return TIER_FAR;
   }
 
-  // Sort by latency ascending so close devices render first
   withLatency.sort((a, b) => a.latencyMs - b.latencyMs);
   const sortedDevices = [...withLatency, ...withoutLatency];
 
-  // Group into tiers for row layout
-  const tierGroups = new Map(); // tier -> [dev]
+  const tierGroups = new Map();
   sortedDevices.forEach(d => {
     const tier = latencyOf(d) !== null ? tierFor(d.latencyMs) : TIER_UNK;
     if (!tierGroups.has(tier)) tierGroups.set(tier, []);
     tierGroups.get(tier).push(d);
   });
 
-  // Determine required height based on tier rows
   const tierOrder = [TIER_NEAR, TIER_MID, TIER_FAR, TIER_UNK];
   const activeTiers = tierOrder.filter(t => tierGroups.has(t));
   let nextTierY = 280;
@@ -1405,124 +1408,297 @@ function renderMap() {
   activeTiers.forEach(tier => {
     tierYMap.set(tier, nextTierY);
     const count = tierGroups.get(tier).length;
-    const rowsNeeded = Math.ceil(count / Math.max(1, Math.floor(W / 110)));
-    nextTierY += rowsNeeded * 110 + 30; // gap between tiers
+    const rowsNeeded = Math.ceil(count / Math.max(1, Math.floor(W / 120)));
+    nextTierY += rowsNeeded * 110 + 40;
   });
 
-  const totalH = Math.max(500, nextTierY + 20);
+  const totalH = Math.max(500, nextTierY + 40);
   mapEl.setAttribute('height', totalH);
   mapEl.setAttribute('viewBox', `0 0 ${W} ${totalH}`);
 
+  // Calculate positions for all nodes
+  const nodePositions = new Map();
+  nodePositions.set('internet', { x: cx, y: internetY });
+  if (gateway) nodePositions.set(gateway.ip, { x: cx, y: routerY });
+
+  const maxPerRow = Math.max(1, Math.floor(W / 120));
+  activeTiers.forEach(tier => {
+    const tierDevices = tierGroups.get(tier);
+    const baseY = tierYMap.get(tier);
+    const rows = [];
+    for (let i = 0; i < tierDevices.length; i += maxPerRow) rows.push(tierDevices.slice(i, i + maxPerRow));
+    rows.forEach((row, ri) => {
+      const y = baseY + ri * 110;
+      const rowW = row.length * 110;
+      const startX = (W - rowW) / 2 + 55;
+      row.forEach((dev, di) => {
+        const x = startX + di * 110;
+        // Use stored position if available (from dragging), else default
+        const stored = mapNodePositions.get(dev.ip);
+        nodePositions.set(dev.ip, stored || { x, y });
+      });
+    });
+  });
+
+  // Build SVG with a transform group for zoom/pan
   let svg = '';
 
+  // Gradient defs for glass nodes
+  svg += `<defs>
+    <radialGradient id="nodeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="rgba(77,142,255,0.15)"/>
+      <stop offset="100%" stop-color="rgba(77,142,255,0)"/>
+    </radialGradient>
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.2"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>`;
+
+  svg += `<g id="mapTransformGroup" transform="translate(${mapPanX},${mapPanY}) scale(${mapZoom})">`;
+
   // Internet node
-  svg += `<g class="map-node" transform="translate(${cx},${internetY})">
-    <circle r="32" fill="var(--bg-card)" stroke="var(--accent)" stroke-width="2"/>
-    <text y="5" text-anchor="middle" fill="var(--text-secondary)" font-size="20">🌐</text>
-    <text y="22" text-anchor="middle" fill="var(--text-muted)" font-size="10">Internet</text>
+  const iPos = nodePositions.get('internet');
+  svg += `<g class="map-node" transform="translate(${iPos.x},${iPos.y})" filter="url(#dropShadow)">
+    <circle r="34" fill="rgba(18,22,34,0.8)" stroke="#4d8eff" stroke-width="1.5" opacity="0.9"/>
+    <circle r="34" fill="url(#nodeGlow)"/>
+    <text y="5" text-anchor="middle" fill="#8494b2" font-size="20">🌐</text>
+    <text y="22" text-anchor="middle" fill="#5a6a8a" font-size="9" font-family="Inter, sans-serif">Internet</text>
   </g>`;
 
-  // Line: Internet → Router
+  // Connection: Internet → Router
   if (gateway) {
-    svg += `<line x1="${cx}" y1="${internetY + 32}" x2="${cx}" y2="${routerY - 28}" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 4"/>`;
+    const gPos = nodePositions.get(gateway.ip);
+    svg += `<line x1="${iPos.x}" y1="${iPos.y + 34}" x2="${gPos.x}" y2="${gPos.y - 32}" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" stroke-dasharray="6 4"/>`;
+  }
+
+  // Draw connection lines first (behind nodes)
+  if (gateway) {
+    const gPos = nodePositions.get(gateway.ip);
+    activeTiers.forEach(tier => {
+      const tierDevices = tierGroups.get(tier);
+      tierDevices.forEach(dev => {
+        const pos = nodePositions.get(dev.ip);
+        if (!pos) return;
+        const ms = latencyOf(dev);
+        const distColor = ms !== null ? tierFor(ms).color : '#5a6a8a';
+        // Curved connection line
+        const midX = (gPos.x + pos.x) / 2;
+        const midY = (gPos.y + 30 + pos.y - 24) / 2 - 10;
+        svg += `<path d="M${gPos.x},${gPos.y + 30} Q${midX},${midY} ${pos.x},${pos.y - 24}" fill="none" stroke="${distColor}" stroke-width="1.2" opacity="0.3" class="map-connection" data-ip="${escHtml(dev.ip)}"/>`;
+        // Latency label
+        if (ms !== null) {
+          const lblX = (gPos.x + pos.x) / 2;
+          const lblY = (gPos.y + 30 + pos.y - 24) / 2 - 5;
+          svg += `<rect x="${lblX - 16}" y="${lblY - 8}" width="32" height="14" rx="4" fill="rgba(12,15,22,0.85)" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>`;
+          svg += `<text x="${lblX}" y="${lblY + 3}" text-anchor="middle" fill="${distColor}" font-size="7" font-weight="600" font-family="JetBrains Mono, monospace">${ms < 1 ? '<1' : Math.round(ms)}ms</text>`;
+        }
+      });
+    });
   }
 
   // Router/Gateway node
   if (gateway) {
+    const gPos = nodePositions.get(gateway.ip);
     const isRisky = anomalyIpSet.has(gateway.ip);
-    const color   = isRisky ? 'var(--danger)' : 'var(--accent)';
-    svg += `<g class="map-node map-clickable" data-ip="${escHtml(gateway.ip)}" transform="translate(${cx},${routerY})">
-      <circle r="30" fill="var(--bg-card)" stroke="${color}" stroke-width="2.5"/>
+    const color   = isRisky ? '#ff5c75' : '#4d8eff';
+    svg += `<g class="map-node map-clickable map-draggable" data-ip="${escHtml(gateway.ip)}" transform="translate(${gPos.x},${gPos.y})" filter="url(#dropShadow)">
+      <circle r="32" fill="rgba(18,22,34,0.85)" stroke="${color}" stroke-width="2"/>
+      <circle r="32" fill="url(#nodeGlow)"/>
       <text y="4" text-anchor="middle" font-size="18">${DEVICE_ICONS[gateway.deviceType] || '🌐'}</text>
-      <text y="50" text-anchor="middle" fill="var(--text-primary)" font-size="10" font-weight="600">${escHtml((gateway.meta?.customName || gateway.hostname || gateway.name).slice(0, 18))}</text>
-      <text y="62" text-anchor="middle" fill="var(--text-muted)" font-size="9">${escHtml(gateway.ip)}</text>
+      <text y="48" text-anchor="middle" fill="#e2e8f4" font-size="9.5" font-weight="600" font-family="Inter, sans-serif">${escHtml((gateway.meta?.customName || gateway.hostname || gateway.name).slice(0, 18))}</text>
+      <text y="60" text-anchor="middle" fill="#5a6a8a" font-size="8" font-family="JetBrains Mono, monospace">${escHtml(gateway.ip)}</text>
     </g>`;
   }
 
-  // ── Distance rings (concentric arcs from router) ──
+  // Distance rings
   activeTiers.forEach(tier => {
     if (tier === TIER_UNK) return;
     const ringY = tierYMap.get(tier);
     const ringR = ringY - routerY;
     svg += `<ellipse cx="${cx}" cy="${routerY}" rx="${Math.min(ringR * 1.2, W / 2 - 20)}" ry="${ringR}"
-      fill="none" stroke="${tier.color}" stroke-width="0.7" stroke-dasharray="6 4" opacity="0.35"/>`;
-    svg += `<text x="${cx + Math.min(ringR * 1.2, W / 2 - 20) + 4}" y="${routerY + 4}" fill="${tier.color}" font-size="8" opacity="0.7">${tier.label}</text>`;
+      fill="none" stroke="${tier.color}" stroke-width="0.5" stroke-dasharray="8 6" opacity="0.2"/>`;
+    svg += `<text x="${cx + Math.min(ringR * 1.2, W / 2 - 20) + 6}" y="${routerY + 4}" fill="${tier.color}" font-size="7.5" opacity="0.5" font-family="Inter, sans-serif" font-weight="600">${tier.label}</text>`;
   });
 
-  // ── Device nodes by tier ──
-  const maxPerRow = Math.max(1, Math.floor(W / 110));
-
+  // Device nodes
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
 
-    // Tier label on the left
-    svg += `<text x="12" y="${baseY - 10}" fill="${tier.color}" font-size="9" font-weight="600" opacity="0.8">${tier === TIER_UNK ? 'Unknown' : tier.label + ' (\u2264' + (tier === TIER_NEAR ? '5' : tier === TIER_MID ? '30' : '30+') + ' ms)'}</text>`;
+    svg += `<text x="12" y="${baseY - 14}" fill="${tier.color}" font-size="8" font-weight="600" opacity="0.6" font-family="Inter, sans-serif">${tier === TIER_UNK ? 'Unknown latency' : tier.label + ' (\u2264' + (tier === TIER_NEAR ? '5' : tier === TIER_MID ? '30' : '30+') + ' ms)'}</text>`;
 
-    const rows = [];
-    for (let i = 0; i < tierDevices.length; i += maxPerRow) rows.push(tierDevices.slice(i, i + maxPerRow));
+    tierDevices.forEach(dev => {
+      const pos = nodePositions.get(dev.ip);
+      if (!pos) return;
+      const isRisky = anomalyIpSet.has(dev.ip);
+      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
+      const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
-    rows.forEach((row, ri) => {
-      const y = baseY + ri * 110;
-      const rowW = row.length * 100;
-      const startX = (W - rowW) / 2 + 50;
-
-      row.forEach((dev, di) => {
-        const x = startX + di * 100;
-        const isRisky = anomalyIpSet.has(dev.ip);
-        const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-        const color   = isRisky ? 'var(--danger)' : isNew ? 'var(--warning)' : 'var(--border)';
-        const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
-        const ms      = latencyOf(dev);
-        const distColor = ms !== null ? tierFor(ms).color : 'var(--text-muted)';
-
-        // Line from router
-        const routerX = cx, routerY2 = routerY + 30;
-        svg += `<line x1="${routerX}" y1="${routerY2}" x2="${x}" y2="${y - 22}" stroke="${distColor}" stroke-width="1.5" opacity="0.5"/>`;
-
-        // Latency label on the line
-        if (ms !== null) {
-          const midX = (routerX + x) / 2;
-          const midY = (routerY2 + y - 22) / 2;
-          svg += `<rect x="${midX - 14}" y="${midY - 7}" width="28" height="13" rx="3" fill="var(--bg-card)" opacity="0.85"/>`;
-          svg += `<text x="${midX}" y="${midY + 3}" text-anchor="middle" fill="${distColor}" font-size="7.5" font-weight="600">${ms < 1 ? '<1' : Math.round(ms)}ms</text>`;
-        }
-
-        svg += `<g class="map-node map-clickable" data-ip="${escHtml(dev.ip)}" transform="translate(${x},${y})">
-          <circle r="22" fill="var(--bg-card)" stroke="${color}" stroke-width="${isRisky ? 2.5 : 1.5}"/>
-          <text y="6" text-anchor="middle" font-size="14">${DEVICE_ICONS[dev.deviceType] || '❓'}</text>
-          <text y="36" text-anchor="middle" fill="var(--text-secondary)" font-size="9" font-weight="500">${escHtml(devName)}</text>
-          <text y="46" text-anchor="middle" fill="var(--text-muted)" font-size="8">${escHtml(dev.ip)}</text>
-          ${isRisky ? `<circle r="6" cx="16" cy="-16" fill="var(--danger)"/>` : ''}
-          ${isNew   ? `<circle r="5" cx="16" cy="-16" fill="var(--warning)"/>` : ''}
-        </g>`;
-      });
+      svg += `<g class="map-node map-clickable map-draggable" data-ip="${escHtml(dev.ip)}" transform="translate(${pos.x},${pos.y})" filter="url(#dropShadow)">
+        <circle r="24" fill="rgba(18,22,34,0.85)" stroke="${strokeColor}" stroke-width="${isRisky ? 2 : 1}" class="node-circle"/>
+        <circle r="24" fill="url(#nodeGlow)" class="node-glow" opacity="0"/>
+        <text y="6" text-anchor="middle" font-size="15">${DEVICE_ICONS[dev.deviceType] || '❓'}</text>
+        <text y="38" text-anchor="middle" fill="#8494b2" font-size="8.5" font-weight="500" font-family="Inter, sans-serif">${escHtml(devName)}</text>
+        <text y="49" text-anchor="middle" fill="#5a6a8a" font-size="7.5" font-family="JetBrains Mono, monospace">${escHtml(dev.ip)}</text>
+        ${isRisky ? `<circle r="5" cx="18" cy="-18" fill="#ff5c75"><animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite"/></circle>` : ''}
+        ${isNew   ? `<circle r="4" cx="18" cy="-18" fill="#ffbe2e"><animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite"/></circle>` : ''}
+      </g>`;
     });
   });
 
+  svg += '</g>'; // close transform group
+
   mapEl.innerHTML = svg;
 
-  // Bind click events
+  // ── Interactive behaviors ──
+  const transformGroup = mapEl.querySelector('#mapTransformGroup');
+
+  // Hover effects: highlight connections and glow
   mapEl.querySelectorAll('.map-clickable').forEach(node => {
-    node.addEventListener('click', () => {
-      const ip  = node.dataset.ip;
-      const dev = allDevices.find(d => d.ip === ip);
-      if (dev) openDetailPanel(dev);
-    });
     node.addEventListener('mouseenter', e => {
-      const ip  = node.dataset.ip;
+      const ip = node.dataset.ip;
+      // Highlight node
+      const glow = node.querySelector('.node-glow');
+      if (glow) glow.setAttribute('opacity', '0.5');
+      node.style.transform = node.getAttribute('transform') || '';
+      // Highlight connection
+      const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
+      if (conn) { conn.setAttribute('opacity', '0.7'); conn.setAttribute('stroke-width', '2.5'); }
+      // Tooltip
       const dev = allDevices.find(d => d.ip === ip);
       if (!dev) return;
       const tooltip = $('mapTooltip');
       const latMs = typeof dev.latencyMs === 'number' && dev.latencyMs > 0 ? `${Math.round(dev.latencyMs)} ms` : '—';
-      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>${escHtml(dev.ip)}<br>${escHtml(dev.deviceType || '—')}<br>Latency: ${latMs}`;
-      tooltip.style.left = (e.clientX + 12) + 'px';
-      tooltip.style.top  = (e.clientY - 10) + 'px';
+      const trustLabel = dev.meta?.trustState ? ` · ${dev.meta.trustState}` : '';
+      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>
+        <span style="opacity:0.7">${escHtml(dev.ip)}</span><br>
+        ${escHtml(dev.deviceType || '—')}${trustLabel}<br>
+        Latency: ${latMs}<br>
+        <span style="font-size:0.65rem;opacity:0.5">Click to view · Drag to move</span>`;
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top  = (e.clientY - 12) + 'px';
       tooltip.classList.remove('hidden');
     });
-    node.addEventListener('mouseleave', () => $('mapTooltip').classList.add('hidden'));
+
+    node.addEventListener('mouseleave', () => {
+      const ip = node.dataset.ip;
+      const glow = node.querySelector('.node-glow');
+      if (glow) glow.setAttribute('opacity', '0');
+      const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
+      if (conn) { conn.setAttribute('opacity', '0.3'); conn.setAttribute('stroke-width', '1.2'); }
+      $('mapTooltip').classList.add('hidden');
+    });
+
+    // Click to open detail
+    node.addEventListener('click', e => {
+      if (mapDragNode) return; // Don't click after drag
+      const ip = node.dataset.ip;
+      const dev = allDevices.find(d => d.ip === ip);
+      if (dev) openDetailPanel(dev);
+    });
   });
+
+  // ── Node Dragging ──
+  mapEl.querySelectorAll('.map-draggable').forEach(node => {
+    node.addEventListener('mousedown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      mapDragNode = node;
+      const pt = mapEl.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgPt = pt.matrixTransform(transformGroup.getScreenCTM().inverse());
+      mapDragStartX = svgPt.x;
+      mapDragStartY = svgPt.y;
+      node.classList.add('map-dragging');
+      $('mapTooltip').classList.add('hidden');
+    });
+  });
+
+  // ── Pan (drag background) ──
+  mapEl.addEventListener('mousedown', e => {
+    if (mapDragNode) return;
+    if (e.target === mapEl || e.target.closest('#mapTransformGroup') && !e.target.closest('.map-draggable')) {
+      mapDragging = true;
+      mapDragStartX = e.clientX - mapPanX;
+      mapDragStartY = e.clientY - mapPanY;
+      mapEl.style.cursor = 'grabbing';
+    }
+  });
+
+  document.addEventListener('mousemove', e => {
+    // Node dragging
+    if (mapDragNode) {
+      const pt = mapEl.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgPt = pt.matrixTransform(transformGroup.getScreenCTM().inverse());
+      const ip = mapDragNode.dataset.ip;
+      mapNodePositions.set(ip, { x: svgPt.x, y: svgPt.y });
+      mapDragNode.setAttribute('transform', `translate(${svgPt.x},${svgPt.y})`);
+      // Update connections
+      if (gateway) {
+        const gPos = nodePositions.get(gateway.ip);
+        const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
+        if (conn && gPos) {
+          const midX = (gPos.x + svgPt.x) / 2;
+          const midY = (gPos.y + 30 + svgPt.y - 24) / 2 - 10;
+          conn.setAttribute('d', `M${gPos.x},${gPos.y + 30} Q${midX},${midY} ${svgPt.x},${svgPt.y - 24}`);
+        }
+      }
+      return;
+    }
+    // Pan
+    if (mapDragging) {
+      mapPanX = e.clientX - mapDragStartX;
+      mapPanY = e.clientY - mapDragStartY;
+      transformGroup.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (mapDragNode) {
+      mapDragNode.classList.remove('map-dragging');
+      mapDragNode = null;
+    }
+    if (mapDragging) {
+      mapDragging = false;
+      mapEl.style.cursor = 'grab';
+    }
+  });
+
+  // ── Zoom (mouse wheel) ──
+  mapEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.08 : 0.08;
+    mapZoom = Math.max(0.3, Math.min(3, mapZoom + delta));
+    transformGroup.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
+    // Update zoom info
+    const zoomInfo = mapEl.parentElement.querySelector('.map-zoom-info');
+    if (zoomInfo) zoomInfo.textContent = `${Math.round(mapZoom * 100)}%`;
+  }, { passive: false });
 }
+
+// Map control functions
+window.mapZoomIn = function() {
+  mapZoom = Math.min(3, mapZoom + 0.2);
+  const tg = document.querySelector('#mapTransformGroup');
+  if (tg) tg.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
+};
+window.mapZoomOut = function() {
+  mapZoom = Math.max(0.3, mapZoom - 0.2);
+  const tg = document.querySelector('#mapTransformGroup');
+  if (tg) tg.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
+};
+window.mapResetView = function() {
+  mapZoom = 1; mapPanX = 0; mapPanY = 0;
+  mapNodePositions.clear();
+  renderMap();
+};
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 async function loadAlerts() {
