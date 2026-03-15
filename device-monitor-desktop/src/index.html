@@ -6,6 +6,7 @@
   <title>Transparency — Network Monitor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -94,7 +95,7 @@
       </div>
       <div class="footer-row">
         <span class="footer-label">Version</span>
-        <span style="color:var(--text-muted); font-size:0.72rem">v2.2.0</span>
+        <span style="color:var(--text-muted); font-size:0.72rem">v3.0.0</span>
       </div>
     </div>
   </aside>
@@ -240,10 +241,16 @@
                   <button class="btn btn-secondary btn-xs" onclick="window.exportMapPNG()" title="Export as PNG">PNG</button>
                 </div>
               </div>
-              <div style="padding:0.5rem;position:relative;min-height:300px">
+              <div class="map-container" style="padding:0.5rem;position:relative;min-height:400px">
+                <div class="map-zoom-info" id="mapZoomInfo">100%</div>
                 <svg id="networkMap" class="network-map hidden"></svg>
                 <div id="mapEmptyState" class="empty-state-sm">Run a scan to generate the network map.</div>
                 <div class="map-tooltip hidden" id="mapTooltip"></div>
+                <div class="map-controls">
+                  <button class="btn btn-secondary" onclick="window.mapZoomIn()" title="Zoom in">+</button>
+                  <button class="btn btn-secondary" onclick="window.mapZoomOut()" title="Zoom out">−</button>
+                  <button class="btn btn-secondary" onclick="window.mapResetView()" title="Reset view">⟳</button>
+                </div>
               </div>
             </div>
           </div>
@@ -418,13 +425,19 @@
             <button class="btn btn-secondary btn-sm" onclick="window.exportMapPNG()">Export PNG</button>
           </div>
         </div>
-        <div class="card" style="min-height:500px;position:relative">
+        <div class="card map-container" style="min-height:500px;position:relative">
+          <div class="map-zoom-info">100%</div>
           <svg id="networkMapFull" class="network-map hidden"></svg>
           <div id="mapEmptyStateFull" class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             <p>Run a scan to generate the network topology map.</p>
           </div>
           <div class="map-tooltip hidden" id="mapTooltipFull"></div>
+          <div class="map-controls">
+            <button class="btn btn-secondary" onclick="window.mapZoomIn()" title="Zoom in">+</button>
+            <button class="btn btn-secondary" onclick="window.mapZoomOut()" title="Zoom out">−</button>
+            <button class="btn btn-secondary" onclick="window.mapResetView()" title="Reset view">⟳</button>
+          </div>
         </div>
       </section>
 
