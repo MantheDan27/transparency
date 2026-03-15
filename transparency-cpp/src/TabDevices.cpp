@@ -819,11 +819,13 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     switch (cmd) {
     case 12001: { // Ping
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12002: { // Traceroute
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -879,6 +881,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12020: { // Open in Browser
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring url = L"http://" + dev.ip;
         for (int p : dev.openPorts) {
             if (p == 443 || p == 8443) { url = L"https://" + dev.ip; break; }
@@ -888,20 +891,24 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12022: { // RDP
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         ShellExecute(nullptr, L"open", L"mstsc.exe", (L"/v:" + dev.ip).c_str(), nullptr, SW_SHOW);
         break;
     }
     case 12023: { // FTP
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring url = L"ftp://" + dev.ip;
         ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOW);
         break;
     }
     case 12024: { // Network share
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring path = L"\\\\" + dev.ip;
         ShellExecute(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOW);
         break;
@@ -911,6 +918,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address detected.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
