@@ -264,12 +264,11 @@ std::vector<int> ScanEngine::scanPorts(const std::string& ip, const std::vector<
     std::vector<int> open;
     std::mutex mtx;
 
-    // Use a thread pool with atomic index
-    const int maxConcurrent = std::min(32, (int)ports.size());
+    int numThreads = std::min(32, (int)ports.size());
     std::vector<std::thread> threads;
     std::atomic<size_t> idx{0};
 
-    for (int i = 0; i < maxConcurrent; ++i) {
+    for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&]() {
             while (!_cancelled) {
                 size_t current_idx = idx.fetch_add(1);
@@ -283,7 +282,6 @@ std::vector<int> ScanEngine::scanPorts(const std::string& ip, const std::vector<
             }
         });
     }
-
     for (auto& t : threads) {
         if (t.joinable()) t.join();
     }

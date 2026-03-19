@@ -59,6 +59,60 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_NOTIFY:     return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
+    case WM_DRAWITEM: {
+        auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
+        if (!dis) return 0;
+        HDC hdc = dis->hDC;
+        RECT rc = dis->rcItem;
+        bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+
+        // Filter pill buttons
+        if (dis->CtlID >= 9600 && dis->CtlID <= 9604) {
+            int filterIdx = dis->CtlID - 9600;
+            bool active = (filterIdx == self->_alertFilter);
+            Theme::DrawGlassPill(hdc, rc, 15, active, pressed);
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, active ? Theme::ACCENT_BLUE : Theme::TEXT_SECONDARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        // Clear All — destructive glass button
+        if (dis->CtlID == IDC_BTN_CLEAR_ALERTS) {
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 2);
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, Theme::ACCENT_RED);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        // Rule buttons (Add/Edit/Delete)
+        if (dis->CtlID == IDC_BTN_ADD_RULE || dis->CtlID == IDC_BTN_EDIT_RULE ||
+            dis->CtlID == IDC_BTN_DEL_RULE) {
+            bool isDel = (dis->CtlID == IDC_BTN_DEL_RULE);
+            bool isAdd = (dis->CtlID == IDC_BTN_ADD_RULE);
+            int variant = isAdd ? 0 : isDel ? 2 : 1;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_SM, pressed, variant);
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, isAdd ? RGB(255,255,255) : isDel ? Theme::ACCENT_RED : Theme::TEXT_PRIMARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
@@ -80,20 +134,18 @@ LRESULT TabAlerts::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
-    // Filter buttons
+    // Filter buttons — owner-drawn pill style
     int btnX = 16;
     for (int i = 0; i < 5; i++) {
         _hFilterBtns[i] = CreateWindowEx(0, L"BUTTON", ALERT_FILTER_LABELS[i],
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            btnX, 12, 80, 26, hwnd, (HMENU)(9600 + i), hInst, nullptr);
-        SendMessage(_hFilterBtns[i], WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            btnX, 10, 80, 30, hwnd, (HMENU)(9600 + i), hInst, nullptr);
         btnX += 84;
     }
 
     _hBtnClearAll = CreateWindowEx(0, L"BUTTON", L"Clear All",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx - 100, 12, 84, 26, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
-    SendMessage(_hBtnClearAll, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        cx - 110, 10, 94, 30, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
 
     // Alert list
     int alertH = (cy - 80) / 3;
@@ -162,19 +214,16 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(hRulesHdr, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
     _hBtnAddRule = CreateWindowEx(0, L"BUTTON", L"Add Rule",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx - 292, rulesY - 22, 88, 22, hwnd, (HMENU)IDC_BTN_ADD_RULE, hInst, nullptr);
-    SendMessage(_hBtnAddRule, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        cx - 308, rulesY - 26, 96, 28, hwnd, (HMENU)IDC_BTN_ADD_RULE, hInst, nullptr);
 
     _hBtnEditRule = CreateWindowEx(0, L"BUTTON", L"Edit",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx - 200, rulesY - 22, 60, 22, hwnd, (HMENU)IDC_BTN_EDIT_RULE, hInst, nullptr);
-    SendMessage(_hBtnEditRule, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        cx - 206, rulesY - 26, 68, 28, hwnd, (HMENU)IDC_BTN_EDIT_RULE, hInst, nullptr);
 
     _hBtnDelRule = CreateWindowEx(0, L"BUTTON", L"Delete",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        cx - 136, rulesY - 22, 60, 22, hwnd, (HMENU)IDC_BTN_DEL_RULE, hInst, nullptr);
-    SendMessage(_hBtnDelRule, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        cx - 132, rulesY - 26, 68, 28, hwnd, (HMENU)IDC_BTN_DEL_RULE, hInst, nullptr);
 
     int ruleH = cy - rulesY - 16;
     _hRuleList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
@@ -224,6 +273,26 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section labels — caption style (uppercase, tertiary)
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+
+    RECT hdr1 = { 16, 36, 200, 48 };
+    DrawText(hdc, L"ACTIVE ALERTS", -1, &hdr1, DT_LEFT | DT_SINGLELINE);
+
+    int alertH = (rc.bottom - 80) / 3;
+    int rulesY = 48 + alertH * 2 + 18;
+    RECT hdr2 = { 16, rulesY - 36, 200, rulesY - 24 };
+    DrawText(hdc, L"ALERT RULES", -1, &hdr2, DT_LEFT | DT_SINGLELINE);
+
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }
@@ -338,11 +407,11 @@ LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
                 for (auto& a : r.anomalies) {
                     if (visible == row) {
                         if (a.severity == L"critical" || a.severity == L"high")
-                            bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 8);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 10);
                         else if (a.severity == L"medium")
-                            bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 8);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 10);
                         else
-                            bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 8);
+                            bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 10);
                         break;
                     }
                     visible++;
@@ -583,9 +652,7 @@ void TabAlerts::ShowRuleDialog(const AlertRule* existing) {
     for (auto* s : sevs) SendMessage(hSev, CB_ADDSTRING, 0, (LPARAM)s);
     SendMessage(hSev, CB_SETCURSEL, 1, 0);
 
-    // Dark theme
-    SetWindowLongPtr(dlgWnd, GWL_STYLE, GetWindowLong(dlgWnd, GWL_STYLE));
-
+    // Dark theme with glassmorphism-inspired styling
     Theme::SetDarkTitlebar(dlgWnd);
     ShowWindow(dlgWnd, SW_SHOW);
     UpdateWindow(dlgWnd);

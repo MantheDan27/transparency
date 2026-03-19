@@ -163,3 +163,4 @@
 #define WM_TOOL_RESULT          (WM_USER + 6)
 #define WM_ALERT_FIRED          (WM_USER + 7)
 #define WM_DNS_CHANGED          (WM_USER + 8)
+#define WM_MAP_DEVICE_CLICK     (WM_USER + 9)

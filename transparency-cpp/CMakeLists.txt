@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparency VERSION 3.6.0 LANGUAGES CXX)
+project(Transparency VERSION 4.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
 else()
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows -municode")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mwindows")
 endif()
 
 # Source files
@@ -51,7 +51,7 @@ add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
 if(MSVC)
     set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 elseif(MINGW OR CYGWIN)
-    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole")
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
 endif()
 target_include_directories(TransparencyTests PRIVATE src)
 target_compile_definitions(TransparencyTests PRIVATE
@@ -104,6 +104,7 @@ target_link_libraries(Transparency PRIVATE
     dwmapi
     dnsapi
     gdi32
+    gdiplus
     ole32
     winmm
     shell32
@@ -187,7 +188,7 @@ add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
 if(MSVC)
     set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 elseif(MINGW OR CYGWIN)
-    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "-mconsole")
+    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "-mconsole -static-libgcc -static-libstdc++")
 endif()
 target_compile_definitions(ScannerTest PRIVATE
     UNICODE

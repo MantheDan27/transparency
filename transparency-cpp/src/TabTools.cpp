@@ -309,6 +309,19 @@ LRESULT TabTools::OnPaint(HWND hwnd) {
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section label
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    RECT hdr = { 16, 34, 200, 46 };
+    DrawText(hdc, L"DIAGNOSTICS", -1, &hdr, DT_LEFT | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }
