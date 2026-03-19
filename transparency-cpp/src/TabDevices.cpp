@@ -24,6 +24,13 @@ static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
 };
 
+// Subclass proc for detail panel — forwards WM_COMMAND to parent
+static LRESULT CALLBACK DetailPanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
+    if (msg == WM_COMMAND) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    if (msg == WM_DRAWITEM) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
+
 bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
 
@@ -188,6 +195,9 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | SS_NOTIFY,
         cx - DETAIL_WIDTH - 16, 48, DETAIL_WIDTH, cy - 64,
         hwnd, nullptr, hInst, nullptr);
+
+    // Fix: Subclass the STATIC detail panel so WM_COMMAND from child buttons reaches TabDevices
+    SetWindowSubclass(_hDetailPanel, DetailPanelProc, 0, 0);
 
     // Detail controls inside panel
     auto makeLbl = [&](const wchar_t* text, int y, int h = 18) -> HWND {
