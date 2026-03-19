@@ -174,6 +174,15 @@ wstring ScanEngine::GetCurrentTimestamp() {
     return GetCurrentTimestampImpl();
 }
 
+bool ScanEngine::IsSafeIP(const std::wstring& ip) {
+    if (ip.empty()) return false;
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    if (InetPtonW(AF_INET, ip.c_str(), &(sa.sin_addr)) == 1) return true;
+    if (InetPtonW(AF_INET6, ip.c_str(), &(sa6.sin6_addr)) == 1) return true;
+    return false;
+}
+
 // ─── Constructor / Destructor ────────────────────────────────────────────────
 
 ScanEngine::ScanEngine() {
@@ -248,11 +257,68 @@ std::vector<ScanEngine::NetworkInterface> ScanEngine::GetLocalNetworks() {
                 }
             }
 
+            ni.ifType = p->IfType;
             result.push_back(std::move(ni));
         }
     }
 
     return result;
+}
+
+// ─── RankNetworkInterfaces ─────────────────────────────────────────────────────
+
+std::vector<ScanEngine::NetworkInterface> ScanEngine::RankNetworkInterfaces() {
+    auto nets = GetLocalNetworks();
+
+    for (auto& ni : nets) {
+        int score = 0;
+        wstring reason;
+
+        // Gateway is the strongest signal
+        if (!ni.gateway.empty()) {
+            score += 50;
+            reason += L"has gateway";
+        }
+
+        // Prefix length — /24 is ideal for home/office
+        int cidr = _wtoi(ni.cidr.c_str());
+        if (cidr >= 20 && cidr <= 24) { score += 30; }
+        else if (cidr >= 16 && cidr < 20) { score += 15; }
+        else { score += 5; }
+
+        // Adapter type
+        if (ni.ifType == 71) { score += 20; if (!reason.empty()) reason += L", "; reason += L"Wi-Fi"; }
+        else if (ni.ifType == 6) { score += 15; if (!reason.empty()) reason += L", "; reason += L"Ethernet"; }
+
+        // Penalize virtual adapters
+        wstring nameLower = ni.name;
+        std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+        if (nameLower.find(L"virtual") != wstring::npos ||
+            nameLower.find(L"vmware") != wstring::npos ||
+            nameLower.find(L"vethernet") != wstring::npos ||
+            nameLower.find(L"hyper-v") != wstring::npos) {
+            score -= 40;
+            if (!reason.empty()) reason += L", "; reason += L"virtual adapter (penalized)";
+        }
+        if (nameLower.find(L"vpn") != wstring::npos ||
+            nameLower.find(L"tap") != wstring::npos) {
+            score -= 20;
+            if (!reason.empty()) reason += L", "; reason += L"VPN adapter (penalized)";
+        }
+
+        if (!reason.empty()) reason += L", ";
+        reason += L"/" + ni.cidr + L" range";
+
+        ni.score = score;
+        ni.reason = reason;
+    }
+
+    // Sort descending by score
+    std::sort(nets.begin(), nets.end(), [](const NetworkInterface& a, const NetworkInterface& b) {
+        return a.score > b.score;
+    });
+
+    return nets;
 }
 
 // ─── LookupVendor ─────────────────────────────────────────────────────────────
@@ -1034,6 +1100,73 @@ wstring ScanEngine::FingerprintDeviceType(const Device& d) {
     return L"Unknown Device";
 }
 
+// ─── BuildClassificationReason ────────────────────────────────────────────────
+// Populates dev.classificationReason with a human-readable evidence summary.
+
+void ScanEngine::BuildClassificationReason(Device& d) {
+    wstring vendor = d.vendor;
+    std::transform(vendor.begin(), vendor.end(), vendor.begin(), ::tolower);
+    wstring hostname = d.hostname;
+    std::transform(hostname.begin(), hostname.end(), hostname.begin(), ::tolower);
+    wstring ssdp = d.ssdpInfo;
+    std::transform(ssdp.begin(), ssdp.end(), ssdp.begin(), ::tolower);
+
+    wstring r;
+    auto append = [&](const wstring& s) {
+        if (!r.empty()) r += L", ";
+        r += s;
+    };
+
+    // Vendor evidence
+    if (!d.vendor.empty()) append(L"vendor: " + d.vendor);
+
+    // Port evidence — list significant open ports
+    if (!d.openPorts.empty()) {
+        wstring portStr;
+        int shown = 0;
+        for (int p : d.openPorts) {
+            if (shown >= 4) { portStr += L"..."; break; }
+            auto it = PORT_NAMES.find(p);
+            if (shown > 0) portStr += L",";
+            portStr += std::to_wstring(p);
+            if (it != PORT_NAMES.end()) portStr += L"/" + it->second;
+            shown++;
+        }
+        append(L"ports: " + portStr);
+    }
+
+    // mDNS evidence
+    if (!d.mdnsServices.empty()) {
+        wstring svc;
+        for (size_t i = 0; i < std::min((size_t)2, d.mdnsServices.size()); i++) {
+            if (i > 0) svc += L",";
+            svc += d.mdnsServices[i];
+        }
+        append(L"mDNS: " + svc);
+    }
+
+    // SSDP evidence
+    if (!d.ssdpInfo.empty()) {
+        wstring s = d.ssdpInfo;
+        if (s.size() > 30) s = s.substr(0, 30) + L"...";
+        append(L"SSDP: " + s);
+    }
+
+    // NetBIOS evidence
+    if (!d.netbiosName.empty()) append(L"NetBIOS: " + d.netbiosName);
+
+    // Hostname evidence
+    if (!d.hostname.empty()) append(L"hostname: " + d.hostname);
+
+    // OS guess from banner
+    if (!d.osGuess.empty()) append(L"banner: " + d.osGuess);
+
+    // Latency hint
+    if (d.latencyMs >= 0 && d.latencyMs <= 2) append(L"latency: <2ms (local)");
+
+    d.classificationReason = r;
+}
+
 // ─── CalcConfidence ────────────────────────────────────────────────────────────
 
 int ScanEngine::CalcConfidence(const Device& d) {
@@ -1403,21 +1536,41 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
         // IP changed for same MAC
         if (!dev.mac.empty()) {
             auto it = prevByMac.find(dev.mac);
-            if (it != prevByMac.end() && it->second->ip != dev.ip) {
-                Anomaly a;
-                a.type = L"ip_changed";
-                a.severity = L"low";
-                a.deviceIp = dev.ip;
-                a.description = L"IP address changed for " + dev.mac +
-                                L": was " + it->second->ip + L", now " + dev.ip;
-                a.explanation = L"A device's IP address changed between scans. This is common when DHCP "
-                                L"leases expire and the device gets a new address. However, it can also "
-                                L"indicate IP spoofing or ARP poisoning in rare cases.";
-                a.remediation = L"1. If this is unexpected, verify the device's MAC address physically. "
-                                L"2. Consider assigning a static IP or DHCP reservation to this device. "
-                                L"3. Monitor for further IP changes.";
-                a.traceSource = L"ArpTable+Comparison";
-                anomalies.push_back(a);
+            if (it != prevByMac.end()) {
+                if (it->second->ip != dev.ip) {
+                    Anomaly a;
+                    a.type = L"ip_changed";
+                    a.severity = L"low";
+                    a.deviceIp = dev.ip;
+                    a.description = L"IP address changed for " + dev.mac +
+                                    L": was " + it->second->ip + L", now " + dev.ip;
+                    a.explanation = L"A device's IP address changed between scans. This is common when DHCP "
+                                    L"leases expire and the device gets a new address. However, it can also "
+                                    L"indicate IP spoofing or ARP poisoning in rare cases.";
+                    a.remediation = L"1. If this is unexpected, verify the device's MAC address physically. "
+                                    L"2. Consider assigning a static IP or DHCP reservation to this device. "
+                                    L"3. Monitor for further IP changes.";
+                    a.traceSource = L"ArpTable+Comparison";
+                    anomalies.push_back(a);
+                }
+
+                // Hostname changed
+                if (!dev.hostname.empty() && !it->second->hostname.empty() &&
+                    dev.hostname != it->second->hostname) {
+                    Anomaly a;
+                    a.type = L"hostname_changed";
+                    a.severity = L"low";
+                    a.deviceIp = dev.ip;
+                    a.description = L"Hostname changed on " + dev.ip + L": was \"" +
+                                    it->second->hostname + L"\", now \"" + dev.hostname + L"\"";
+                    a.explanation = L"A device's hostname changed between scans. This could indicate a device "
+                                    L"reconfiguration, OS reinstall, or a different device using the same MAC. "
+                                    L"On Wi-Fi with MAC randomization, this may indicate a reconnecting device.";
+                    a.remediation = L"1. Verify the device identity if the hostname change is unexpected. "
+                                    L"2. If this is a known device, update its custom name for clarity.";
+                    a.traceSource = L"DNS+Comparison";
+                    anomalies.push_back(a);
+                }
             }
         }
     }
@@ -1488,19 +1641,26 @@ ScanResult ScanEngine::BuildResult(
             auto arpIt = arpTable.find(ipStr);
             if (arpIt != arpTable.end()) {
                 dev.mac = arpIt->second;
+                dev.evidence.push_back({L"mac", L"ARP table", dev.mac});
                 dev.vendor = LookupVendor(dev.mac);
+                if (!dev.vendor.empty())
+                    dev.evidence.push_back({L"vendor", L"OUI lookup", dev.vendor});
             }
 
             // mDNS services
             auto mdnsIt = mdns.find(ipStr);
             if (mdnsIt != mdns.end()) {
                 dev.mdnsServices = mdnsIt->second;
+                wstring joined;
+                for (auto& s : dev.mdnsServices) { if (!joined.empty()) joined += L", "; joined += s; }
+                dev.evidence.push_back({L"mdns", L"mDNS discovery", joined});
             }
 
             // SSDP info
             auto ssdpIt = ssdp.find(ipStr);
             if (ssdpIt != ssdp.end()) {
                 dev.ssdpInfo = ssdpIt->second;
+                dev.evidence.push_back({L"ssdp", L"SSDP/UPnP", dev.ssdpInfo});
             }
 
             // Port scan
@@ -1511,12 +1671,30 @@ ScanResult ScanEngine::BuildResult(
             // NetBIOS hostname
             if (!_cancelled) {
                 dev.netbiosName = LookupNetBIOS(ipStr, 500);
+                if (!dev.netbiosName.empty())
+                    dev.evidence.push_back({L"netbios", L"NetBIOS query", dev.netbiosName});
             }
 
             // Reverse DNS
             if (!_cancelled) {
-                dev.hostname = ReverseDNS(ipStr);
-                if (dev.hostname.empty()) dev.hostname = dev.netbiosName;
+                wstring dnsName = ReverseDNS(ipStr);
+                if (!dnsName.empty()) {
+                    dev.hostname = dnsName;
+                    dev.evidence.push_back({L"hostname", L"Reverse DNS", dnsName});
+                } else if (!dev.netbiosName.empty()) {
+                    dev.hostname = dev.netbiosName;
+                    dev.evidence.push_back({L"hostname", L"NetBIOS fallback", dev.netbiosName});
+                }
+            }
+
+            // Port evidence
+            if (!portList.empty() && !dev.openPorts.empty()) {
+                wstring portStr;
+                for (int p : dev.openPorts) {
+                    if (!portStr.empty()) portStr += L",";
+                    portStr += std::to_wstring(p);
+                }
+                dev.evidence.push_back({L"ports", L"TCP port scan", portStr});
             }
 
             // Banner grabbing
@@ -1541,9 +1719,14 @@ ScanResult ScanEngine::BuildResult(
             // Latency
             dev.latencyMs = PingSingle(ipStr, 300);
 
-            // Fingerprint + confidence alternatives
+            // Banner evidence
+            if (!dev.osGuess.empty())
+                dev.evidence.push_back({L"os", L"Banner grab", dev.osGuess});
+
+            // Fingerprint + confidence alternatives + classification reason
             dev.deviceType = FingerprintDeviceType(dev);
             dev.confidence = CalcConfidence(dev);
+            BuildClassificationReason(dev);
             FillConfidenceAlternatives(dev);
 
             // IoT behavioral risk profiling

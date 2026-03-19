@@ -1,0 +1,15 @@
+{
+  "name": "transparency-web",
+  "version": "1.0.0",
+  "description": "Transparency Network Monitor - Firebase Web App",
+  "private": true,
+  "scripts": {
+    "deploy": "firebase deploy",
+    "serve": "firebase emulators:start --only hosting",
+    "deploy-hosting": "firebase deploy --only hosting",
+    "deploy-rules": "firebase deploy --only firestore:rules"
+  },
+  "dependencies": {
+    "firebase": "^12.10.0"
+  }
+}
