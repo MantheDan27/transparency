@@ -12,6 +12,7 @@
 #include <sstream>
 #include <algorithm>
 #include <thread>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <regex>
@@ -676,39 +677,38 @@ ScanResult ScanEngine::doScan(const std::string& mode, const std::vector<int>& p
         if (cb) cb(15, "Pinging " + std::to_string(total) + " hosts...");
         std::mutex mtx;
         std::vector<std::thread> threads;
-        int active = 0;
-        std::mutex activeMtx;
-        std::condition_variable cv;
-        const int maxPingThreads = 64;
+        std::atomic<size_t> idx{0};
+        const int maxPingThreads = std::min(64, total);
 
-        for (int i = 0; i < total && !_cancelled; i++) {
-            {
-                std::unique_lock<std::mutex> lk(activeMtx);
-                cv.wait(lk, [&] { return active < maxPingThreads; });
-                active++;
-            }
-            threads.emplace_back([&, i]() {
-                bool alive = pingHost(ips[i], 1500);
-                if (alive) {
-                    std::lock_guard<std::mutex> lk(mtx);
-                    if (deviceMap.find(ips[i]) == deviceMap.end()) {
-                        Device dev;
-                        dev.ip = ips[i];
-                        dev.online = true;
-                        dev.firstSeen = nowTimestamp();
-                        dev.lastSeen = nowTimestamp();
-                        deviceMap[ips[i]] = dev;
+        for (int i = 0; i < maxPingThreads; ++i) {
+            threads.emplace_back([&]() {
+                while (!_cancelled) {
+                    size_t current_idx = idx.fetch_add(1);
+                    if (current_idx >= (size_t)total) break;
+
+                    std::string ip = ips[current_idx];
+                    bool alive = pingHost(ip, 1500);
+                    if (alive) {
+                        std::lock_guard<std::mutex> lk(mtx);
+                        if (deviceMap.find(ip) == deviceMap.end()) {
+                            Device dev;
+                            dev.ip = ip;
+                            dev.online = true;
+                            dev.firstSeen = nowTimestamp();
+                            dev.lastSeen = nowTimestamp();
+                            deviceMap[ip] = dev;
+                        }
+                    }
+                    {
+                        std::lock_guard<std::mutex> lk(mtx);
+                        pingCount++;
                     }
                 }
-                {
-                    std::lock_guard<std::mutex> lk(activeMtx);
-                    active--;
-                    pingCount++;
-                }
-                cv.notify_one();
             });
         }
-        for (auto& t : threads) t.join();
+        for (auto& t : threads) {
+            if (t.joinable()) t.join();
+        }
 
         // Re-read ARP table after pings
         auto arpAfter = readArpTable();
