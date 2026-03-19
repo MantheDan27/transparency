@@ -1028,7 +1028,7 @@ function openDetailPanel(dev, tab) {
         </div>`;
       }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
-  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" title="Remove tag" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
   const overviewContent = `
     <div class="detail-section">
@@ -1050,7 +1050,7 @@ function openDetailPanel(dev, tab) {
         </select>
       </div>
       <div class="detail-field"><span class="detail-label">Tags</span>
-        <div class="detail-val" id="detailTagsArea">${tagChips}<button class="btn btn-secondary btn-xs add-tag-btn" data-ip="${escHtml(dev.ip)}">+ Tag</button></div>
+        <div class="detail-val" id="detailTagsArea">${tagChips}<button class="btn btn-secondary btn-xs add-tag-btn" aria-label="Add tag" title="Add tag" data-ip="${escHtml(dev.ip)}">+ Tag</button></div>
       </div>
       ${fp.summary ? `<div class="explainability-panel">
         <div class="exp-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Why we think this is a ${escHtml(dev.deviceType||'device')}</div>
