@@ -132,7 +132,11 @@ void testDeviceOffline() {
     std::cout << "testDeviceOffline passed" << std::endl;
 }
 
+#if defined(_MSC_VER) || defined(UNICODE)
+int wmain(int argc, wchar_t** argv) {
+#else
 int main() {
+#endif
     testNewDevice();
     testRiskyPort();
     testPortChanged();

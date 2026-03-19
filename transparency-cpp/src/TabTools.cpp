@@ -51,7 +51,7 @@ bool TabTools::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainW
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushApp();
+    wc.hbrBackground = Theme::BrushSurface();
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
@@ -81,7 +81,7 @@ LRESULT CALLBACK TabTools::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushApp()); return 1; }
+    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_TOOL_RESULT: return self->OnToolResult(hwnd, wp, lp);
     case WM_SCAN_COMPLETE: self->RefreshIpList(); return 0;
@@ -89,8 +89,8 @@ LRESULT CALLBACK TabTools::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
         SetTextColor((HDC)wp, Theme::TEXT_PRIMARY);
-        SetBkColor((HDC)wp, Theme::BG_APP);
-        return (LRESULT)Theme::BrushApp();
+        SetBkColor((HDC)wp, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
     }
     default: return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -308,7 +308,20 @@ LRESULT TabTools::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section label
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    RECT hdr = { 16, 34, 200, 46 };
+    DrawText(hdc, L"DIAGNOSTICS", -1, &hdr, DT_LEFT | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }
