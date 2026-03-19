@@ -27,7 +27,7 @@
 
 static ULONG_PTR s_gdiplusToken = 0;
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(UNICODE)
 int WINAPI wWinMain(
     HINSTANCE hInstance,
     HINSTANCE /*hPrevInstance*/,
