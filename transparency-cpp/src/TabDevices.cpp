@@ -16,6 +16,7 @@
 #include "Resource.h"
 #include "Scanner.h"
 #include <shellapi.h>
+#include <ws2tcpip.h>
 
 using std::wstring;
 
