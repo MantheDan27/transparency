@@ -4,7 +4,8 @@
         Title="Transparency — Device Monitor"
         Height="880" Width="1300"
         MinHeight="700" MinWidth="1000"
-        Background="#12121E" Foreground="#E8E8F8"
+        Background="#101218" Foreground="#E2E4EA"
+        FontFamily="Segoe UI Variable, Segoe UI"
         WindowStartupLocation="CenterScreen">
 
     <!-- ═══════════════════════════════ RESOURCES ═══════════════════════════════ -->
@@ -13,24 +14,24 @@
         <!-- ── Buttons ─────────────────────────────────────────────────────── -->
         <Style x:Key="NavBtn" TargetType="Button">
             <Setter Property="Background"              Value="Transparent"/>
-            <Setter Property="Foreground"              Value="#666688"/>
-            <Setter Property="FontSize"                Value="13"/>
-            <Setter Property="Padding"                 Value="14,11"/>
+            <Setter Property="Foreground"              Value="#8B90A0"/>
+            <Setter Property="FontSize"                Value="13.5"/>
+            <Setter Property="Padding"                 Value="16,12"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="BorderThickness"         Value="0"/>
-            <Setter Property="Margin"                  Value="0,1"/>
+            <Setter Property="Margin"                  Value="0,2"/>
             <Setter Property="Cursor"                  Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bg" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#18243A"/>
-                                <Setter Property="Foreground"                Value="#4A9EFF"/>
+                                <Setter TargetName="Bg" Property="Background" Value="#1E212B"/>
+                                <Setter Property="Foreground"                Value="#5B8DEF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -39,27 +40,27 @@
         </Style>
 
         <Style x:Key="PrimaryBtn" TargetType="Button">
-            <Setter Property="Background"     Value="#4A9EFF"/>
+            <Setter Property="Background"     Value="#5B8DEF"/>
             <Setter Property="Foreground"     Value="#FFFFFF"/>
-            <Setter Property="FontSize"       Value="13"/>
+            <Setter Property="FontSize"       Value="13.5"/>
             <Setter Property="FontWeight"     Value="SemiBold"/>
-            <Setter Property="Padding"        Value="22,10"/>
+            <Setter Property="Padding"        Value="24,11"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor"         Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bg" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#3A8EEF"/>
+                                <Setter TargetName="Bg" Property="Background" Value="#4A7DE0"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bg" Property="Background" Value="#1E2A3A"/>
-                                <Setter Property="Foreground"                Value="#334466"/>
+                                <Setter TargetName="Bg" Property="Background" Value="#1E212B"/>
+                                <Setter Property="Foreground"                Value="#565B6E"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -68,13 +69,13 @@
         </Style>
 
         <Style x:Key="DangerBtn" TargetType="Button">
-            <Setter Property="Background"     Value="#1E0A0F"/>
-            <Setter Property="Foreground"     Value="#FF4757"/>
-            <Setter Property="FontSize"       Value="13"/>
+            <Setter Property="Background"     Value="#1E1215"/>
+            <Setter Property="Foreground"     Value="#F87171"/>
+            <Setter Property="FontSize"       Value="13.5"/>
             <Setter Property="FontWeight"     Value="SemiBold"/>
-            <Setter Property="Padding"        Value="22,10"/>
+            <Setter Property="Padding"        Value="24,11"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush"    Value="#4A1520"/>
+            <Setter Property="BorderBrush"    Value="#3D1D24"/>
             <Setter Property="Cursor"         Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -82,13 +83,13 @@
                         <Border x:Name="Bg" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background"    Value="#FF4757"/>
-                                <Setter TargetName="Bg" Property="BorderBrush"   Value="#FF4757"/>
+                                <Setter TargetName="Bg" Property="Background"    Value="#F87171"/>
+                                <Setter TargetName="Bg" Property="BorderBrush"   Value="#F87171"/>
                                 <Setter Property="Foreground"                    Value="White"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -99,11 +100,11 @@
 
         <Style x:Key="SmallBtn" TargetType="Button">
             <Setter Property="Background"     Value="Transparent"/>
-            <Setter Property="Foreground"     Value="#4A9EFF"/>
-            <Setter Property="FontSize"       Value="12"/>
-            <Setter Property="Padding"        Value="10,5"/>
+            <Setter Property="Foreground"     Value="#5B8DEF"/>
+            <Setter Property="FontSize"       Value="12.5"/>
+            <Setter Property="Padding"        Value="12,6"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush"    Value="#253050"/>
+            <Setter Property="BorderBrush"    Value="#252830"/>
             <Setter Property="Cursor"         Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -111,13 +112,13 @@
                         <Border x:Name="Bg" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background"  Value="#18243A"/>
-                                <Setter TargetName="Bg" Property="BorderBrush" Value="#4A9EFF"/>
+                                <Setter TargetName="Bg" Property="Background"  Value="#1E212B"/>
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="#5B8DEF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -127,41 +128,41 @@
 
         <!-- ── Cards / sections ────────────────────────────────────────────── -->
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background"       Value="#1C1C2E"/>
-            <Setter Property="CornerRadius"     Value="12"/>
-            <Setter Property="BorderBrush"      Value="#252540"/>
+            <Setter Property="Background"       Value="#1A1D27"/>
+            <Setter Property="CornerRadius"     Value="14"/>
+            <Setter Property="BorderBrush"      Value="#252830"/>
             <Setter Property="BorderThickness"  Value="1"/>
-            <Setter Property="Padding"          Value="24"/>
+            <Setter Property="Padding"          Value="28"/>
         </Style>
 
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="FontSize"   Value="10"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#444466"/>
+            <Setter Property="FontSize"   Value="10.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#565B6E"/>
             <Setter Property="Margin"     Value="0,0,0,10"/>
         </Style>
 
         <!-- ── DataGrid ─────────────────────────────────────────────────────── -->
         <Style x:Key="DGHeader" TargetType="DataGridColumnHeader">
-            <Setter Property="Background"      Value="#12121E"/>
-            <Setter Property="Foreground"      Value="#444466"/>
-            <Setter Property="FontSize"        Value="10"/>
-            <Setter Property="FontWeight"      Value="Bold"/>
-            <Setter Property="Padding"         Value="14,10"/>
+            <Setter Property="Background"      Value="#101218"/>
+            <Setter Property="Foreground"      Value="#565B6E"/>
+            <Setter Property="FontSize"        Value="10.5"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Padding"         Value="14,11"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
-            <Setter Property="BorderBrush"     Value="#202038"/>
+            <Setter Property="BorderBrush"     Value="#252830"/>
         </Style>
 
         <Style x:Key="DGCell" TargetType="DataGridCell">
             <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="#C8C8E0"/>
+            <Setter Property="Foreground"      Value="#E2E4EA"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="FontSize"        Value="13"/>
             <Setter Property="Padding"         Value="2,0"/>
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#182A44"/>
-                    <Setter Property="Foreground" Value="#4A9EFF"/>
+                    <Setter Property="Background" Value="#233755"/>
+                    <Setter Property="Foreground" Value="#5B8DEF"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -170,10 +171,10 @@
             <Setter Property="Background" Value="Transparent"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#181830"/>
+                    <Setter Property="Background" Value="#1E212B"/>
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#182A44"/>
+                    <Setter Property="Background" Value="#233755"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -182,18 +183,18 @@
         <Style x:Key="LedgerList" TargetType="ListBox">
             <Setter Property="Background"      Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontFamily"      Value="Consolas"/>
+            <Setter Property="FontFamily"      Value="Cascadia Code, Consolas"/>
             <Setter Property="FontSize"        Value="12"/>
-            <Setter Property="Foreground"      Value="#666688"/>
+            <Setter Property="Foreground"      Value="#8B90A0"/>
         </Style>
         <Style x:Key="LedgerItem" TargetType="ListBoxItem">
             <Setter Property="Background"      Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding"         Value="12,7"/>
-            <Setter Property="Foreground"      Value="#666688"/>
+            <Setter Property="Padding"         Value="14,9"/>
+            <Setter Property="Foreground"      Value="#8B90A0"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#181830"/>
+                    <Setter Property="Background" Value="#1E212B"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -208,16 +209,16 @@
         </Grid.ColumnDefinitions>
 
         <!-- ── SIDEBAR ─────────────────────────────────────────────────────── -->
-        <Border Grid.Column="0" Background="#0A0A16"
-                BorderBrush="#18182E" BorderThickness="0,0,1,0">
+        <Border Grid.Column="0" Background="#14161E"
+                BorderBrush="#252830" BorderThickness="0,0,1,0">
             <DockPanel>
 
                 <!-- Logo -->
                 <StackPanel DockPanel.Dock="Top" Margin="22,28,22,32">
                     <TextBlock Text="Transparency"
-                               FontSize="20" FontWeight="Bold" Foreground="#4A9EFF"/>
+                               FontSize="21" FontWeight="SemiBold" Foreground="#5B8DEF"/>
                     <TextBlock Text="Device Security Monitor"
-                               FontSize="11" Foreground="#333355" Margin="0,4,0,0"/>
+                               FontSize="11.5" Foreground="#565B6E" Margin="0,5,0,0"/>
                 </StackPanel>
 
                 <!-- Navigation -->
@@ -227,7 +228,7 @@
                     <Button Name="NavDashboard" Tag="Dashboard" Click="Nav_Click"
                             Style="{StaticResource NavBtn}">
                         <StackPanel Orientation="Horizontal" Margin="0">
-                            <TextBlock Text="[ ]" FontFamily="Consolas" FontSize="13"
+                            <TextBlock Text="[ ]" FontFamily="Cascadia Code, Consolas" FontSize="13"
                                        VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBlock Text="Dashboard" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -236,7 +237,7 @@
                     <Button Name="NavAnomalies" Tag="Anomalies" Click="Nav_Click"
                             Style="{StaticResource NavBtn}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text=" ! " FontFamily="Consolas" FontSize="13"
+                            <TextBlock Text=" ! " FontFamily="Cascadia Code, Consolas" FontSize="13"
                                        VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBlock Text="Anomalies" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -245,7 +246,7 @@
                     <Button Name="NavLedger" Tag="Ledger" Click="Nav_Click"
                             Style="{StaticResource NavBtn}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text=" # " FontFamily="Consolas" FontSize="13"
+                            <TextBlock Text=" # " FontFamily="Cascadia Code, Consolas" FontSize="13"
                                        VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBlock Text="Data Ledger" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -254,7 +255,7 @@
                     <Button Name="NavSettings" Tag="Settings" Click="Nav_Click"
                             Style="{StaticResource NavBtn}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text=" * " FontFamily="Consolas" FontSize="13"
+                            <TextBlock Text=" * " FontFamily="Cascadia Code, Consolas" FontSize="13"
                                        VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBlock Text="Settings" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -263,11 +264,11 @@
 
                 <!-- Footer -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="22,0,22,24">
-                    <Border BorderBrush="#1A1A30" BorderThickness="0,1,0,0" Margin="0,0,0,16"/>
-                    <TextBlock Text="v2.0.2  native" Foreground="#2A2A44" FontSize="11" FontFamily="Consolas"/>
+                    <Border BorderBrush="#252830" BorderThickness="0,1,0,0" Margin="0,0,0,16"/>
+                    <TextBlock Text="v2.0.2  native" Foreground="#565B6E" FontSize="11" FontFamily="Cascadia Code, Consolas"/>
                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <Ellipse Width="7" Height="7" Fill="#2ED573" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                        <TextBlock Text="Online" Foreground="#2ED573" FontSize="11"/>
+                        <Ellipse Width="7" Height="7" Fill="#34D399" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                        <TextBlock Text="Online" Foreground="#34D399" FontSize="11"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -290,14 +291,14 @@
                 <DockPanel Grid.Row="0" Margin="0,0,0,28" LastChildFill="False">
                     <StackPanel>
                         <TextBlock Text="Network Dashboard"
-                                   FontSize="24" FontWeight="Bold" Foreground="#E8E8F8"/>
+                                   FontSize="24" FontWeight="Bold" Foreground="#E2E4EA"/>
                         <TextBlock Name="TxtLastScanned"
                                    Text="Run a scan to discover devices on your network."
-                                   FontSize="12" Foreground="#444466" Margin="0,5,0,0"/>
+                                   FontSize="12" Foreground="#565B6E" Margin="0,5,0,0"/>
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Name="TxtScanStatus" Foreground="#555577" FontSize="12"
-                                   VerticalAlignment="Center" Margin="0,0,18,0" FontFamily="Consolas"/>
+                        <TextBlock Name="TxtScanStatus" Foreground="#8B90A0" FontSize="12"
+                                   VerticalAlignment="Center" Margin="0,0,18,0" FontFamily="Cascadia Code, Consolas"/>
                         <Button Name="ScanBtn" Content="Scan Network"
                                 Click="Scan_Click" Style="{StaticResource PrimaryBtn}"/>
                     </StackPanel>
@@ -309,24 +310,24 @@
                         <StackPanel>
                             <TextBlock Text="TOTAL DEVICES" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Name="TxtTotalDevices" Text="—"
-                                       FontSize="44" FontWeight="Bold" Foreground="#4A9EFF"/>
-                            <TextBlock Text="on this network" FontSize="11" Foreground="#333355" Margin="0,4,0,0"/>
+                                       FontSize="44" FontWeight="Bold" Foreground="#5B8DEF"/>
+                            <TextBlock Text="on this network" FontSize="11" Foreground="#565B6E" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Card}" Margin="4,0">
                         <StackPanel>
                             <TextBlock Text="ACTIVE THREATS" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Name="TxtActiveThreats" Text="—"
-                                       FontSize="44" FontWeight="Bold" Foreground="#FF4757"/>
-                            <TextBlock Text="anomalies detected" FontSize="11" Foreground="#333355" Margin="0,4,0,0"/>
+                                       FontSize="44" FontWeight="Bold" Foreground="#F87171"/>
+                            <TextBlock Text="anomalies detected" FontSize="11" Foreground="#565B6E" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Card}" Margin="8,0,0,0">
                         <StackPanel>
                             <TextBlock Text="CLOUD SYNCS" Style="{StaticResource SectionLabel}"/>
                             <TextBlock Name="TxtCloudSyncs" Text="—"
-                                       FontSize="44" FontWeight="Bold" Foreground="#2ED573"/>
-                            <TextBlock Text="enrichment requests" FontSize="11" Foreground="#333355" Margin="0,4,0,0"/>
+                                       FontSize="44" FontWeight="Bold" Foreground="#34D399"/>
+                            <TextBlock Text="enrichment requests" FontSize="11" Foreground="#565B6E" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                 </UniformGrid>
@@ -336,16 +337,16 @@
                            Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
 
                 <!-- Device Grid -->
-                <Border Grid.Row="3" Background="#1C1C2E" CornerRadius="12"
-                        BorderBrush="#252540" BorderThickness="1" Padding="0">
+                <Border Grid.Row="3" Background="#1A1D27" CornerRadius="12"
+                        BorderBrush="#252830" BorderThickness="1" Padding="0">
                     <DataGrid Name="DeviceGrid"
                               AutoGenerateColumns="False"
                               Background="Transparent"
                               BorderThickness="0"
                               RowBackground="Transparent"
-                              AlternatingRowBackground="#0E0E1C"
+                              AlternatingRowBackground="#161821"
                               GridLinesVisibility="Horizontal"
-                              HorizontalGridLinesBrush="#18182E"
+                              HorizontalGridLinesBrush="#252830"
                               IsReadOnly="True"
                               SelectionMode="Single"
                               HeadersVisibility="Column"
@@ -382,23 +383,23 @@
                 <DockPanel Grid.Row="0" Margin="0,0,0,24">
                     <StackPanel>
                         <TextBlock Text="Security Anomalies"
-                                   FontSize="24" FontWeight="Bold" Foreground="#E8E8F8"/>
+                                   FontSize="24" FontWeight="Bold" Foreground="#E2E4EA"/>
                         <TextBlock Text="Each panel shows the detection trace, explanation, and remediation steps."
-                                   FontSize="12" Foreground="#444466" Margin="0,5,0,0"/>
+                                   FontSize="12" Foreground="#565B6E" Margin="0,5,0,0"/>
                     </StackPanel>
                     <TextBlock Name="TxtAnomalyCount" DockPanel.Dock="Right"
-                               Foreground="#444466" FontSize="12" VerticalAlignment="Bottom"
-                               FontFamily="Consolas"/>
+                               Foreground="#565B6E" FontSize="12" VerticalAlignment="Bottom"
+                               FontFamily="Cascadia Code, Consolas"/>
                 </DockPanel>
 
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
 
                         <!-- Empty state -->
-                        <Border Name="AnomalyEmptyState" Background="#1C1C2E" CornerRadius="12"
-                                BorderBrush="#252540" BorderThickness="1" Padding="32">
+                        <Border Name="AnomalyEmptyState" Background="#1A1D27" CornerRadius="12"
+                                BorderBrush="#252830" BorderThickness="1" Padding="32">
                             <TextBlock Text="No anomalies detected. Run a scan first."
-                                       Foreground="#333355" FontSize="14" HorizontalAlignment="Center"/>
+                                       Foreground="#565B6E" FontSize="14" HorizontalAlignment="Center"/>
                         </Border>
 
                         <!-- Anomaly cards -->
@@ -450,7 +451,7 @@
                                                     <TextBlock HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"
                                                                FontWeight="Bold" FontSize="16"
-                                                               FontFamily="Consolas">
+                                                               FontFamily="Cascadia Code, Consolas">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
                                                                 <Setter Property="Text"       Value="L"/>
@@ -475,7 +476,7 @@
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
                                                         <TextBlock Text="{Binding Type}"
                                                                    FontWeight="Bold" FontSize="14"
-                                                                   Foreground="#E8E8F8" VerticalAlignment="Center"/>
+                                                                   Foreground="#E2E4EA" VerticalAlignment="Center"/>
                                                         <Border Margin="10,0,0,0" CornerRadius="4"
                                                                 Padding="7,2" VerticalAlignment="Center">
                                                             <Border.Style>
@@ -491,7 +492,7 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
-                                                            <TextBlock FontSize="10" FontWeight="Bold" FontFamily="Consolas">
+                                                            <TextBlock FontSize="10" FontWeight="Bold" FontFamily="Cascadia Code, Consolas">
                                                                 <TextBlock.Style>
                                                                     <Style TargetType="TextBlock">
                                                                         <Setter Property="Text"       Value="LOW"/>
@@ -513,10 +514,10 @@
                                                     </StackPanel>
 
                                                     <TextBlock Text="{Binding DeviceIp}"
-                                                               Foreground="#4A9EFF" FontFamily="Consolas"
+                                                               Foreground="#5B8DEF" FontFamily="Cascadia Code, Consolas"
                                                                FontSize="12" Margin="0,0,0,6"/>
                                                     <TextBlock Text="{Binding Description}"
-                                                               Foreground="#AAAAC0" FontSize="13"
+                                                               Foreground="#B0B3BE" FontSize="13"
                                                                TextWrapping="Wrap"/>
                                                 </StackPanel>
                                             </Grid>
@@ -525,52 +526,52 @@
                                             <Expander Margin="20,0,20,18">
                                                 <Expander.Header>
                                                     <TextBlock Text="Details — Explanation, Remediation &amp; Trace"
-                                                               FontSize="12" Foreground="#444466"/>
+                                                               FontSize="12" Foreground="#565B6E"/>
                                                 </Expander.Header>
 
-                                                <Border Background="#0E0E1C" CornerRadius="8"
+                                                <Border Background="#13151C" CornerRadius="8"
                                                         Padding="20,16" Margin="0,8,0,0">
                                                     <StackPanel>
 
                                                         <!-- WHY IT'S RISKY -->
                                                         <TextBlock Text="WHY IT'S RISKY"
                                                                    FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#4A9EFF" Margin="0,0,0,6"
-                                                                   FontFamily="Consolas"/>
+                                                                   Foreground="#5B8DEF" Margin="0,0,0,6"
+                                                                   FontFamily="Cascadia Code, Consolas"/>
                                                         <TextBlock Text="{Binding Explanation}"
-                                                                   Foreground="#AAAAC0" FontSize="13"
+                                                                   Foreground="#B0B3BE" FontSize="13"
                                                                    TextWrapping="Wrap" Margin="0,0,0,18"/>
 
                                                         <!-- REMEDIATION -->
                                                         <TextBlock Text="REMEDIATION"
                                                                    FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#2ED573" Margin="0,0,0,6"
-                                                                   FontFamily="Consolas"/>
+                                                                   Foreground="#34D399" Margin="0,0,0,6"
+                                                                   FontFamily="Cascadia Code, Consolas"/>
                                                         <TextBlock Text="{Binding Remediation}"
-                                                                   Foreground="#AAAAC0" FontSize="13"
+                                                                   Foreground="#B0B3BE" FontSize="13"
                                                                    TextWrapping="Wrap" Margin="0,0,0,18"/>
 
                                                         <!-- DETECTION TRACE -->
                                                         <TextBlock Text="DETECTION TRACE"
                                                                    FontSize="10" FontWeight="Bold"
                                                                    Foreground="#FFA502" Margin="0,0,0,6"
-                                                                   FontFamily="Consolas"/>
-                                                        <Border Background="#08081A" CornerRadius="6"
+                                                                   FontFamily="Cascadia Code, Consolas"/>
+                                                        <Border Background="#101218" CornerRadius="6"
                                                                 Padding="14,10" Margin="0,0,0,14">
                                                             <TextBlock Text="{Binding TraceSource}"
-                                                                       Foreground="#666688"
-                                                                       FontFamily="Consolas" FontSize="12"
+                                                                       Foreground="#8B90A0"
+                                                                       FontFamily="Cascadia Code, Consolas" FontSize="12"
                                                                        TextWrapping="Wrap"/>
                                                         </Border>
 
                                                         <!-- AFFECTED PORTS -->
                                                         <TextBlock Text="AFFECTED PORTS"
                                                                    FontSize="10" FontWeight="Bold"
-                                                                   Foreground="#444466" Margin="0,0,0,6"
-                                                                   FontFamily="Consolas"/>
+                                                                   Foreground="#565B6E" Margin="0,0,0,6"
+                                                                   FontFamily="Cascadia Code, Consolas"/>
                                                         <TextBlock Text="{Binding AffectedPortsDisplay}"
-                                                                   Foreground="#666688"
-                                                                   FontFamily="Consolas" FontSize="12"/>
+                                                                   Foreground="#8B90A0"
+                                                                   FontFamily="Cascadia Code, Consolas" FontSize="12"/>
 
                                                     </StackPanel>
                                                 </Border>
@@ -595,14 +596,14 @@
                 <DockPanel Grid.Row="0" Margin="0,0,0,24">
                     <StackPanel>
                         <TextBlock Text="Cloud Data Ledger"
-                                   FontSize="24" FontWeight="Bold" Foreground="#E8E8F8"/>
+                                   FontSize="24" FontWeight="Bold" Foreground="#E2E4EA"/>
                         <TextBlock Text="Every enrichment request and deletion is logged here in real time."
-                                   FontSize="12" Foreground="#444466" Margin="0,5,0,0"/>
+                                   FontSize="12" Foreground="#565B6E" Margin="0,5,0,0"/>
                     </StackPanel>
                 </DockPanel>
 
-                <Border Grid.Row="1" Background="#1C1C2E" CornerRadius="12"
-                        BorderBrush="#252540" BorderThickness="1" Padding="0">
+                <Border Grid.Row="1" Background="#1A1D27" CornerRadius="12"
+                        BorderBrush="#252830" BorderThickness="1" Padding="0">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ListBox Name="LedgerList"
                                  Style="{StaticResource LedgerList}"
@@ -620,17 +621,17 @@
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Text="Privacy &amp; Settings"
-                           FontSize="24" FontWeight="Bold" Foreground="#E8E8F8" Margin="0,0,0,28"/>
+                           FontSize="24" FontWeight="Bold" Foreground="#E2E4EA" Margin="0,0,0,28"/>
 
                 <!-- Privacy explanation -->
                 <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,16">
                     <StackPanel>
                         <TextBlock Text="HOW YOUR DATA IS USED"
                                    Style="{StaticResource SectionLabel}"/>
-                        <TextBlock FontSize="13" Foreground="#AAAAC0" TextWrapping="Wrap" LineHeight="22">
+                        <TextBlock FontSize="13" Foreground="#B0B3BE" TextWrapping="Wrap" LineHeight="22">
                             Transparency scans your local network by sending ICMP ping probes and attempting
                             TCP connections to well-known ports. No data leaves your machine during a scan.&#x0A;&#x0A;
-                            When you click <Bold><Run Foreground="#4A9EFF">Enrich</Run></Bold> on a device,
+                            When you click <Bold><Run Foreground="#5B8DEF">Enrich</Run></Bold> on a device,
                             limited metadata (IP address, hostname, open ports) is sent to the mock cloud
                             enrichment service running on this machine. No data is sent to any external server.&#x0A;&#x0A;
                             You may request deletion of all enrichment history at any time using the button below.
@@ -643,7 +644,7 @@
                     <StackPanel>
                         <TextBlock Text="DATA DELETION" Style="{StaticResource SectionLabel}"/>
                         <TextBlock Text="Request immediate deletion of all device enrichment records stored by the mock cloud service."
-                                   FontSize="13" Foreground="#AAAAC0" TextWrapping="Wrap" Margin="0,0,0,20"/>
+                                   FontSize="13" Foreground="#B0B3BE" TextWrapping="Wrap" Margin="0,0,0,20"/>
                         <Button Content="Delete All Cloud Data"
                                 Click="DeleteData_Click" Style="{StaticResource DangerBtn}"
                                 HorizontalAlignment="Left"/>
@@ -655,12 +656,12 @@
 
         <!-- ── LOADING OVERLAY ─────────────────────────────────────────────── -->
         <Border Name="LoadingOverlay" Grid.ColumnSpan="2"
-                Background="#CC0A0A16" Visibility="Collapsed">
+                Background="#CC101218" Visibility="Collapsed">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <TextBlock Name="TxtLoadingMsg" Text="Scanning…"
-                           FontSize="20" Foreground="#4A9EFF" HorizontalAlignment="Center"/>
+                           FontSize="20" Foreground="#5B8DEF" HorizontalAlignment="Center"/>
                 <TextBlock Name="TxtLoadingDetail" Text=""
-                           FontSize="12" Foreground="#444466" FontFamily="Consolas"
+                           FontSize="12" Foreground="#565B6E" FontFamily="Cascadia Code, Consolas"
                            HorizontalAlignment="Center" Margin="0,10,0,0"/>
             </StackPanel>
         </Border>

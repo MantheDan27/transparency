@@ -159,7 +159,11 @@ void test_fingerprint() {
     std::cout << "All tests passed successfully!" << std::endl;
 }
 
+#if defined(_MSC_VER) || defined(UNICODE)
+int wmain(int argc, wchar_t** argv) {
+#else
 int main() {
+#endif
     test_fingerprint();
     return 0;
 }

@@ -46,6 +46,11 @@ private:
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
 
+    // IP selector dropdown
+    HWND _hIpSelector = nullptr;
+    void RefreshIpList();
+    void FillTargetFromIp();
+
     // Ping
     HWND _hPingTarget = nullptr, _hPingCount = nullptr;
     HWND _hBtnPing = nullptr, _hPingOut = nullptr;

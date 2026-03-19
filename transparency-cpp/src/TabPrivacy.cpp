@@ -46,7 +46,7 @@ bool TabPrivacy::Create(HWND parent, int x, int y, int w, int h, MainWindow* mai
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushApp();
+    wc.hbrBackground = Theme::BrushSurface();
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
@@ -76,14 +76,14 @@ LRESULT CALLBACK TabPrivacy::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND:{RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushApp()); return 1;}
+    case WM_ERASEBKGND:{RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1;}
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
         SetTextColor((HDC)wp, Theme::TEXT_PRIMARY);
-        SetBkColor((HDC)wp, Theme::BG_APP);
-        return (LRESULT)Theme::BrushApp();
+        SetBkColor((HDC)wp, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
     }
     default: return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -268,7 +268,7 @@ LRESULT TabPrivacy::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushSurface());
     EndPaint(hwnd, &ps);
     return 0;
 }
@@ -510,6 +510,17 @@ static void WToU8EscAppend(const std::wstring& w, std::string& out) {
         WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &heapBuf[0], n, nullptr, nullptr);
         pBuf = &heapBuf[0];
     }
+    // Escape and append UTF-8 chars
+    for (const char* p = pBuf; *p; ++p) {
+        unsigned char c = (unsigned char)*p;
+        if      (c == '"')  out += "\\\"";
+        else if (c == '\\') out += "\\\\";
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c < 0x20)  out += ' ';
+        else                out += (char)c;
+    }
+}
 
 static std::string JEsc(const std::string& s) {
     std::string o;
@@ -528,6 +539,7 @@ static std::string JEsc(const std::string& s) {
         else if (c < 0x20)  o += " ";
         else                o += c;
     }
+    return o;
 }
 
 void TabPrivacy::ExportFullJson(HWND hwnd) {

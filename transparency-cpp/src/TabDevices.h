@@ -37,6 +37,7 @@ private:
     void HideDetailPanel();
     void UpdateDetailPanel(const Device& dev);
     void ApplyFilter();
+    void ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx);
 
     wstring GetPortSummary(const Device& dev);
 
@@ -65,6 +66,11 @@ private:
     HWND _hDetailMdns       = nullptr;
     HWND _hDetailAnoms      = nullptr;
     HWND _hDetailIotRisk    = nullptr;  // IoT risk panel
+    HWND _hDetailEvidence   = nullptr;  // classification evidence
+    HWND _hDetailSubnet     = nullptr;  // subnet label
+    HWND _hDetailFirstSeen  = nullptr;  // first seen timestamp
+    HWND _hDetailSightings  = nullptr;  // sighting count
+    HWND _hDetailIpHistory  = nullptr;  // IP history
     HWND _hDetailSave       = nullptr;
     HWND _hDetailClose      = nullptr;
 

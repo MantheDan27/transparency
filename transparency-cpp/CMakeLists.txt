@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparency VERSION 3.5.0 LANGUAGES CXX)
+project(Transparency VERSION 4.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,7 @@ set(SOURCES
     src/TabTools.cpp
     src/TabPrivacy.cpp
     src/TabLedger.cpp
+    src/TabSmartHome.cpp
     src/Scanner.cpp
     src/Monitor.cpp
 )
@@ -40,12 +41,18 @@ set(HEADERS
     src/TabTools.h
     src/TabPrivacy.h
     src/TabLedger.h
+    src/TabSmartHome.h
 )
 
 add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})
 
 # Add test executable
 add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
+if(MSVC)
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+elseif(MINGW OR CYGWIN)
+    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole")
+endif()
 target_include_directories(TransparencyTests PRIVATE src)
 target_compile_definitions(TransparencyTests PRIVATE
     UNICODE
@@ -97,6 +104,7 @@ target_link_libraries(Transparency PRIVATE
     dwmapi
     dnsapi
     gdi32
+    gdiplus
     ole32
     winmm
     shell32
@@ -177,6 +185,11 @@ endif()
 
 # Additional scanner test
 add_executable(ScannerTest src/ScannerTest.cpp src/Scanner.cpp)
+if(MSVC)
+    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+elseif(MINGW OR CYGWIN)
+    set_target_properties(ScannerTest PROPERTIES LINK_FLAGS "-mconsole")
+endif()
 target_compile_definitions(ScannerTest PRIVATE
     UNICODE
     _UNICODE

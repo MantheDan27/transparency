@@ -10,11 +10,15 @@
 #include <memory>
 #include <mutex>
 #include <future>
+#include <map>
+#include <thread>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdi32.lib")
+#include <objbase.h>
+#include <gdiplus.h>
 
 #include "MainWindow.h"
 #include "TabOverview.h"
@@ -23,6 +27,7 @@
 #include "TabTools.h"
 #include "TabLedger.h"
 #include "TabPrivacy.h"
+#include "TabSmartHome.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -34,20 +39,35 @@ MainWindow* MainWindow::s_instance = nullptr;
 struct NavItem { const wchar_t* icon; const wchar_t* label; Tab tab; };
 
 static const NavItem NAV_ITEMS[] = {
-    { L"\u25A6", L"Overview",  Tab::Overview  },
-    { L"\u25A1", L"Devices",   Tab::Devices   },
-    { L"\u25B2", L"Alerts",    Tab::Alerts    },
-    { L"\u25C6", L"Tools",     Tab::Tools     },
-    { L"\u25A4", L"Ledger",    Tab::Ledger    },
-    { L"\u25CB", L"Privacy",   Tab::Privacy   },
+    { L"\u25AB", L"Dashboard",    Tab::Overview  },
+    { L"\u229E", L"Devices",      Tab::Devices   },
+    { L"\u2691", L"Alerts",       Tab::Alerts    },
+    { L"\u25CE", L"Topology",     Tab::SmartHome },
+    { L"\u25B3", L"Diagnostics",  Tab::Tools     },
+    { L"\u2630", L"Scan History", Tab::Ledger    },
 };
+static const int NAV_ITEM_COUNT = 6;
+
+// Bottom nav items (pinned)
+static const NavItem NAV_BOTTOM[] = {
+    { L"\u2699", L"Settings",  Tab::Privacy   },
+};
+
+const wchar_t* MainWindow::NavLabel(int i) {
+    if (i >= 0 && i < NAV_ITEM_COUNT) return NAV_ITEMS[i].label;
+    return L"";
+}
+const wchar_t* MainWindow::NavIcon(int i) {
+    if (i >= 0 && i < NAV_ITEM_COUNT) return NAV_ITEMS[i].icon;
+    return L"";
+}
 
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 bool MainWindow::Create(HINSTANCE hInstance) {
     WNDCLASSEX wc = {};
     wc.cbSize        = sizeof(wc);
-    wc.style         = CS_HREDRAW | CS_VREDRAW;
+    wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
     wc.hbrBackground = Theme::BrushApp();
@@ -70,7 +90,7 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     HWND hwnd = CreateWindowEx(
         0, L"TransparencyMainWnd",
         L"Transparency - Network Monitor",
-        WS_OVERLAPPEDWINDOW,
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         wx, wy, ww, wh,
         nullptr, nullptr, hInstance, self);
 
@@ -109,13 +129,9 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_PAINT:
         return self->OnPaint(hwnd);
 
-    case WM_ERASEBKGND: {
-        HDC hdc = (HDC)wp;
-        RECT rc;
-        GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, Theme::BrushApp());
+    case WM_ERASEBKGND:
+        // Suppress — OnPaint handles all drawing via double buffer
         return 1;
-    }
 
     case WM_LBUTTONDOWN:
         return self->OnLButtonDown(hwnd, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
@@ -125,11 +141,10 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 
     case WM_MOUSELEAVE:
         self->_hoverNav = -1;
+        self->_hoverTitleBtn = -1;
+        self->_hoverWinBtn = -1;
         self->_trackingMouse = false;
-        {
-            RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, 9999 };
-            InvalidateRect(hwnd, &sidebarRc, FALSE);
-        }
+        InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
 
     case WM_COMMAND:
@@ -161,6 +176,15 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return self->OnGatewayChanged(hwnd, wp, lp);
 
     case WM_TIMER:
+        if (wp == 2) {
+            // Refresh status bar and content header every second
+            RECT rc; GetClientRect(hwnd, &rc);
+            RECT statusRc = { 0, rc.bottom - 26, rc.right, rc.bottom };
+            InvalidateRect(hwnd, &statusRc, FALSE);
+            RECT hdrRc = { self->GetSidebarWidth(), 38, rc.right, 78 };
+            InvalidateRect(hwnd, &hdrRc, FALSE);
+            return 0;
+        }
         if (wp == 1) {
             // Scheduled scan check — fires every 60 seconds
             if (self->_scheduledScan.enabled) {
@@ -205,6 +229,21 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_DESTROY:
         return self->OnDestroy(hwnd);
 
+    case WM_MAP_DEVICE_CLICK: {
+        // Select the device in the Devices tab by index
+        int devIdx = (int)wp;
+        if (self->_tabDevices && self->_tabDevices->GetHwnd()) {
+            HWND devList = GetDlgItem(self->_tabDevices->GetHwnd(), IDC_LIST_DEVICES);
+            if (devList) {
+                ListView_SetItemState(devList, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+                ListView_SetItemState(devList, devIdx, LVIS_SELECTED | LVIS_FOCUSED,
+                                      LVIS_SELECTED | LVIS_FOCUSED);
+                ListView_EnsureVisible(devList, devIdx, FALSE);
+            }
+        }
+        return 0;
+    }
+
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -217,50 +256,86 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     GetClientRect(hwnd, &rc);
     int cx = rc.right, cy = rc.bottom;
 
-    // Create tab panels — no child windows in the sidebar at all;
-    // sidebar is painted directly and hit-tested via WM_LBUTTONDOWN.
+    int sw = GetSidebarWidth();
+    int contentTop = TITLEBAR_H + CONTENT_HDR_H;
+    int contentBot = cy - STATUSBAR_H;
+    int panelX = sw;
+    int panelW = cx - sw;
+    int panelH = contentBot - contentTop;
+
     _tabOverview = std::make_unique<TabOverview>();
     _tabDevices  = std::make_unique<TabDevices>();
     _tabAlerts   = std::make_unique<TabAlerts>();
     _tabTools    = std::make_unique<TabTools>();
     _tabLedger   = std::make_unique<TabLedger>();
     _tabPrivacy  = std::make_unique<TabPrivacy>();
+    _tabSmartHome = std::make_unique<TabSmartHome>();
 
-    int panelX = SIDEBAR_WIDTH;
-    int panelW = cx - SIDEBAR_WIDTH;
-
-    _tabOverview->Create(hwnd, panelX, 0, panelW, cy, this);
-    _tabDevices ->Create(hwnd, panelX, 0, panelW, cy, this);
-    _tabAlerts  ->Create(hwnd, panelX, 0, panelW, cy, this);
-    _tabTools   ->Create(hwnd, panelX, 0, panelW, cy, this);
-    _tabLedger  ->Create(hwnd, panelX, 0, panelW, cy, this);
-    _tabPrivacy ->Create(hwnd, panelX, 0, panelW, cy, this);
+    _tabOverview->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabDevices ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabAlerts  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabTools   ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabLedger  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabPrivacy ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabSmartHome->Create(hwnd, panelX, contentTop, panelW, panelH, this);
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparency v3.5.0 initialized");
-
-    // Check scheduled scans every 60 seconds
+    AddLedgerEntry(L"App Started", L"Transparency v4.1.0 initialized");
     SetTimer(hwnd, 1, 60000, nullptr);
 
-    // Auto-run quick scan on launch so tabs have data immediately
-    StartQuickScan();
+    // Refresh status bar every 5 seconds (avoid excessive repaints)
+    SetTimer(hwnd, 2, 5000, nullptr);
 
+    StartQuickScan();
     return 0;
 }
 
 // ─── OnLButtonDown ───────────────────────────────────────────────────────────
 
 LRESULT MainWindow::OnLButtonDown(HWND hwnd, int x, int y) {
-    if (x >= 0 && x < SIDEBAR_WIDTH) {
-        for (int i = 0; i < (int)Tab::COUNT; i++) {
-            int btnY = NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
-            if (y >= btnY && y < btnY + NAV_BTN_HEIGHT - 2) {
-                SwitchTab((Tab)i);
+    int sw = GetSidebarWidth();
+
+    // Title bar toolbar buttons: Quick Scan, Deep Scan, Stop
+    if (y < TITLEBAR_H && x > sw + 20) {
+        int tbX = sw + 20;
+        // Quick Scan button
+        if (x >= tbX && x < tbX + 80) { StartQuickScan(); return 0; }
+        tbX += 88;
+        // Deep Scan button
+        if (x >= tbX && x < tbX + 80) { StartDeepScan(); return 0; }
+        tbX += 88;
+        // Stop button
+        if (x >= tbX && x < tbX + 50) { StopMonitor(); return 0; }
+    }
+
+    // Sidebar collapse toggle
+    if (x >= 0 && x < sw && y >= TITLEBAR_H && y < TITLEBAR_H + 32) {
+        _sidebarExpanded = !_sidebarExpanded;
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutChildren(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, FALSE);
+        return 0;
+    }
+
+    // Sidebar nav items
+    if (x >= 0 && x < sw && y >= TITLEBAR_H + NAV_BTN_TOP) {
+        for (int i = 0; i < NAV_ITEM_COUNT; i++) {
+            int btnY = TITLEBAR_H + NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
+            if (y >= btnY && y < btnY + NAV_BTN_HEIGHT) {
+                SwitchTab(NAV_ITEMS[i].tab);
                 return 0;
             }
         }
+        // Bottom nav (Settings)
+        RECT rc; GetClientRect(hwnd, &rc);
+        int botY = rc.bottom - STATUSBAR_H - 44;
+        if (y >= botY && y < botY + NAV_BTN_HEIGHT) {
+            SwitchTab(Tab::Privacy);
+            return 0;
+        }
     }
+
     return DefWindowProc(hwnd, WM_LBUTTONDOWN, 0, MAKELPARAM(x, y));
 }
 
@@ -276,11 +351,12 @@ LRESULT MainWindow::OnMouseMove(HWND hwnd, int x, int y) {
         _trackingMouse = true;
     }
 
+    int sw = GetSidebarWidth();
     int newHover = -1;
-    if (x >= 0 && x < SIDEBAR_WIDTH) {
-        for (int i = 0; i < (int)Tab::COUNT; i++) {
-            int btnY = NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
-            if (y >= btnY && y < btnY + NAV_BTN_HEIGHT - 2) {
+    if (x >= 0 && x < sw && y >= TITLEBAR_H + NAV_BTN_TOP) {
+        for (int i = 0; i < NAV_ITEM_COUNT; i++) {
+            int btnY = TITLEBAR_H + NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
+            if (y >= btnY && y < btnY + NAV_BTN_HEIGHT) {
                 newHover = i;
                 break;
             }
@@ -289,8 +365,7 @@ LRESULT MainWindow::OnMouseMove(HWND hwnd, int x, int y) {
 
     if (newHover != _hoverNav) {
         _hoverNav = newHover;
-        RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, 9999 };
-        InvalidateRect(hwnd, &sidebarRc, FALSE);
+        InvalidateRect(hwnd, nullptr, FALSE);
     }
     return 0;
 }
@@ -298,12 +373,17 @@ LRESULT MainWindow::OnMouseMove(HWND hwnd, int x, int y) {
 // ─── LayoutChildren ──────────────────────────────────────────────────────────
 
 void MainWindow::LayoutChildren(int cx, int cy) {
-    int panelX = SIDEBAR_WIDTH;
-    int panelW = cx - SIDEBAR_WIDTH;
+    int sw = GetSidebarWidth();
+    int contentTop = TITLEBAR_H + CONTENT_HDR_H;
+    int contentBot = cy - STATUSBAR_H;
+    int panelX = sw;
+    int panelW = cx - sw;
+    int panelH = contentBot - contentTop;
+    if (panelH < 1) panelH = 1;
 
     auto resize = [&](auto& tab) {
         if (tab && tab->GetHwnd())
-            SetWindowPos(tab->GetHwnd(), nullptr, panelX, 0, panelW, cy, SWP_NOZORDER);
+            SetWindowPos(tab->GetHwnd(), nullptr, panelX, contentTop, panelW, panelH, SWP_NOZORDER);
     };
 
     resize(_tabOverview);
@@ -312,6 +392,7 @@ void MainWindow::LayoutChildren(int cx, int cy) {
     resize(_tabTools);
     resize(_tabLedger);
     resize(_tabPrivacy);
+    resize(_tabSmartHome);
 }
 
 // ─── OnSize ──────────────────────────────────────────────────────────────────
@@ -319,104 +400,381 @@ void MainWindow::LayoutChildren(int cx, int cy) {
 LRESULT MainWindow::OnSize(HWND hwnd, int cx, int cy) {
     if (cx > 0 && cy > 0) {
         LayoutChildren(cx, cy);
-        // Redraw sidebar (it has no child windows, must be repainted on resize)
-        RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, cy };
-        InvalidateRect(hwnd, &sidebarRc, FALSE);
+        InvalidateRect(hwnd, nullptr, FALSE);
     }
     return 0;
+}
+
+// ─── DrawTitleBar ─────────────────────────────────────────────────────────────
+
+void MainWindow::DrawTitleBar(HDC hdc, int cx) {
+    int sw = GetSidebarWidth();
+
+    // Title bar background — bg_root
+    RECT tbRc = { 0, 0, cx, TITLEBAR_H };
+    FillRect(hdc, &tbRc, Theme::BrushRoot());
+
+    // Bottom border
+    RECT tbBorder = { 0, TITLEBAR_H - 1, cx, TITLEBAR_H };
+    FillRect(hdc, &tbBorder, Theme::BrushBorderSubtle());
+
+    SetBkMode(hdc, TRANSPARENT);
+
+    // App icon (gradient square with "T")
+    RECT iconRc = { 14, 10, 32, 28 };
+    Theme::DrawGradientButton(hdc, iconRc, 5, Theme::ACCENT_BLUE, Theme::ACCENT_CYAN);
+    SetTextColor(hdc, Theme::BG_ROOT);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    DrawText(hdc, L"T", -1, &iconRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    // App name
+    SetTextColor(hdc, Theme::TEXT_SECONDARY);
+    SelectObject(hdc, Theme::FontNavActive());
+    RECT nameRc = { 40, 0, 160, TITLEBAR_H };
+    DrawText(hdc, L"Transparency", -1, &nameRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // Toolbar actions — centered after sidebar
+    int tbX = sw + 20;
+    auto drawToolBtn = [&](const wchar_t* icon, const wchar_t* label, COLORREF accent, int w) {
+        RECT btnRc = { tbX, 7, tbX + w, TITLEBAR_H - 7 };
+        bool hover = false; // simplified for now
+        if (hover)
+            Theme::DrawRoundedCard(hdc, btnRc, 6, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT, 0);
+
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        SelectObject(hdc, Theme::FontCaption());
+        RECT irc = { tbX + 8, 7, tbX + 22, TITLEBAR_H - 7 };
+        SetTextColor(hdc, accent);
+        DrawText(hdc, icon, -1, &irc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        RECT lrc = { tbX + 22, 7, tbX + w - 4, TITLEBAR_H - 7 };
+        DrawText(hdc, label, -1, &lrc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        tbX += w + 8;
+    };
+
+    drawToolBtn(L"\u25B8", L"Quick", Theme::ACCENT_GREEN, 72);
+    drawToolBtn(L"\u25B8\u25B8", L"Deep", Theme::ACCENT_BLUE, 72);
+
+    // Separator
+    RECT sepRc = { tbX, 11, tbX + 1, TITLEBAR_H - 11 };
+    FillRect(hdc, &sepRc, Theme::BrushBorderDefault());
+    tbX += 12;
+
+    drawToolBtn(L"\u25A0", L"Stop", Theme::ACCENT_RED, 56);
+
+    // Command palette trigger (center-right area)
+    int cpX = cx - 280;
+    if (cpX > tbX + 40) {
+        RECT cpRc = { cpX, 8, cpX + 200, TITLEBAR_H - 8 };
+        Theme::DrawRoundedCard(hdc, cpRc, 6, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        SelectObject(hdc, Theme::FontCaption());
+        RECT cpText = { cpX + 10, 8, cpX + 180, TITLEBAR_H - 8 };
+        DrawText(hdc, L"Search devices, commands...", -1, &cpText, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        // Ctrl+K badge
+        RECT badge = { cpX + 152, 12, cpX + 194, TITLEBAR_H - 12 };
+        Theme::DrawRoundedCard(hdc, badge, 3, Theme::BG_ROOT, Theme::BORDER_DEFAULT);
+        RECT badgeText = { cpX + 152, 12, cpX + 194, TITLEBAR_H - 12 };
+        DrawText(hdc, L"Ctrl+K", -1, &badgeText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    SelectObject(hdc, old);
 }
 
 // ─── DrawNavSidebar ──────────────────────────────────────────────────────────
 
 void MainWindow::DrawNavSidebar(HDC hdc, const RECT& rc) {
-    // Sidebar background
-    RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, rc.bottom };
-    FillRect(hdc, &sidebarRc, Theme::BrushSidebar());
+    int sw = GetSidebarWidth();
+
+    // Sidebar background — bg_root
+    RECT sidebarRc = { 0, TITLEBAR_H, sw, rc.bottom - STATUSBAR_H };
+    FillRect(hdc, &sidebarRc, Theme::BrushRoot());
 
     // Right border
-    RECT borderRc = { SIDEBAR_WIDTH - 1, 0, SIDEBAR_WIDTH, rc.bottom };
-    FillRect(hdc, &borderRc, Theme::BrushBorder());
+    RECT borderRc = { sw - 1, TITLEBAR_H, sw, rc.bottom - STATUSBAR_H };
+    FillRect(hdc, &borderRc, Theme::BrushBorderSubtle());
 
-    // Brand name
-    RECT brandRc = { 0, 12, SIDEBAR_WIDTH, NAV_BTN_TOP - 4 };
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::ACCENT);
-    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBrand());
-    DrawText(hdc, L"Transparency", -1, &brandRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    // Collapse toggle (top of sidebar)
+    RECT toggleRc = { 0, TITLEBAR_H, sw, TITLEBAR_H + 32 };
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontMono());
+    RECT togText = { 14, TITLEBAR_H, sw, TITLEBAR_H + 32 };
+    DrawText(hdc, _sidebarExpanded ? L"\u25C2" : L"\u25B8", -1, &togText,
+             DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, oldFont);
 
-    // Separator under brand
-    RECT sepRc = { 10, NAV_BTN_TOP - 6, SIDEBAR_WIDTH - 10, NAV_BTN_TOP - 5 };
-    FillRect(hdc, &sepRc, Theme::BrushBorder());
+    // Nav items
+    for (int i = 0; i < NAV_ITEM_COUNT; i++) {
+        int btnY = TITLEBAR_H + NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
+        RECT btnRc = { 4, btnY, sw - 4, btnY + NAV_BTN_HEIGHT - 1 };
 
-    // Nav buttons
-    for (int i = 0; i < (int)Tab::COUNT; i++) {
-        int btnY  = NAV_BTN_TOP + i * NAV_BTN_HEIGHT;
-        RECT btnRc = { 8, btnY, SIDEBAR_WIDTH - 8, btnY + NAV_BTN_HEIGHT - 2 };
-
-        bool active  = (_currentTab == (Tab)i);
+        bool active  = (_currentTab == NAV_ITEMS[i].tab);
         bool hovered = (_hoverNav == i && !active);
 
-        COLORREF bg = active  ? Theme::BG_ROW_SEL
-                    : hovered ? Theme::BG_ROW_HOV
-                    :           Theme::BG_SIDEBAR;
-        HBRUSH bgBrush = CreateSolidBrush(bg);
-        FillRect(hdc, &btnRc, bgBrush);
-        DeleteObject(bgBrush);
+        if (active)
+            Theme::DrawRoundedCard(hdc, btnRc, 6, Theme::BG_NAV_ACTIVE, Theme::BORDER_SUBTLE, 0);
+        else if (hovered)
+            Theme::DrawRoundedCard(hdc, btnRc, 6, Theme::BG_OVERLAY, Theme::BORDER_SUBTLE, 0);
 
-        if (active) {
-            RECT accent = { btnRc.left, btnRc.top + 4, btnRc.left + 3, btnRc.bottom - 4 };
-            HBRUSH accentBrush = CreateSolidBrush(Theme::ACCENT);
-            FillRect(hdc, &accent, accentBrush);
-            DeleteObject(accentBrush);
+        // Icon — 14px, centered in 20px container
+        COLORREF iconCol = active ? Theme::ACCENT_BLUE : Theme::TEXT_TERTIARY;
+        SetTextColor(hdc, iconCol);
+        SelectObject(hdc, Theme::FontBody());
+        int iconLeft = _sidebarExpanded ? 10 : (sw - 14) / 2;
+        RECT iconRc = { btnRc.left + iconLeft, btnRc.top, btnRc.left + iconLeft + 20, btnRc.bottom };
+        DrawText(hdc, NAV_ITEMS[i].icon, -1, &iconRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+        // Label (only when expanded)
+        if (_sidebarExpanded) {
+            COLORREF textCol = active ? Theme::TEXT_PRIMARY : hovered ? Theme::TEXT_PRIMARY : Theme::TEXT_TERTIARY;
+            SetTextColor(hdc, textCol);
+            SelectObject(hdc, active ? Theme::FontNavActive() : Theme::FontNavInactive());
+            RECT labelRc = { btnRc.left + 36, btnRc.top, btnRc.right - 4, btnRc.bottom };
+            DrawText(hdc, NAV_ITEMS[i].label, -1, &labelRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         }
-
-        SetBkMode(hdc, TRANSPARENT);
-        COLORREF textColor = active  ? Theme::ACCENT
-                           : hovered ? Theme::TEXT_PRIMARY
-                           :           Theme::TEXT_SECONDARY;
-        SetTextColor(hdc, textColor);
-
-        HFONT navFont = (HFONT)SelectObject(hdc, Theme::FontBody());
-
-        RECT iconRc  = { btnRc.left + 12, btnRc.top, btnRc.left + 28, btnRc.bottom };
-        DrawText(hdc, NAV_ITEMS[i].icon, -1, &iconRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-        RECT labelRc = { btnRc.left + 30, btnRc.top, btnRc.right - 4, btnRc.bottom };
-        DrawText(hdc, NAV_ITEMS[i].label, -1, &labelRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-        SelectObject(hdc, navFont);
     }
 
-    // Version label
+    // Bottom separator
+    int botSepY = rc.bottom - STATUSBAR_H - 56;
+    RECT botSep = { 8, botSepY, sw - 8, botSepY + 1 };
+    FillRect(hdc, &botSep, Theme::BrushBorderSubtle());
+
+    // Bottom nav: Settings
+    int botBtnY = rc.bottom - STATUSBAR_H - 48;
+    RECT botBtnRc = { 4, botBtnY, sw - 4, botBtnY + NAV_BTN_HEIGHT - 1 };
+    bool settingsActive = (_currentTab == Tab::Privacy);
+    if (settingsActive)
+        Theme::DrawRoundedCard(hdc, botBtnRc, 6, Theme::BG_NAV_ACTIVE, Theme::BORDER_SUBTLE, 0);
+
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    SelectObject(hdc, Theme::FontBody());
+    int sIconLeft = _sidebarExpanded ? 10 : (sw - 14) / 2;
+    RECT sIconRc = { botBtnRc.left + sIconLeft, botBtnRc.top, botBtnRc.left + sIconLeft + 20, botBtnRc.bottom };
+    DrawText(hdc, L"\u2699", -1, &sIconRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    if (_sidebarExpanded) {
+        SetTextColor(hdc, settingsActive ? Theme::TEXT_PRIMARY : Theme::TEXT_TERTIARY);
+        SelectObject(hdc, settingsActive ? Theme::FontNavActive() : Theme::FontNavInactive());
+        RECT sLblRc = { botBtnRc.left + 36, botBtnRc.top, botBtnRc.right - 4, botBtnRc.bottom };
+        DrawText(hdc, L"Settings", -1, &sLblRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    }
+}
+
+// ─── DrawContentHeader ───────────────────────────────────────────────────────
+
+void MainWindow::DrawContentHeader(HDC hdc, int cx, int cy) {
+    int sw = GetSidebarWidth();
+    int hdrTop = TITLEBAR_H;
+
+    // Background — bg_surface
+    RECT hdrRc = { sw, hdrTop, cx, hdrTop + CONTENT_HDR_H };
+    FillRect(hdc, &hdrRc, Theme::BrushSurface());
+
+    // Bottom border
+    RECT hdrBorder = { sw, hdrTop + CONTENT_HDR_H - 1, cx, hdrTop + CONTENT_HDR_H };
+    FillRect(hdc, &hdrBorder, Theme::BrushBorderSubtle());
+
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::TEXT_SECONDARY);
-    RECT verRc = { 4, rc.bottom - 28, SIDEBAR_WIDTH - 4, rc.bottom - 6 };
-    HFONT verFont = (HFONT)SelectObject(hdc, Theme::FontSmall());
-    DrawText(hdc, L"v3.5.0", -1, &verRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, verFont);
+
+    // View title — 13px/700
+    SetTextColor(hdc, Theme::TEXT_PRIMARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+    const wchar_t* viewTitle = L"Dashboard";
+    switch (_currentTab) {
+    case Tab::Devices:  viewTitle = L"Devices";     break;
+    case Tab::Alerts:   viewTitle = L"Alerts";      break;
+    case Tab::Tools:    viewTitle = L"Diagnostics";  break;
+    case Tab::Ledger:   viewTitle = L"Scan History"; break;
+    case Tab::Privacy:  viewTitle = L"Settings";     break;
+    case Tab::SmartHome:viewTitle = L"Topology";     break;
+    default: break;
+    }
+    RECT titleRc = { sw + 20, hdrTop, sw + 200, hdrTop + CONTENT_HDR_H };
+    DrawText(hdc, viewTitle, -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // Item count — mono 11px (read count directly, no full copy)
+    int itemCount = 0;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        itemCount = (int)_lastResult.devices.size();
+    }
+    wchar_t countStr[32];
+    swprintf_s(countStr, L"%d found", itemCount);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    SelectObject(hdc, Theme::FontMono());
+    RECT countRc = { sw + 120, hdrTop, sw + 240, hdrTop + CONTENT_HDR_H };
+    DrawText(hdc, countStr, -1, &countRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // Right side: last scan time
+    DWORD elapsed = _lastScanTick ? (GetTickCount() - _lastScanTick) / 1000 : 0;
+    wchar_t scanStr[64];
+    if (_lastScanTick == 0)
+        wcscpy_s(scanStr, L"NO SCAN YET");
+    else if (elapsed < 60)
+        swprintf_s(scanStr, L"LAST SCAN: %ds AGO", elapsed);
+    else
+        swprintf_s(scanStr, L"LAST SCAN: %dm AGO", elapsed / 60);
+
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    SelectObject(hdc, Theme::FontCaption());
+    RECT scanRc = { cx - 220, hdrTop, cx - 30, hdrTop + CONTENT_HDR_H };
+    DrawText(hdc, scanStr, -1, &scanRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+
+    // Monitoring dot (green pulsing circle)
+    if (_monitorActive) {
+        Gdiplus::Graphics g(hdc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        // Glow
+        Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GREEN, 100));
+        g.FillEllipse(&glow, cx - 24, hdrTop + 16, 8, 8);
+        // Dot
+        Gdiplus::SolidBrush dot(Theme::GdipColor(Theme::ACCENT_GREEN));
+        g.FillEllipse(&dot, cx - 22, hdrTop + 18, 4, 4);
+    }
+
+    SelectObject(hdc, old);
+}
+
+// ─── DrawStatusBar ───────────────────────────────────────────────────────────
+
+void MainWindow::DrawStatusBar(HDC hdc, int cx, int cy) {
+    int sbTop = cy - STATUSBAR_H;
+
+    // Background — bg_root
+    RECT sbRc = { 0, sbTop, cx, cy };
+    FillRect(hdc, &sbRc, Theme::BrushRoot());
+
+    // Top border
+    RECT sbBorder = { 0, sbTop, cx, sbTop + 1 };
+    FillRect(hdc, &sbBorder, Theme::BrushBorderSubtle());
+
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontMono());
+
+    int x = 14;
+
+    // Monitoring status with dot
+    if (_monitorActive) {
+        Gdiplus::Graphics g(hdc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::SolidBrush dot(Theme::GdipColor(Theme::ACCENT_GREEN));
+        g.FillEllipse(&dot, x, sbTop + 10, 5, 5);
+        x += 10;
+        RECT monRc = { x, sbTop, x + 120, cy };
+        DrawText(hdc, L"Monitoring Active", -1, &monRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        x += 130;
+    } else {
+        RECT monRc = { x, sbTop, x + 80, cy };
+        DrawText(hdc, L"Idle", -1, &monRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        x += 50;
+    }
+
+    // Network info — use cached data to avoid expensive calls during paint
+    static wstring s_cachedNetInfo;
+    static DWORD s_netCacheTick = 0;
+    DWORD now = GetTickCount();
+    if (now - s_netCacheTick > 10000 || s_cachedNetInfo.empty()) {
+        auto nets = ScanEngine::GetLocalNetworks();
+        s_cachedNetInfo = nets.empty() ? L"" : nets[0].localIp + L"/" + nets[0].cidr;
+        s_netCacheTick = now;
+    }
+    if (!s_cachedNetInfo.empty()) {
+        RECT netRc = { x, sbTop, x + 140, cy };
+        DrawText(hdc, s_cachedNetInfo.c_str(), -1, &netRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        x += 150;
+    }
+
+    // Device + alert count — read counts directly (fast, no copy)
+    int devCount = 0, anomCount = 0;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        devCount = (int)_lastResult.devices.size();
+        anomCount = (int)_lastResult.anomalies.size();
+    }
+    wchar_t devStr[32];
+    swprintf_s(devStr, L"%d devices", devCount);
+    RECT devRc = { x, sbTop, x + 80, cy };
+    DrawText(hdc, devStr, -1, &devRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    x += 90;
+
+    // Alert count
+    wchar_t alertStr[32];
+    swprintf_s(alertStr, L"%d alerts", anomCount);
+    RECT alertRc = { x, sbTop, x + 70, cy };
+    DrawText(hdc, alertStr, -1, &alertRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    // Right side: gateway — cached
+    static wstring s_cachedGw;
+    if (now - s_netCacheTick < 1000) {
+        // Use same cache cycle — already refreshed above
+    } else if (s_cachedGw.empty()) {
+        auto nets2 = ScanEngine::GetLocalNetworks();
+        if (!nets2.empty() && !nets2[0].gateway.empty())
+            s_cachedGw = L"GW: " + nets2[0].gateway;
+    }
+    if (!s_cachedGw.empty()) {
+        int rx = cx - 14;
+        RECT gwRc = { rx - 160, sbTop, rx, cy };
+        DrawText(hdc, s_cachedGw.c_str(), -1, &gwRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    SelectObject(hdc, old);
 }
 
 // ─── OnPaint ─────────────────────────────────────────────────────────────────
 
 LRESULT MainWindow::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
+    HDC hdcScreen = BeginPaint(hwnd, &ps);
 
     RECT rc;
     GetClientRect(hwnd, &rc);
+    int cx = rc.right, cy = rc.bottom;
+    if (cx <= 0 || cy <= 0) { EndPaint(hwnd, &ps); return 0; }
 
-    FillRect(hdc, &rc, Theme::BrushApp());
+    // Double buffer — paint to offscreen bitmap, then blit
+    HDC hdc = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cx, cy);
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdc, hBmp);
+
+    // Fill entire background
+    FillRect(hdc, &rc, Theme::BrushRoot());
+
+    // Draw the 4 shell zones
+    DrawTitleBar(hdc, cx);
     DrawNavSidebar(hdc, rc);
+    DrawContentHeader(hdc, cx, cy);
+    DrawStatusBar(hdc, cx, cy);
+
+    // Blit to screen
+    BitBlt(hdcScreen, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
+
+    SelectObject(hdc, hOldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(hdc);
 
     EndPaint(hwnd, &ps);
     return 0;
+}
+
+LRESULT MainWindow::OnLButtonUp(HWND hwnd, int x, int y) {
+    return DefWindowProc(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
+}
+
+LRESULT MainWindow::OnNcHitTest(HWND hwnd, int x, int y) {
+    return DefWindowProc(hwnd, WM_NCHITTEST, 0, MAKELPARAM(x, y));
 }
 
 // ─── OnDestroy ───────────────────────────────────────────────────────────────
 
 LRESULT MainWindow::OnDestroy(HWND hwnd) {
     KillTimer(hwnd, 1);
+    KillTimer(hwnd, 2);
     StopLocalApi();
     _monitor.Stop();
     _scanner.Cancel();
@@ -443,8 +801,7 @@ void MainWindow::SwitchTab(Tab tab) {
     ShowActivePanel();
 
     if (_hwnd) {
-        RECT sidebarRc = { 0, 0, SIDEBAR_WIDTH, 9999 };
-        InvalidateRect(_hwnd, &sidebarRc, FALSE);
+        InvalidateRect(_hwnd, nullptr, FALSE);
         UpdateWindow(_hwnd);
     }
 }
@@ -468,23 +825,84 @@ void MainWindow::ShowActivePanel() {
     show(_tabTools,    _currentTab == Tab::Tools);
     show(_tabLedger,   _currentTab == Tab::Ledger);
     show(_tabPrivacy,  _currentTab == Tab::Privacy);
+    show(_tabSmartHome, _currentTab == Tab::SmartHome);
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
 
+// ─── MergeDeviceHistory ──────────────────────────────────────────────────────
+// Carry forward persistent fields from previous scan by matching on MAC.
+static void MergeDeviceHistory(ScanResult& result, const ScanResult& prev) {
+    // Build MAC -> device map from previous
+    std::map<wstring, const Device*> prevByMac;
+    for (auto& d : prev.devices) {
+        if (!d.mac.empty()) prevByMac[d.mac] = &d;
+    }
+
+    for (auto& dev : result.devices) {
+        if (dev.mac.empty()) continue;
+        auto it = prevByMac.find(dev.mac);
+        if (it == prevByMac.end()) continue;
+        const Device* pd = it->second;
+
+        // Carry forward user data
+        if (dev.customName.empty() && !pd->customName.empty()) dev.customName = pd->customName;
+        if (dev.notes.empty() && !pd->notes.empty()) dev.notes = pd->notes;
+        if (dev.trustState == L"unknown" && pd->trustState != L"unknown") dev.trustState = pd->trustState;
+        dev.tags = pd->tags;
+        dev.location = pd->location;
+
+        // Carry forward temporal data
+        if (!pd->firstSeen.empty()) dev.firstSeen = pd->firstSeen;
+        dev.prevHostname = pd->hostname;
+        dev.prevPorts = pd->openPorts;
+        dev.sightingCount = pd->sightingCount + 1;
+
+        // Build IP history
+        dev.ipHistory = pd->ipHistory;
+        if (pd->ip != dev.ip && !pd->ip.empty()) {
+            // Add old IP if not already tracked
+            bool found = false;
+            for (auto& h : dev.ipHistory) { if (h == pd->ip) { found = true; break; } }
+            if (!found) {
+                dev.ipHistory.push_back(pd->ip);
+                if (dev.ipHistory.size() > 10) dev.ipHistory.erase(dev.ipHistory.begin());
+            }
+        }
+
+        // Carry forward latency history
+        dev.latencyHistory = pd->latencyHistory;
+        if (dev.latencyMs >= 0) {
+            dev.latencyHistory.push_back(dev.latencyMs);
+            if (dev.latencyHistory.size() > 7)
+                dev.latencyHistory.erase(dev.latencyHistory.begin());
+        }
+    }
+}
+
 void MainWindow::StartQuickScan() {
     AddLedgerEntry(L"Scan Started", L"Quick scan initiated");
 
+    ScanResult prevResult;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        prevResult = _lastResult;
+    }
+
     auto* hwnd = _hwnd;
-    std::thread([this, hwnd]() {
+    std::thread([this, hwnd, prevResult]() {
         auto future = _scanner.QuickScan([hwnd](int pct, std::wstring msg) {
             wstring* msgPtr = new wstring(msg);
             PostMessage(hwnd, WM_SCAN_PROGRESS, (WPARAM)pct, (LPARAM)msgPtr);
         });
 
         ScanResult* result = new ScanResult(future.get());
+        MergeDeviceHistory(*result, prevResult);
+        if (!prevResult.devices.empty())
+            result->anomalies = ScanEngine::AnalyzeAnomalies(*result, prevResult);
         {
             std::lock_guard<std::mutex> lk(_dataMutex);
+            _previousResult = prevResult;
             _lastResult = *result;
         }
         PostMessage(hwnd, WM_SCAN_COMPLETE, 0, (LPARAM)result);
@@ -494,16 +912,26 @@ void MainWindow::StartQuickScan() {
 void MainWindow::StartStandardScan() {
     AddLedgerEntry(L"Scan Started", L"Standard scan initiated");
 
+    ScanResult prevResult;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        prevResult = _lastResult;
+    }
+
     auto* hwnd = _hwnd;
-    std::thread([this, hwnd]() {
+    std::thread([this, hwnd, prevResult]() {
         auto future = _scanner.StandardScan([hwnd](int pct, std::wstring msg) {
             wstring* msgPtr = new wstring(msg);
             PostMessage(hwnd, WM_SCAN_PROGRESS, (WPARAM)pct, (LPARAM)msgPtr);
         });
 
         ScanResult* result = new ScanResult(future.get());
+        MergeDeviceHistory(*result, prevResult);
+        if (!prevResult.devices.empty())
+            result->anomalies = ScanEngine::AnalyzeAnomalies(*result, prevResult);
         {
             std::lock_guard<std::mutex> lk(_dataMutex);
+            _previousResult = prevResult;
             _lastResult = *result;
         }
         PostMessage(hwnd, WM_SCAN_COMPLETE, 0, (LPARAM)result);
@@ -513,16 +941,26 @@ void MainWindow::StartStandardScan() {
 void MainWindow::StartDeepScan() {
     AddLedgerEntry(L"Scan Started", L"Deep scan initiated");
 
+    ScanResult prevResult;
+    {
+        std::lock_guard<std::mutex> lk(_dataMutex);
+        prevResult = _lastResult;
+    }
+
     auto* hwnd = _hwnd;
-    std::thread([this, hwnd]() {
+    std::thread([this, hwnd, prevResult]() {
         auto future = _scanner.DeepScan([hwnd](int pct, std::wstring msg) {
             wstring* msgPtr = new wstring(msg);
             PostMessage(hwnd, WM_SCAN_PROGRESS, (WPARAM)pct, (LPARAM)msgPtr);
         });
 
         ScanResult* result = new ScanResult(future.get());
+        MergeDeviceHistory(*result, prevResult);
+        if (!prevResult.devices.empty())
+            result->anomalies = ScanEngine::AnalyzeAnomalies(*result, prevResult);
         {
             std::lock_guard<std::mutex> lk(_dataMutex);
+            _previousResult = prevResult;
             _lastResult = *result;
         }
         PostMessage(hwnd, WM_SCAN_COMPLETE, 0, (LPARAM)result);
@@ -741,7 +1179,7 @@ DWORD WINAPI MainWindow::LocalApiThreadProc(LPVOID param) {
         };
 
         if (route("/api/health")) {
-            body = "{\"status\":\"ok\",\"version\":\"3.5.0\"}\r\n";
+            body = "{\"status\":\"ok\",\"version\":\"4.1.0\"}\r\n";
             found = true;
         } else if (route("/api/status")) {
             body = "{\"devices\":" + std::to_string(r.devices.size()) +
@@ -762,6 +1200,10 @@ DWORD WINAPI MainWindow::LocalApiThreadProc(LPVOID param) {
                       + ",\"online\":" + (d.online?"true":"false")
                       + ",\"latencyMs\":" + std::to_string(d.latencyMs)
                       + ",\"confidence\":" + std::to_string(d.confidence)
+                      + ",\"classificationReason\":\"" + jsonEsc(wstr2utf8(d.classificationReason)) + "\""
+                      + ",\"subnet\":\"" + jsonEsc(wstr2utf8(d.subnet)) + "\""
+                      + ",\"firstSeen\":\"" + jsonEsc(wstr2utf8(d.firstSeen)) + "\""
+                      + ",\"sightings\":" + std::to_string(d.sightingCount)
                       + "}";
             }
             body += "]\r\n";
@@ -839,6 +1281,8 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
         _lastResult = *result;
     }
     delete result;
+    _lastScanTick = GetTickCount();
+    InvalidateRect(hwnd, nullptr, FALSE);
 
     if (_tabOverview && _tabOverview->GetHwnd())
         SendMessage(_tabOverview->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
@@ -848,6 +1292,10 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
         SendMessage(_tabAlerts->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
     if (_tabLedger && _tabLedger->GetHwnd())
         SendMessage(_tabLedger->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
+    if (_tabTools && _tabTools->GetHwnd())
+        SendMessage(_tabTools->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
+    if (_tabSmartHome && _tabSmartHome->GetHwnd())
+        SendMessage(_tabSmartHome->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
 
     ScanResult r = GetLastResult();
     AddLedgerEntry(L"Scan Complete",

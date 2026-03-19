@@ -103,11 +103,13 @@
 #define IDC_BTN_HOOK_ADD        6071
 #define IDC_BTN_HOOK_DEL        6072
 #define IDC_BTN_SCHED_SAVE      6073
+#define IDC_BTN_NIC_PIN         6080
 
 // Combo box IDs
 #define IDC_COMBO_DNS_TYPE      7001
 #define IDC_COMBO_TRUST         7002
 #define IDC_COMBO_SCAN_MODE     7003
+#define IDC_COMBO_NIC_SELECT    7004
 
 // Checkbox IDs
 #define IDC_CHECK_GENTLE        8001
@@ -130,6 +132,28 @@
 #define IDD_RULE_BUILDER        10001
 #define IDD_ABOUT               10002
 
+// Smart Home tab IDs
+#define IDC_SMART_DEVICE_LIST       11001
+#define IDC_BTN_ALEXA_LINK          11010
+#define IDC_BTN_ALEXA_DISCOVER      11011
+#define IDC_SMART_ALEXA_OUT         11012
+#define IDC_BTN_GOOGLE_LINK         11020
+#define IDC_BTN_GOOGLE_DISCOVER     11021
+#define IDC_SMART_GOOGLE_OUT        11022
+#define IDC_SMART_TRIGGER_EVENT     11030
+#define IDC_SMART_TRIGGER_ACTION    11031
+#define IDC_SMART_TRIGGER_LIST      11032
+#define IDC_BTN_SMART_ADD_TRIGGER   11033
+#define IDC_BTN_SMART_DEL_TRIGGER   11034
+#define IDC_SMART_SCENE_NAME        11040
+#define IDC_SMART_SCENE_LIST        11041
+#define IDC_BTN_SMART_ADD_SCENE     11042
+#define IDC_BTN_SMART_RUN_SCENE     11043
+
+// Nav IDs
+#define IDC_NAV_SMARTHOME   2007
+#define IDC_PANEL_SMARTHOME 3007
+
 // WM_USER custom messages
 #define WM_SCAN_COMPLETE        (WM_USER + 1)
 #define WM_SCAN_PROGRESS        (WM_USER + 2)
@@ -139,3 +163,4 @@
 #define WM_TOOL_RESULT          (WM_USER + 6)
 #define WM_ALERT_FIRED          (WM_USER + 7)
 #define WM_DNS_CHANGED          (WM_USER + 8)
+#define WM_MAP_DEVICE_CLICK     (WM_USER + 9)

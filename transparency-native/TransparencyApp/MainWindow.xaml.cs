@@ -44,11 +44,11 @@ namespace TransparencyApp
             // Reset previous
             if (_activeNav is not null)
                 _activeNav.Foreground = new SolidColorBrush(
-                    (Color)ColorConverter.ConvertFromString("#666688"));
+                    (Color)ColorConverter.ConvertFromString("#8B90A0"));
 
             _activeNav = btn;
             btn.Foreground = new SolidColorBrush(
-                (Color)ColorConverter.ConvertFromString("#4A9EFF"));
+                (Color)ColorConverter.ConvertFromString("#5B8DEF"));
         }
 
         // ── Scan ──────────────────────────────────────────────────────────────

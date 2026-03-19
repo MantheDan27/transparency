@@ -51,7 +51,7 @@ bool TabTools::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainW
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushApp();
+    wc.hbrBackground = Theme::BrushSurface();
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
@@ -81,15 +81,16 @@ LRESULT CALLBACK TabTools::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushApp()); return 1; }
+    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_TOOL_RESULT: return self->OnToolResult(hwnd, wp, lp);
+    case WM_SCAN_COMPLETE: self->RefreshIpList(); return 0;
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
         SetTextColor((HDC)wp, Theme::TEXT_PRIMARY);
-        SetBkColor((HDC)wp, Theme::BG_APP);
-        return (LRESULT)Theme::BrushApp();
+        SetBkColor((HDC)wp, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
     }
     default: return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -100,6 +101,7 @@ LRESULT TabTools::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
     CreateControls(hwnd, rc.right, rc.bottom);
     RefreshWifiInfo();
     RefreshGatewayInfo();
+    RefreshIpList();
     return 0;
 }
 
@@ -138,6 +140,16 @@ void TabTools::CreateControls(HWND hwnd, int cx, int cy) {
     };
 
     int y = 10;
+
+    // ── Target Device IP Selector ────────────────────────────────────────────
+    mkLbl(L"TARGET DEVICE", 16, y, 130);
+    _hIpSelector = CreateWindowEx(0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        150, y - 2, 280, 200, hwnd, (HMENU)(INT_PTR)9750, hInst, nullptr);
+    SendMessage(_hIpSelector, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    // "Use" button to fill target fields
+    mkBtn(L"Use", 9751, 440, y - 2, 50, 24);
+    y += 34;
 
     // ── Guided Flows ──────────────────────────────────────────────────────────
     MakeSection(hwnd, L"Guided Troubleshooting", y, cx, hInst);
@@ -296,9 +308,56 @@ LRESULT TabTools::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section label
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    RECT hdr = { 16, 34, 200, 46 };
+    DrawText(hdc, L"DIAGNOSTICS", -1, &hdr, DT_LEFT | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
+}
+
+void TabTools::RefreshIpList() {
+    if (!_hIpSelector || !_mainWnd) return;
+    SendMessage(_hIpSelector, CB_RESETCONTENT, 0, 0);
+    SendMessage(_hIpSelector, CB_ADDSTRING, 0, (LPARAM)L"(select a device)");
+
+    ScanResult r = _mainWnd->GetLastResult();
+    for (auto& d : r.devices) {
+        wstring label = d.ip;
+        if (!d.customName.empty()) label += L"  \u2014  " + d.customName;
+        else if (!d.hostname.empty()) label += L"  \u2014  " + d.hostname;
+        else if (!d.vendor.empty()) label += L"  \u2014  " + d.vendor;
+        SendMessage(_hIpSelector, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+    }
+    SendMessage(_hIpSelector, CB_SETCURSEL, 0, 0);
+}
+
+void TabTools::FillTargetFromIp() {
+    if (!_hIpSelector || !_mainWnd) return;
+    int sel = (int)SendMessage(_hIpSelector, CB_GETCURSEL, 0, 0);
+    if (sel <= 0) return; // skip "(select a device)"
+
+    ScanResult r = _mainWnd->GetLastResult();
+    int idx = sel - 1;
+    if (idx >= (int)r.devices.size()) return;
+
+    const wchar_t* ip = r.devices[idx].ip.c_str();
+    // Fill all target fields
+    if (_hPingTarget) SetWindowText(_hPingTarget, ip);
+    if (_hTraceTarget) SetWindowText(_hTraceTarget, ip);
+    if (_hTcpHost) SetWindowText(_hTcpHost, ip);
+    if (_hPortScanTarget) SetWindowText(_hPortScanTarget, ip);
+    if (_hRevDnsIp) SetWindowText(_hRevDnsIp, ip);
 }
 
 void TabTools::AppendOutput(HWND hEdit, const wstring& text) {
@@ -368,6 +427,10 @@ LRESULT TabTools::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     case 9701: ShowGuidedFlow(1); break;
     case 9702: ShowGuidedFlow(2); break;
     case 9703: ShowGuidedFlow(3); break;
+
+    case 9751: // "Use" button — fill target fields from selected IP
+        FillTargetFromIp();
+        break;
 
     case IDC_BTN_PORT_SCAN_RUN: {
         wchar_t target[256] = {};

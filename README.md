@@ -1,5 +1,4 @@
 # Transparency
-
 A native Windows desktop application for monitoring devices on your local network. Built with C++ and Win32 APIs — no runtime or installer required.
 
 ## Features
@@ -24,7 +23,7 @@ Pre-built releases are available on the [Releases](../../releases) page. Downloa
 
 **Requirements**: Windows 10 or later (x64). Run as administrator for full ARP/ping functionality.
 
-## Building from Source
+## Building from Source 
 
 ### Prerequisites
 
