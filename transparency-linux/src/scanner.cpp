@@ -12,6 +12,7 @@
 #include <sstream>
 #include <algorithm>
 #include <thread>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <regex>
@@ -263,33 +264,27 @@ std::vector<int> ScanEngine::scanPorts(const std::string& ip, const std::vector<
     std::vector<int> open;
     std::mutex mtx;
 
-    // Use a simple semaphore approach with threads
-    const int maxConcurrent = 32;
+    int numThreads = std::min(32, (int)ports.size());
     std::vector<std::thread> threads;
-    int active = 0;
-    std::mutex activeMtx;
-    std::condition_variable cv;
+    std::atomic<size_t> idx{0};
 
-    for (int port : ports) {
-        if (_cancelled) break;
-        {
-            std::unique_lock<std::mutex> lk(activeMtx);
-            cv.wait(lk, [&] { return active < maxConcurrent; });
-            active++;
-        }
-        threads.emplace_back([&, port]() {
-            if (probePort(ip, port, timeoutMs)) {
-                std::lock_guard<std::mutex> lk(mtx);
-                open.push_back(port);
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&]() {
+            while (!_cancelled) {
+                size_t current_idx = idx.fetch_add(1);
+                if (current_idx >= ports.size()) break;
+
+                int port = ports[current_idx];
+                if (probePort(ip, port, timeoutMs)) {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    open.push_back(port);
+                }
             }
-            {
-                std::lock_guard<std::mutex> lk(activeMtx);
-                active--;
-            }
-            cv.notify_one();
         });
     }
-    for (auto& t : threads) t.join();
+    for (auto& t : threads) {
+        if (t.joinable()) t.join();
+    }
 
     std::sort(open.begin(), open.end());
     return open;
@@ -682,39 +677,38 @@ ScanResult ScanEngine::doScan(const std::string& mode, const std::vector<int>& p
         if (cb) cb(15, "Pinging " + std::to_string(total) + " hosts...");
         std::mutex mtx;
         std::vector<std::thread> threads;
-        int active = 0;
-        std::mutex activeMtx;
-        std::condition_variable cv;
-        const int maxPingThreads = 64;
+        std::atomic<size_t> idx{0};
+        const int maxPingThreads = std::min(64, total);
 
-        for (int i = 0; i < total && !_cancelled; i++) {
-            {
-                std::unique_lock<std::mutex> lk(activeMtx);
-                cv.wait(lk, [&] { return active < maxPingThreads; });
-                active++;
-            }
-            threads.emplace_back([&, i]() {
-                bool alive = pingHost(ips[i], 1500);
-                if (alive) {
-                    std::lock_guard<std::mutex> lk(mtx);
-                    if (deviceMap.find(ips[i]) == deviceMap.end()) {
-                        Device dev;
-                        dev.ip = ips[i];
-                        dev.online = true;
-                        dev.firstSeen = nowTimestamp();
-                        dev.lastSeen = nowTimestamp();
-                        deviceMap[ips[i]] = dev;
+        for (int i = 0; i < maxPingThreads; ++i) {
+            threads.emplace_back([&]() {
+                while (!_cancelled) {
+                    size_t current_idx = idx.fetch_add(1);
+                    if (current_idx >= (size_t)total) break;
+
+                    std::string ip = ips[current_idx];
+                    bool alive = pingHost(ip, 1500);
+                    if (alive) {
+                        std::lock_guard<std::mutex> lk(mtx);
+                        if (deviceMap.find(ip) == deviceMap.end()) {
+                            Device dev;
+                            dev.ip = ip;
+                            dev.online = true;
+                            dev.firstSeen = nowTimestamp();
+                            dev.lastSeen = nowTimestamp();
+                            deviceMap[ip] = dev;
+                        }
+                    }
+                    {
+                        std::lock_guard<std::mutex> lk(mtx);
+                        pingCount++;
                     }
                 }
-                {
-                    std::lock_guard<std::mutex> lk(activeMtx);
-                    active--;
-                    pingCount++;
-                }
-                cv.notify_one();
             });
         }
-        for (auto& t : threads) t.join();
+        for (auto& t : threads) {
+            if (t.joinable()) t.join();
+        }
 
         // Re-read ARP table after pings
         auto arpAfter = readArpTable();

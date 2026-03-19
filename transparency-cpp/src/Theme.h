@@ -6,8 +6,11 @@
 #include <dwmapi.h>
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "dwmapi.lib")
+#include <objbase.h>
+#include <gdiplus.h>
+#pragma comment(lib, "gdiplus.lib")
 
-// ─── Design System: Transparency v3.6 ───────────────────────────────────────
+// ─── Design System: Transparency v4.1 ───────────────────────────────────────
 // Single source of truth for all visual tokens. See design-system.md for spec.
 // Rule: NEVER hardcode colors, fonts, sizes, or spacing inline.
 
@@ -216,6 +219,328 @@ inline void ApplyDarkEdit(HWND hwnd) {
 inline void SetDarkTitlebar(HWND hwnd) {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
+}
+
+// ── GDI+ Drawing Helpers ────────────────────────────────────────────────────
+
+inline Gdiplus::Color GdipColor(COLORREF cr, BYTE alpha = 255) {
+    return Gdiplus::Color(alpha, GetRValue(cr), GetGValue(cr), GetBValue(cr));
+}
+
+inline void DrawRoundedCard(HDC hdc, const RECT& rc, int radius,
+                            COLORREF fillColor, COLORREF borderColor,
+                            int borderWidth = 1) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    Gdiplus::SolidBrush fill(GdipColor(fillColor));
+    g.FillPath(&fill, &path);
+
+    if (borderWidth > 0) {
+        Gdiplus::Pen pen(GdipColor(borderColor), (Gdiplus::REAL)borderWidth);
+        g.DrawPath(&pen, &path);
+    }
+}
+
+inline void DrawAccentCard(HDC hdc, const RECT& rc, int radius,
+                           COLORREF fillColor, COLORREF borderColor,
+                           COLORREF accentColor) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    Gdiplus::SolidBrush fill(GdipColor(fillColor));
+    g.FillPath(&fill, &path);
+
+    // Top accent bar (3px, clipped to card)
+    Gdiplus::Region oldClip;
+    g.GetClip(&oldClip);
+    g.SetClip(&path);
+    Gdiplus::SolidBrush accentBrush(GdipColor(accentColor));
+    g.FillRectangle(&accentBrush, x, y, w, 3);
+    g.SetClip(&oldClip);
+
+    Gdiplus::Pen pen(GdipColor(borderColor), 1.0f);
+    g.DrawPath(&pen, &path);
+}
+
+inline void DrawGradientButton(HDC hdc, const RECT& rc, int radius,
+                               COLORREF topColor, COLORREF bottomColor,
+                               COLORREF borderColor = 0, int borderWidth = 0) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    Gdiplus::LinearGradientBrush grad(
+        Gdiplus::Point(x, y), Gdiplus::Point(x + w, y + h),
+        GdipColor(topColor), GdipColor(bottomColor));
+    g.FillPath(&grad, &path);
+
+    if (borderWidth > 0) {
+        Gdiplus::Pen pen(GdipColor(borderColor), (Gdiplus::REAL)borderWidth);
+        g.DrawPath(&pen, &path);
+    }
+}
+
+// ── Glassmorphism button ─────────────────────────────────────────────────────
+// Semi-transparent fill with frosted highlight at top, subtle glow border.
+// variant: 0 = primary (accent), 1 = secondary (neutral), 2 = destructive (red)
+inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
+                            bool pressed, int variant = 0) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    // Base fill — semi-transparent tinted surface
+    BYTE baseAlpha = pressed ? (BYTE)180 : (BYTE)120;
+    if (variant == 0) {
+        // Primary: accent blue glass
+        Gdiplus::LinearGradientBrush grad(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
+            Gdiplus::Color(baseAlpha, 30, 70, 160),
+            Gdiplus::Color(baseAlpha, 20, 45, 110));
+        g.FillPath(&grad, &path);
+    } else if (variant == 2) {
+        // Destructive: red-tinted glass
+        Gdiplus::SolidBrush fill(Gdiplus::Color(pressed ? 100 : 70, 200, 40, 60));
+        g.FillPath(&fill, &path);
+    } else {
+        // Secondary: neutral dark glass
+        Gdiplus::SolidBrush fill(GdipColor(BG_ELEVATED, baseAlpha));
+        g.FillPath(&fill, &path);
+    }
+
+    // Top highlight — frosted edge shimmer
+    {
+        Gdiplus::GraphicsPath topClip;
+        topClip.AddArc(x, y, d, d, 180, 90);
+        topClip.AddArc(x + w - d - 1, y, d, d, 270, 90);
+        topClip.AddLine(x + w - 1, y + d / 2, x, y + d / 2);
+        topClip.CloseFigure();
+
+        Gdiplus::Region oldClip;
+        g.GetClip(&oldClip);
+        g.SetClip(&path);  // confine to button shape
+
+        BYTE highlightAlpha = pressed ? (BYTE)15 : (BYTE)40;
+        Gdiplus::LinearGradientBrush shimmer(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
+            Gdiplus::Color(highlightAlpha, 255, 255, 255),
+            Gdiplus::Color(0, 255, 255, 255));
+        g.FillRectangle(&shimmer, x, y, w, h / 2);
+
+        g.SetClip(&oldClip);
+    }
+
+    // Border — colored glow edge
+    if (variant == 0) {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 70, 61, 127, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else if (variant == 2) {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 60, 255, 64, 96), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 50 : 30, 255, 255, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    }
+}
+
+// Glass-style filter pill — active state has accent glow, inactive is frosted
+inline void DrawGlassPill(HDC hdc, const RECT& rc, int radius,
+                          bool active, bool pressed) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    if (active) {
+        // Active: accent-tinted glass
+        Gdiplus::SolidBrush fill(Gdiplus::Color(100, 30, 70, 160));
+        g.FillPath(&fill, &path);
+        Gdiplus::Pen pen(Gdiplus::Color(90, 61, 127, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else if (pressed) {
+        Gdiplus::SolidBrush fill(GdipColor(BG_OVERLAY, 140));
+        g.FillPath(&fill, &path);
+        Gdiplus::Pen pen(Gdiplus::Color(25, 255, 255, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else {
+        Gdiplus::SolidBrush fill(GdipColor(BG_ELEVATED, 100));
+        g.FillPath(&fill, &path);
+        Gdiplus::Pen pen(Gdiplus::Color(18, 255, 255, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    }
+
+    // Top shimmer on active
+    if (active && !pressed) {
+        Gdiplus::Region oldClip;
+        g.GetClip(&oldClip);
+        g.SetClip(&path);
+        Gdiplus::LinearGradientBrush shimmer(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
+            Gdiplus::Color(25, 255, 255, 255),
+            Gdiplus::Color(0, 255, 255, 255));
+        g.FillRectangle(&shimmer, x, y, w, h / 2);
+        g.SetClip(&oldClip);
+    }
+}
+
+inline void DrawConfidenceBar(HDC hdc, int x, int y, int w, int h, int pct) {
+    Gdiplus::Graphics g(hdc);
+    // Track
+    Gdiplus::SolidBrush trackBrush(GdipColor(BG_ROOT));
+    g.FillRectangle(&trackBrush, x, y, w, h);
+    // Fill with gradient
+    int fillW = (w * pct) / 100;
+    if (fillW > 0) {
+        Gdiplus::LinearGradientBrush grad(
+            Gdiplus::Point(x, y), Gdiplus::Point(x + w, y),
+            GdipColor(ACCENT_BLUE), GdipColor(ACCENT_CYAN));
+        g.FillRectangle(&grad, x, y, fillW, h);
+    }
+}
+
+inline void DrawGlassPanel(HDC hdc, const RECT& rc, int radius,
+                           BYTE alpha = 153) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    Gdiplus::SolidBrush fill(GdipColor(BG_SURFACE, alpha));
+    g.FillPath(&fill, &path);
+
+    Gdiplus::Pen pen(Gdiplus::Color(20, 255, 255, 255), 1.0f);
+    g.DrawPath(&pen, &path);
+}
+
+inline void DrawAlertBanner(HDC hdc, const RECT& rc, COLORREF accentColor) {
+    Gdiplus::Graphics g(hdc);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+
+    Gdiplus::SolidBrush fill(GdipColor(accentColor, 20));
+    g.FillRectangle(&fill, x, y, w, h);
+
+    Gdiplus::Pen pen(GdipColor(accentColor, 64), 1.0f);
+    g.DrawRectangle(&pen, x, y, w - 1, h - 1);
+
+    Gdiplus::SolidBrush bar(GdipColor(accentColor));
+    g.FillRectangle(&bar, x, y, 3, h);
+}
+
+inline void DrawPillBadge(HDC hdc, int x, int y, int w, int h,
+                          COLORREF accentColor, const wchar_t* text,
+                          HFONT font) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 90, 180);
+    path.AddArc(x + w - d, y, d, d, 270, 180);
+    path.CloseFigure();
+
+    Gdiplus::SolidBrush fill(GdipColor(accentColor, 31));
+    g.FillPath(&fill, &path);
+
+    Gdiplus::Pen pen(GdipColor(accentColor, 64), 1.0f);
+    g.DrawPath(&pen, &path);
+
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, accentColor);
+    HFONT oldFont = (HFONT)SelectObject(hdc, font);
+    RECT textRc = { x + 4, y, x + w - 4, y + h };
+    DrawText(hdc, text, -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, oldFont);
+}
+
+inline void DrawCardShadow(HDC hdc, const RECT& rc, int radius,
+                           int offsetY = 2, int blur = 6) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    for (int i = blur; i > 0; i -= 2) {
+        Gdiplus::GraphicsPath path;
+        path.AddArc(x - i, y + offsetY - i, d, d, 180, 90);
+        path.AddArc(x + w - d - 1 + i, y + offsetY - i, d, d, 270, 90);
+        path.AddArc(x + w - d - 1 + i, y + h - d - 1 + offsetY + i, d, d, 0, 90);
+        path.AddArc(x - i, y + h - d - 1 + offsetY + i, d, d, 90, 90);
+        path.CloseFigure();
+        BYTE alpha = (BYTE)(20 - i * 3);
+        if (alpha > 20) alpha = 0;
+        Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(alpha, 0, 0, 0));
+        g.FillPath(&shadowBrush, &path);
+    }
 }
 
 } // namespace Theme
