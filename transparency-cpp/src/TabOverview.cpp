@@ -61,7 +61,7 @@ bool TabOverview::Create(HWND parent, int x, int y, int w, int h, MainWindow* ma
     RegisterClassEx(&wc);
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
-        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
 
     return _hwnd != nullptr;
@@ -106,6 +106,12 @@ LRESULT CALLBACK TabOverview::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         SetBkColor(hdc, Theme::BG_SURFACE);
         return (LRESULT)Theme::BrushSurface();
     }
+    case WM_VSCROLL:
+        return self->OnVScroll(hwnd, wp);
+    case WM_MOUSEWHEEL:
+        return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
+    case WM_LBUTTONDOWN:
+        return self->OnLButtonDown(hwnd, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
     case WM_SCAN_COMPLETE:
         return self->OnScanComplete(hwnd);
     case WM_SCAN_PROGRESS:
@@ -130,13 +136,22 @@ static const int TILE_Y  = 120;  // pushed down for NIC selector row
 static const int TILE_H  = 110; // taller for Display-size numbers + sparkline
 static const int PILL_Y_OFF = 36;
 static const int BTN_H  = 44;  // min interactive target per design system
+static const int MAP_MIN_H = 400; // minimum topology map height so it isn't crammed
 
-static void GetLayoutMetrics(int cx, int cy,
+static void GetLayoutMetrics(int cx, int /*cy*/,
     int& tileW, int& pillY, int& btnY, int& listY) {
     tileW = (cx - 40) / 4;
     pillY = TILE_Y + TILE_H + PILL_Y_OFF;
     btnY  = pillY + 34;
     listY = btnY + BTN_H + 52;
+}
+
+// Compute total content height (may exceed viewport → scrollable)
+static int ComputeContentHeight(int cx, int cy) {
+    int tileW, pillY, btnY, listY;
+    GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
+    int mapH = std::max(cy - listY - 16, MAP_MIN_H);
+    return listY + mapH + 16;
 }
 
 void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
@@ -270,36 +285,132 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
 void TabOverview::LayoutControls(int cx, int cy) {
     if (!_hwnd) return;
 
+    _viewHeight = cy;
+    _contentHeight = ComputeContentHeight(cx, cy);
+
+    int sOff = -_scrollY;  // scroll offset applied to all positions
+
     int tileW, pillY, btnY, listY;
     GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
 
     for (int i = 0; i < 4; i++) {
         int x = 16 + i * (tileW + 8);
-        if (_hKpi[i]) SetWindowPos(_hKpi[i], nullptr, x, TILE_Y, tileW, TILE_H, SWP_NOZORDER);
+        if (_hKpi[i]) SetWindowPos(_hKpi[i], nullptr, x, TILE_Y + sOff, tileW, TILE_H, SWP_NOZORDER);
     }
 
-    if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, btnY + BTN_H + 8,  cx - 32, 20, SWP_NOZORDER);
-    if (_hProgressBar)SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 32, cx - 32,  8, SWP_NOZORDER);
-    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16, cx - 400, 40, SWP_NOZORDER);
-    if (_hNicCombo) SetWindowPos(_hNicCombo, nullptr, 16, 44, 380, 160, SWP_NOZORDER);
-    if (_hNicPin) SetWindowPos(_hNicPin, nullptr, 402, 44, 50, 24, SWP_NOZORDER);
-    if (_hNicReason) SetWindowPos(_hNicReason, nullptr, 16, 72, cx - 32, 30, SWP_NOZORDER);
+    // Reposition scan mode pills + action buttons with scroll offset
+    if (_hModeQuick)    SetWindowPos(_hModeQuick, nullptr, 16, pillY + sOff, 80, 24, SWP_NOZORDER);
+    if (_hModeStandard) SetWindowPos(_hModeStandard, nullptr, 102, pillY + sOff, 90, 24, SWP_NOZORDER);
+    if (_hModeDeep)     SetWindowPos(_hModeDeep, nullptr, 198, pillY + sOff, 75, 24, SWP_NOZORDER);
+    if (_hCheckGentle)  SetWindowPos(_hCheckGentle, nullptr, 290, pillY + sOff, 110, 24, SWP_NOZORDER);
 
-    // Topology map rect (left 60%)
+    if (_hBtnQuickScan) SetWindowPos(_hBtnQuickScan, nullptr, Theme::SP4, btnY + sOff, 120, BTN_H, SWP_NOZORDER);
+    if (_hBtnDeepScan)  SetWindowPos(_hBtnDeepScan, nullptr, Theme::SP4 + 128, btnY + sOff, 120, BTN_H, SWP_NOZORDER);
+    if (_hBtnMonStart)  SetWindowPos(_hBtnMonStart, nullptr, Theme::SP4 + 256, btnY + sOff, 130, BTN_H, SWP_NOZORDER);
+    if (_hBtnMonStop)   SetWindowPos(_hBtnMonStop, nullptr, Theme::SP4 + 394, btnY + sOff, 130, BTN_H, SWP_NOZORDER);
+    if (_hBtnExport)    SetWindowPos(_hBtnExport, nullptr, Theme::SP4 + 532, btnY + sOff, 130, BTN_H, SWP_NOZORDER);
+
+    if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, btnY + BTN_H + 8 + sOff,  cx - 32, 20, SWP_NOZORDER);
+    if (_hProgressBar)SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 32 + sOff, cx - 32,  8, SWP_NOZORDER);
+    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16 + sOff, cx - 400, 40, SWP_NOZORDER);
+    if (_hNicCombo) SetWindowPos(_hNicCombo, nullptr, 16, 44 + sOff, 380, 160, SWP_NOZORDER);
+    if (_hNicPin) SetWindowPos(_hNicPin, nullptr, 402, 44 + sOff, 50, 24, SWP_NOZORDER);
+    if (_hNicReason) SetWindowPos(_hNicReason, nullptr, 16, 72 + sOff, cx - 32, 30, SWP_NOZORDER);
+
+    // Topology map rect (left 60%) — enforce minimum height
     int mapW = (cx - 40) * 6 / 10;
-    int mapH = cy - listY - 16;
-    _mapRect = { 16, listY, 16 + mapW, listY + std::max(mapH, 80) };
+    int mapH = std::max(cy - listY - 16, MAP_MIN_H);
+    _mapRect = { 16, listY + sOff, 16 + mapW, listY + mapH + sOff };
 
     // Changes list (right 40%)
     int listX = 16 + mapW + 8;
     int listW = cx - listX - 16;
     if (_hChangesList)
-        SetWindowPos(_hChangesList, nullptr, listX, listY,
+        SetWindowPos(_hChangesList, nullptr, listX, listY + sOff,
                      std::max(listW, 100), std::max(mapH, 50), SWP_NOZORDER);
+
+    UpdateScrollBar(_hwnd);
 }
 
 LRESULT TabOverview::OnSize(HWND hwnd, int cx, int cy) {
     LayoutControls(cx, cy);
+    return 0;
+}
+
+void TabOverview::UpdateScrollBar(HWND hwnd) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = _contentHeight;
+    si.nPage  = _viewHeight;
+    si.nPos   = _scrollY;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+}
+
+LRESULT TabOverview::OnVScroll(HWND hwnd, WPARAM wp) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_ALL;
+    GetScrollInfo(hwnd, SB_VERT, &si);
+
+    int oldPos = _scrollY;
+    switch (LOWORD(wp)) {
+    case SB_LINEUP:        _scrollY -= 30; break;
+    case SB_LINEDOWN:      _scrollY += 30; break;
+    case SB_PAGEUP:        _scrollY -= si.nPage; break;
+    case SB_PAGEDOWN:      _scrollY += si.nPage; break;
+    case SB_THUMBTRACK:    _scrollY = si.nTrackPos; break;
+    }
+
+    int maxScroll = _contentHeight - _viewHeight;
+    if (maxScroll < 0) maxScroll = 0;
+    if (_scrollY < 0) _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, TRUE);
+    }
+    return 0;
+}
+
+LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
+    int oldPos = _scrollY;
+    _scrollY -= delta / 2;  // smooth scrolling
+
+    int maxScroll = _contentHeight - _viewHeight;
+    if (maxScroll < 0) maxScroll = 0;
+    if (_scrollY < 0) _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, TRUE);
+    }
+    return 0;
+}
+
+int TabOverview::HitTestMapNode(int mx, int my) const {
+    for (int i = 0; i < (int)_mapNodes.size(); i++) {
+        int dx = mx - _mapNodes[i].cx;
+        int dy = my - _mapNodes[i].cy;
+        int r  = _mapNodes[i].radius + 4; // small hit margin
+        if (dx * dx + dy * dy <= r * r)
+            return _mapNodes[i].deviceIndex;
+    }
+    return -1;
+}
+
+LRESULT TabOverview::OnLButtonDown(HWND hwnd, int mx, int my) {
+    int devIdx = HitTestMapNode(mx, my);
+    if (devIdx >= 0 && _mainWnd) {
+        // Switch to Devices tab and post the device index for selection
+        _mainWnd->SwitchTab(Tab::Devices);
+        PostMessage(_mainWnd->GetHwnd(), WM_MAP_DEVICE_CLICK, (WPARAM)devIdx, 0);
+    }
     return 0;
 }
 
@@ -318,22 +429,15 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
         bool pressed = (dis->itemState & ODS_SELECTED) != 0;
         bool disabled = (dis->itemState & ODS_DISABLED) != 0;
 
-        // Primary buttons get gradient, secondary get elevated bg
+        // Primary buttons get accent glass, secondary get neutral glass
         bool isPrimary = (dis->CtlID == IDC_BTN_SCAN_QUICK);
 
         if (disabled) {
             Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD,
                 Theme::BG_ELEVATED, Theme::BORDER_SUBTLE);
-        } else if (isPrimary) {
-            // Primary: gradient #3D7FFF → #2960D9
-            COLORREF gradTop = RGB(61, 127, 255);
-            COLORREF gradBot = RGB(41, 96, 217);
-            if (pressed) { gradTop = gradBot; }
-            Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_MD, gradTop, gradBot);
         } else {
-            // Secondary: bg_elevated + border
-            COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
-            Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, Theme::BORDER_DEFAULT);
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
+                                   isPrimary ? 0 : 1);
         }
 
         // Button text
@@ -450,9 +554,10 @@ static COLORREF DeviceNodeColor(const Device& d) {
 }
 
 void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
-    // Rounded card — design system radius_md
-    Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, Theme::BG_ELEVATED,
-                          Theme::BORDER_DEFAULT);
+    _mapNodes.clear();
+
+    // Glass panel background for the map
+    Theme::DrawGlassPanel(hdc, rc, Theme::RADIUS_MD);
 
     HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
     HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
@@ -461,15 +566,23 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
     HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontCaption());
-    RECT hdrRc = { rc.left + 8, rc.top + 6, rc.right - 8, rc.top + 20 };
+    RECT hdrRc = { rc.left + 12, rc.top + 8, rc.right - 12, rc.top + 22 };
     DrawText(hdc, L"NETWORK MAP", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+
+    // Hint text
+    {
+        RECT hintRc = { rc.right - 200, rc.top + 8, rc.right - 12, rc.top + 22 };
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        DrawText(hdc, L"Click a device to inspect", -1, &hintRc, DT_RIGHT | DT_SINGLELINE);
+    }
 
     if (!_mainWnd) goto cleanup;
     {
         ScanResult r = _mainWnd->GetLastResult();
         if (r.devices.empty()) {
             SetTextColor(hdc, Theme::TEXT_TERTIARY);
-            RECT noRc = { rc.left, rc.top + 24, rc.right, rc.bottom };
+            SelectObject(hdc, Theme::FontBody());
+            RECT noRc = { rc.left, rc.top + 28, rc.right, rc.bottom };
             DrawText(hdc, L"Run a scan to see the network map.",
                      -1, &noRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             goto cleanup;
@@ -483,21 +596,26 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             subnetGroups[sub].push_back(i);
         }
 
-        int mapLeft   = rc.left   + 12;
-        int mapTop    = rc.top    + 28;
-        int mapRight  = rc.right  - 12;
-        int mapBottom = rc.bottom - 12;
+        int mapLeft   = rc.left   + 16;
+        int mapTop    = rc.top    + 32;
+        int mapRight  = rc.right  - 16;
+        int mapBottom = rc.bottom - 16;
+
+        // Node sizing — larger for better readability and click targets
+        const int NODE_R = 10;   // device node radius (was 5-6)
+        const int GW_R   = 18;   // gateway node radius (was 12-14)
 
         if (subnetGroups.size() <= 1) {
             // Single subnet — classic radial layout
             int cx = (mapLeft + mapRight)  / 2;
             int cy = (mapTop  + mapBottom) / 2;
-            int radius = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 22;
-            if (radius < 20) radius = 20;
+            int radius = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 30;
+            if (radius < 40) radius = 40;
 
-            int n = std::min((int)r.devices.size(), 24);
+            int n = std::min((int)r.devices.size(), 32);
 
-            HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
+            // Draw connection lines first
+            HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
             SelectObject(hdc, linePen);
             for (int i = 0; i < n; i++) {
                 double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
@@ -508,6 +626,7 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             }
             DeleteObject(linePen);
 
+            // Draw device nodes
             for (int i = 0; i < n; i++) {
                 auto& d = r.devices[i];
                 double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
@@ -515,60 +634,79 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
                 int ny = cy + (int)(radius * sin(angle));
 
                 COLORREF col = DeviceNodeColor(d);
-                HBRUSH nb = CreateSolidBrush(col);
-                HPEN   np = CreatePen(PS_SOLID, 1, col);
-                HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
-                HPEN   op = (HPEN)SelectObject(hdc, np);
-                Ellipse(hdc, nx - 6, ny - 6, nx + 6, ny + 6);
-                SelectObject(hdc, ob); SelectObject(hdc, op);
-                DeleteObject(nb); DeleteObject(np);
+
+                // Outer glow ring
+                {
+                    Gdiplus::Graphics g(hdc);
+                    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                    Gdiplus::SolidBrush glow(Theme::GdipColor(col, 40));
+                    g.FillEllipse(&glow, nx - NODE_R - 3, ny - NODE_R - 3,
+                                  (NODE_R + 3) * 2, (NODE_R + 3) * 2);
+                    Gdiplus::SolidBrush fill(Theme::GdipColor(col, 220));
+                    g.FillEllipse(&fill, nx - NODE_R, ny - NODE_R, NODE_R * 2, NODE_R * 2);
+                    // Inner highlight
+                    Gdiplus::SolidBrush hi(Gdiplus::Color(50, 255, 255, 255));
+                    g.FillEllipse(&hi, nx - NODE_R + 2, ny - NODE_R + 1, NODE_R, NODE_R / 2 + 2);
+                }
+
+                _mapNodes.push_back({ nx, ny, NODE_R, i });
 
                 wstring lbl = d.customName.empty()
                     ? (d.hostname.empty() ? d.ip : d.hostname)
                     : d.customName;
-                if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
+                if ((int)lbl.size() > 12) lbl = lbl.substr(0, 12);
 
-                SetTextColor(hdc, Theme::TEXT_TERTIARY);
+                SetTextColor(hdc, Theme::TEXT_SECONDARY);
                 SelectObject(hdc, Theme::FontSmall());
-                RECT lblRc = { nx - 38, ny + 8, nx + 38, ny + 20 };
+                RECT lblRc = { nx - 48, ny + NODE_R + 3, nx + 48, ny + NODE_R + 16 };
                 DrawText(hdc, lbl.c_str(), -1, &lblRc,
                          DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
             }
 
-            // Gateway center node
-            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
-            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
-            HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
-            HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
-            Ellipse(hdc, cx - 14, cy - 14, cx + 14, cy + 14);
-            SelectObject(hdc, ob2); SelectObject(hdc, op2);
-            DeleteObject(gwb); DeleteObject(gwp);
+            // Gateway center node — larger with glow
+            {
+                Gdiplus::Graphics g(hdc);
+                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                // Outer glow
+                Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GLOW, 50));
+                g.FillEllipse(&glow, cx - GW_R - 5, cy - GW_R - 5,
+                              (GW_R + 5) * 2, (GW_R + 5) * 2);
+                Gdiplus::SolidBrush fill(Theme::GdipColor(Theme::ACCENT_GLOW));
+                g.FillEllipse(&fill, cx - GW_R, cy - GW_R, GW_R * 2, GW_R * 2);
+                // Inner highlight
+                Gdiplus::SolidBrush hi(Gdiplus::Color(60, 255, 255, 255));
+                g.FillEllipse(&hi, cx - GW_R + 3, cy - GW_R + 2, GW_R, GW_R / 2 + 3);
+            }
 
             SetTextColor(hdc, Theme::BG_APP);
-            SelectObject(hdc, Theme::FontSmall());
-            RECT gwRc = { cx - 14, cy - 8, cx + 14, cy + 8 };
+            SelectObject(hdc, Theme::FontNavActive());
+            RECT gwRc = { cx - GW_R, cy - 8, cx + GW_R, cy + 8 };
             DrawText(hdc, L"GW", -1, &gwRc,
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
-            // Multi-subnet layout — horizontal bands per subnet with gateway at top center
+            // Multi-subnet layout — horizontal bands
             int gwCx = (mapLeft + mapRight) / 2;
-            int gwCy = mapTop + 16;
+            int gwCy = mapTop + 20;
 
-            // Gateway node
-            HBRUSH gwb = CreateSolidBrush(Theme::ACCENT_GLOW);
-            HPEN   gwp = CreatePen(PS_SOLID, 2, Theme::ACCENT_GLOW);
-            HBRUSH ob2 = (HBRUSH)SelectObject(hdc, gwb);
-            HPEN   op2 = (HPEN)SelectObject(hdc, gwp);
-            Ellipse(hdc, gwCx - 12, gwCy - 12, gwCx + 12, gwCy + 12);
-            SelectObject(hdc, ob2); SelectObject(hdc, op2);
-            DeleteObject(gwb); DeleteObject(gwp);
+            // Gateway node with glow
+            {
+                Gdiplus::Graphics g(hdc);
+                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GLOW, 50));
+                g.FillEllipse(&glow, gwCx - GW_R - 4, gwCy - GW_R - 4,
+                              (GW_R + 4) * 2, (GW_R + 4) * 2);
+                Gdiplus::SolidBrush fill(Theme::GdipColor(Theme::ACCENT_GLOW));
+                g.FillEllipse(&fill, gwCx - GW_R, gwCy - GW_R, GW_R * 2, GW_R * 2);
+                Gdiplus::SolidBrush hi(Gdiplus::Color(60, 255, 255, 255));
+                g.FillEllipse(&hi, gwCx - GW_R + 3, gwCy - GW_R + 2, GW_R, GW_R / 2 + 3);
+            }
 
             SetTextColor(hdc, Theme::BG_APP);
-            SelectObject(hdc, Theme::FontSmall());
-            RECT gwRc = { gwCx - 12, gwCy - 7, gwCx + 12, gwCy + 7 };
+            SelectObject(hdc, Theme::FontNavActive());
+            RECT gwRc = { gwCx - GW_R, gwCy - 8, gwCx + GW_R, gwCy + 8 };
             DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-            int bandTop = gwCy + 20;
+            int bandTop = gwCy + GW_R + 12;
             int totalH = mapBottom - bandTop;
             int numSubnets = std::min((int)subnetGroups.size(), 4);
             int bandH = totalH / std::max(numSubnets, 1);
@@ -577,32 +715,32 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             for (auto& [subName, devIndices] : subnetGroups) {
                 if (subIdx >= 4) break;
                 int bTop = bandTop + subIdx * bandH;
-                int bBot = bTop + bandH - 4;
+                int bBot = bTop + bandH - 8;
 
                 // Subnet label
                 SetTextColor(hdc, Theme::ACCENT_BLUE);
-                SelectObject(hdc, Theme::FontSmall());
-                RECT subRc = { mapLeft, bTop, mapRight, bTop + 14 };
+                SelectObject(hdc, Theme::FontCaption());
+                RECT subRc = { mapLeft, bTop, mapRight, bTop + 16 };
                 DrawText(hdc, subName.c_str(), -1, &subRc, DT_LEFT | DT_SINGLELINE);
 
                 // Dashed separator
                 HPEN sepPen = CreatePen(PS_DOT, 1, Theme::BORDER_DEFAULT);
                 SelectObject(hdc, sepPen);
-                MoveToEx(hdc, mapLeft, bTop + 15, nullptr);
-                LineTo(hdc, mapRight, bTop + 15);
+                MoveToEx(hdc, mapLeft, bTop + 18, nullptr);
+                LineTo(hdc, mapRight, bTop + 18);
                 DeleteObject(sepPen);
 
-                // Line from gateway down to this subnet center
+                // Line from gateway down
                 int subCx = (mapLeft + mapRight) / 2;
-                int subCy = (bTop + 16 + bBot) / 2;
-                HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
+                int subCy = (bTop + 20 + bBot) / 2;
+                HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
                 SelectObject(hdc, linePen);
-                MoveToEx(hdc, gwCx, gwCy + 12, nullptr);
-                LineTo(hdc, subCx, bTop + 16);
+                MoveToEx(hdc, gwCx, gwCy + GW_R, nullptr);
+                LineTo(hdc, subCx, bTop + 20);
                 DeleteObject(linePen);
 
-                // Devices in this subnet — horizontal spread
-                int n = std::min((int)devIndices.size(), 12);
+                // Devices in this subnet — horizontal spread with more room
+                int n = std::min((int)devIndices.size(), 16);
                 int nodeW = (mapRight - mapLeft) / std::max(n, 1);
                 for (int i = 0; i < n; i++) {
                     const Device& d = r.devices[devIndices[i]];
@@ -610,29 +748,37 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
                     int ny = subCy;
 
                     // Line from subnet center
-                    HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
+                    HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
                     SelectObject(hdc, lp2);
-                    MoveToEx(hdc, subCx, bTop + 16, nullptr);
+                    MoveToEx(hdc, subCx, bTop + 20, nullptr);
                     LineTo(hdc, nx, ny);
                     DeleteObject(lp2);
 
                     COLORREF col = DeviceNodeColor(d);
-                    HBRUSH nb = CreateSolidBrush(col);
-                    HPEN   np = CreatePen(PS_SOLID, 1, col);
-                    HBRUSH ob = (HBRUSH)SelectObject(hdc, nb);
-                    HPEN   op = (HPEN)SelectObject(hdc, np);
-                    Ellipse(hdc, nx - 5, ny - 5, nx + 5, ny + 5);
-                    SelectObject(hdc, ob); SelectObject(hdc, op);
-                    DeleteObject(nb); DeleteObject(np);
+
+                    // Glow + filled node
+                    {
+                        Gdiplus::Graphics g(hdc);
+                        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                        Gdiplus::SolidBrush glow(Theme::GdipColor(col, 40));
+                        g.FillEllipse(&glow, nx - NODE_R - 3, ny - NODE_R - 3,
+                                      (NODE_R + 3) * 2, (NODE_R + 3) * 2);
+                        Gdiplus::SolidBrush fill(Theme::GdipColor(col, 220));
+                        g.FillEllipse(&fill, nx - NODE_R, ny - NODE_R, NODE_R * 2, NODE_R * 2);
+                        Gdiplus::SolidBrush hi(Gdiplus::Color(50, 255, 255, 255));
+                        g.FillEllipse(&hi, nx - NODE_R + 2, ny - NODE_R + 1, NODE_R, NODE_R / 2 + 2);
+                    }
+
+                    _mapNodes.push_back({ nx, ny, NODE_R, devIndices[i] });
 
                     wstring lbl = d.customName.empty()
                         ? (d.hostname.empty() ? d.ip : d.hostname)
                         : d.customName;
-                    if ((int)lbl.size() > 8) lbl = lbl.substr(0, 8);
+                    if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
 
-                    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+                    SetTextColor(hdc, Theme::TEXT_SECONDARY);
                     SelectObject(hdc, Theme::FontSmall());
-                    RECT lblRc = { nx - 32, ny + 7, nx + 32, ny + 18 };
+                    RECT lblRc = { nx - 40, ny + NODE_R + 3, nx + 40, ny + NODE_R + 16 };
                     DrawText(hdc, lbl.c_str(), -1, &lblRc,
                              DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
                 }

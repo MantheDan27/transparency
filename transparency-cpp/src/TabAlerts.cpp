@@ -70,12 +70,7 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (dis->CtlID >= 9600 && dis->CtlID <= 9604) {
             int filterIdx = dis->CtlID - 9600;
             bool active = (filterIdx == self->_alertFilter);
-            if (active)
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_NAV_ACTIVE, Theme::ACCENT_BLUE);
-            else if (pressed)
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT);
-            else
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
+            Theme::DrawGlassPill(hdc, rc, 15, active, pressed);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -86,12 +81,9 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SelectObject(hdc, old);
             return TRUE;
         }
-        // Clear All — destructive button style
+        // Clear All — destructive glass button
         if (dis->CtlID == IDC_BTN_CLEAR_ALERTS) {
-            COLORREF bg = pressed ? Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 25)
-                                  : Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 15);
-            COLORREF border = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 40);
-            Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, border);
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 2);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -107,15 +99,8 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             dis->CtlID == IDC_BTN_DEL_RULE) {
             bool isDel = (dis->CtlID == IDC_BTN_DEL_RULE);
             bool isAdd = (dis->CtlID == IDC_BTN_ADD_RULE);
-            COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
-            if (isAdd && !pressed) {
-                Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_SM, RGB(61,127,255), RGB(41,96,217));
-            } else if (isDel) {
-                bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, pressed ? 20 : 12);
-                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_SM, bg, Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 40));
-            } else {
-                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_SM, bg, Theme::BORDER_DEFAULT);
-            }
+            int variant = isAdd ? 0 : isDel ? 2 : 1;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_SM, pressed, variant);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);

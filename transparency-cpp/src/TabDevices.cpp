@@ -73,13 +73,7 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             int filterIdx = dis->CtlID - IDC_BTN_FILTER_ALL;
             bool active = (filterIdx == self->_filterMode);
 
-            if (active) {
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_NAV_ACTIVE, Theme::ACCENT_BLUE);
-            } else if (pressed) {
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT);
-            } else {
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
-            }
+            Theme::DrawGlassPill(hdc, rc, 15, active, pressed);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -97,14 +91,8 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             bool pressed = (dis->itemState & ODS_SELECTED) != 0;
             bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
 
-            if (isSave) {
-                COLORREF top = pressed ? RGB(41,96,217) : RGB(61,127,255);
-                COLORREF bot = RGB(41, 96, 217);
-                Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_MD, top, bot);
-            } else {
-                COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
-                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, Theme::BORDER_DEFAULT);
-            }
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
+                                   isSave ? 0 : 1);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);

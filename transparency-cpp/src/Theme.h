@@ -316,6 +316,130 @@ inline void DrawGradientButton(HDC hdc, const RECT& rc, int radius,
     }
 }
 
+// ── Glassmorphism button ─────────────────────────────────────────────────────
+// Semi-transparent fill with frosted highlight at top, subtle glow border.
+// variant: 0 = primary (accent), 1 = secondary (neutral), 2 = destructive (red)
+inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
+                            bool pressed, int variant = 0) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    // Base fill — semi-transparent tinted surface
+    BYTE baseAlpha = pressed ? (BYTE)180 : (BYTE)120;
+    if (variant == 0) {
+        // Primary: accent blue glass
+        Gdiplus::LinearGradientBrush grad(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
+            Gdiplus::Color(baseAlpha, 30, 70, 160),
+            Gdiplus::Color(baseAlpha, 20, 45, 110));
+        g.FillPath(&grad, &path);
+    } else if (variant == 2) {
+        // Destructive: red-tinted glass
+        Gdiplus::SolidBrush fill(Gdiplus::Color(pressed ? 100 : 70, 200, 40, 60));
+        g.FillPath(&fill, &path);
+    } else {
+        // Secondary: neutral dark glass
+        Gdiplus::SolidBrush fill(GdipColor(BG_ELEVATED, baseAlpha));
+        g.FillPath(&fill, &path);
+    }
+
+    // Top highlight — frosted edge shimmer
+    {
+        Gdiplus::GraphicsPath topClip;
+        topClip.AddArc(x, y, d, d, 180, 90);
+        topClip.AddArc(x + w - d - 1, y, d, d, 270, 90);
+        topClip.AddLine(x + w - 1, y + d / 2, x, y + d / 2);
+        topClip.CloseFigure();
+
+        Gdiplus::Region oldClip;
+        g.GetClip(&oldClip);
+        g.SetClip(&path);  // confine to button shape
+
+        BYTE highlightAlpha = pressed ? (BYTE)15 : (BYTE)40;
+        Gdiplus::LinearGradientBrush shimmer(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
+            Gdiplus::Color(highlightAlpha, 255, 255, 255),
+            Gdiplus::Color(0, 255, 255, 255));
+        g.FillRectangle(&shimmer, x, y, w, h / 2);
+
+        g.SetClip(&oldClip);
+    }
+
+    // Border — colored glow edge
+    if (variant == 0) {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 70, 61, 127, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else if (variant == 2) {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 60, 255, 64, 96), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 50 : 30, 255, 255, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    }
+}
+
+// Glass-style filter pill — active state has accent glow, inactive is frosted
+inline void DrawGlassPill(HDC hdc, const RECT& rc, int radius,
+                          bool active, bool pressed) {
+    Gdiplus::Graphics g(hdc);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    int x = rc.left, y = rc.top;
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    int d = radius * 2;
+    if (d > w) d = w; if (d > h) d = h;
+
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d - 1, y, d, d, 270, 90);
+    path.AddArc(x + w - d - 1, y + h - d - 1, d, d, 0, 90);
+    path.AddArc(x, y + h - d - 1, d, d, 90, 90);
+    path.CloseFigure();
+
+    if (active) {
+        // Active: accent-tinted glass
+        Gdiplus::SolidBrush fill(Gdiplus::Color(100, 30, 70, 160));
+        g.FillPath(&fill, &path);
+        Gdiplus::Pen pen(Gdiplus::Color(90, 61, 127, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else if (pressed) {
+        Gdiplus::SolidBrush fill(GdipColor(BG_OVERLAY, 140));
+        g.FillPath(&fill, &path);
+        Gdiplus::Pen pen(Gdiplus::Color(25, 255, 255, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    } else {
+        Gdiplus::SolidBrush fill(GdipColor(BG_ELEVATED, 100));
+        g.FillPath(&fill, &path);
+        Gdiplus::Pen pen(Gdiplus::Color(18, 255, 255, 255), 1.0f);
+        g.DrawPath(&pen, &path);
+    }
+
+    // Top shimmer on active
+    if (active && !pressed) {
+        Gdiplus::Region oldClip;
+        g.GetClip(&oldClip);
+        g.SetClip(&path);
+        Gdiplus::LinearGradientBrush shimmer(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
+            Gdiplus::Color(25, 255, 255, 255),
+            Gdiplus::Color(0, 255, 255, 255));
+        g.FillRectangle(&shimmer, x, y, w, h / 2);
+        g.SetClip(&oldClip);
+    }
+}
+
 inline void DrawConfidenceBar(HDC hdc, int x, int y, int w, int h, int pct) {
     Gdiplus::Graphics g(hdc);
     // Track
