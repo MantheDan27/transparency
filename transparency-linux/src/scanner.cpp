@@ -263,33 +263,27 @@ std::vector<int> ScanEngine::scanPorts(const std::string& ip, const std::vector<
     std::vector<int> open;
     std::mutex mtx;
 
-    // Use a simple semaphore approach with threads
-    const int maxConcurrent = 32;
+    int numThreads = std::min(32, (int)ports.size());
     std::vector<std::thread> threads;
-    int active = 0;
-    std::mutex activeMtx;
-    std::condition_variable cv;
+    std::atomic<size_t> idx{0};
 
-    for (int port : ports) {
-        if (_cancelled) break;
-        {
-            std::unique_lock<std::mutex> lk(activeMtx);
-            cv.wait(lk, [&] { return active < maxConcurrent; });
-            active++;
-        }
-        threads.emplace_back([&, port]() {
-            if (probePort(ip, port, timeoutMs)) {
-                std::lock_guard<std::mutex> lk(mtx);
-                open.push_back(port);
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&]() {
+            while (!_cancelled) {
+                size_t current_idx = idx.fetch_add(1);
+                if (current_idx >= ports.size()) break;
+
+                int port = ports[current_idx];
+                if (probePort(ip, port, timeoutMs)) {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    open.push_back(port);
+                }
             }
-            {
-                std::lock_guard<std::mutex> lk(activeMtx);
-                active--;
-            }
-            cv.notify_one();
         });
     }
-    for (auto& t : threads) t.join();
+    for (auto& t : threads) {
+        if (t.joinable()) t.join();
+    }
 
     std::sort(open.begin(), open.end());
     return open;
