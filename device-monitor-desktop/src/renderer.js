@@ -60,6 +60,16 @@ let currentScanMode  = 'standard';
 let editingRuleId    = null;
 
 // ── DOM helper ────────────────────────────────────────────────────────────────
+
+// Performance Optimization: Debounce helper to prevent excessive UI blocking during rapid input
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
 const $ = id => document.getElementById(id);
 
 function escHtml(str) {
