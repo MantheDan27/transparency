@@ -599,8 +599,12 @@ function renderDeviceTable() {
   // Build severity map
   const sevMap = {};
   const sevOrder = { High:3, Medium:2, Low:1 };
+  const newDeviceIpSet = new Set();
+  const changedDeviceIpSet = new Set();
   for (const a of allAnomalies) {
     if (!sevMap[a.device] || sevOrder[a.severity] > sevOrder[sevMap[a.device]]) sevMap[a.device] = a.severity;
+    if (a.type === 'New Device') newDeviceIpSet.add(a.device);
+    if (a.type === 'Ports Changed') changedDeviceIpSet.add(a.device);
   }
 
   tbody.innerHTML = devs.map(dev => {
@@ -612,8 +616,8 @@ function renderDeviceTable() {
     const checked = selectedDevices.has(dev.ip) ? 'checked' : '';
     const hist    = dev.history;
     const lastSeen = hist?.lastSeen ? relativeTime(hist.lastSeen) : 'Just now';
-    const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-    const changed = allAnomalies.some(a => (a.type === 'Ports Changed') && a.device === dev.ip);
+    const isNew   = newDeviceIpSet.has(dev.ip);
+    const changed = changedDeviceIpSet.has(dev.ip);
 
     const portBadges = dev.ports?.length
       ? dev.ports.slice(0, 6).map(p => {
@@ -1396,7 +1400,12 @@ function renderMap() {
 
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
-  const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+  const anomalyIpSet = new Set();
+  const newDeviceIpSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.severity === 'High') anomalyIpSet.add(a.device);
+    if (a.type === 'New Device') newDeviceIpSet.add(a.device);
+  }
 
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
@@ -1556,7 +1565,7 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      const isNew   = newDeviceIpSet.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
