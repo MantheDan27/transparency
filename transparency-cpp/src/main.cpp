@@ -12,6 +12,9 @@
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "ole32.lib")
 
+#include <gdiplus.h>
+#pragma comment(lib, "gdiplus.lib")
+
 #include "MainWindow.h"
 
 // Manifest for Common Controls v6 (required for visual styles and modern list views)
@@ -21,6 +24,8 @@
     processorArchitecture='*' \
     publicKeyToken='6595b64144ccf1df' \
     language='*'\"")
+
+static ULONG_PTR s_gdiplusToken = 0;
 
 #if defined(_MSC_VER) || defined(UNICODE)
 int WINAPI wWinMain(
@@ -67,6 +72,10 @@ int WINAPI WinMain(
         return 1;
     }
 
+    // Initialize GDI+
+    Gdiplus::GdiplusStartupInput gdiplusInput;
+    Gdiplus::GdiplusStartup(&s_gdiplusToken, &gdiplusInput, nullptr);
+
     // Create main window
     if (!MainWindow::Create(hInstance)) {
         MessageBox(nullptr, L"Failed to create main window.", L"Error", MB_OK | MB_ICONERROR);
@@ -83,6 +92,7 @@ int WINAPI WinMain(
     }
 
     // Cleanup
+    Gdiplus::GdiplusShutdown(s_gdiplusToken);
     WSACleanup();
     CoUninitialize();
 

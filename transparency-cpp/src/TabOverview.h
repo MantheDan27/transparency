@@ -32,14 +32,19 @@ private:
     LRESULT OnScanComplete(HWND hwnd);
     LRESULT OnMonitorTick(HWND hwnd);
     LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
+    LRESULT OnVScroll(HWND hwnd, WPARAM wp);
+    LRESULT OnMouseWheel(HWND hwnd, int delta);
+    LRESULT OnLButtonDown(HWND hwnd, int mx, int my);
 
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
+    void UpdateScrollBar(HWND hwnd);
     void RefreshKPIs();
     void RefreshNetworkInfo();
     void DrawTopologyMap(HDC hdc, const RECT& rc);
     void DrawSparkline(HDC hdc, const RECT& rc,
                        const std::vector<int>& vals, COLORREF col);
+    int  HitTestMapNode(int mx, int my) const;
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
@@ -90,6 +95,16 @@ private:
 
     // Current scan mode
     int _scanMode = 0; // 0=Quick, 1=Standard, 2=Deep
+
+    // Scrolling state
+    int _scrollY = 0;       // current scroll offset
+    int _contentHeight = 0; // total content height
+    int _viewHeight = 0;    // visible viewport height
+
+    // Interactive map — node hit targets (screen coords, scroll-adjusted in HitTest)
+    struct MapNode { int cx, cy, radius; int deviceIndex; };
+    std::vector<MapNode> _mapNodes;
+    int _hoveredNode = -1;
 
     static const wchar_t* s_className;
 };

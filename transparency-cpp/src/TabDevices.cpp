@@ -4,6 +4,7 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <string>
+#include <cwctype>
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -15,14 +16,31 @@
 #include "Resource.h"
 #include "Scanner.h"
 #include <shellapi.h>
+#include <ws2tcpip.h>
 
 using std::wstring;
+
+bool IsValidIP(const std::wstring& ip) {
+    if (ip.empty()) return false;
+    for (wchar_t c : ip) {
+        if (!std::iswalnum(c) && c != L'.' && c != L':' && c != L'-') return false;
+    }
+    return true;
+}
+
 
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
 
 static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
 };
+
+// Subclass proc for detail panel — forwards WM_COMMAND to parent
+static LRESULT CALLBACK DetailPanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
+    if (msg == WM_COMMAND) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    if (msg == WM_DRAWITEM) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
 
 bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
@@ -31,7 +49,7 @@ bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mai
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushApp();
+    wc.hbrBackground = Theme::BrushSurface();
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
@@ -61,16 +79,57 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushApp()); return 1; }
+    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_NOTIFY:     return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
+    case WM_DRAWITEM: {
+        auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
+        if (dis && dis->CtlID >= IDC_BTN_FILTER_ALL && dis->CtlID <= IDC_BTN_FILTER_CHANGED) {
+            HDC hdc = dis->hDC;
+            RECT rc = dis->rcItem;
+            bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            int filterIdx = dis->CtlID - IDC_BTN_FILTER_ALL;
+            bool active = (filterIdx == self->_filterMode);
+
+            Theme::DrawGlassPill(hdc, rc, 15, active, pressed);
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, active ? Theme::ACCENT_BLUE : Theme::TEXT_SECONDARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        // Save/Close buttons
+        if (dis && (dis->CtlID == IDC_BTN_DEVICE_SAVE || dis->CtlID == 9500)) {
+            HDC hdc = dis->hDC;
+            RECT rc = dis->rcItem;
+            bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
+
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
+                                   isSave ? 0 : 1);
+
+            wchar_t text[32] = {};
+            GetWindowText(dis->hwndItem, text, 32);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, isSave ? RGB(255,255,255) : Theme::TEXT_PRIMARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
         HDC hdc = (HDC)wp;
         SetTextColor(hdc, Theme::TEXT_PRIMARY);
-        SetBkColor(hdc, Theme::BG_APP);
-        return (LRESULT)Theme::BrushApp();
+        SetBkColor(hdc, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
     }
     case WM_SCAN_COMPLETE: return self->OnScanComplete(hwnd);
     default: return DefWindowProc(hwnd, msg, wp, lp);
@@ -94,13 +153,12 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hSearch, EM_SETCUEBANNER, FALSE, (LPARAM)L"Search devices...");
     Theme::ApplyDarkEdit(_hSearch);
 
-    // Filter buttons
+    // Filter buttons — owner-drawn pill style
     int btnX = 290;
     for (int i = 0; i < 6; i++) {
         _hFilterBtns[i] = CreateWindowEx(0, L"BUTTON", FILTER_LABELS[i],
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            btnX, 12, 72, 26, hwnd, (HMENU)(IDC_BTN_FILTER_ALL + i), hInst, nullptr);
-        SendMessage(_hFilterBtns[i], WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+            btnX, 10, 72, 30, hwnd, (HMENU)(IDC_BTN_FILTER_ALL + i), hInst, nullptr);
         btnX += 76;
     }
 
@@ -148,6 +206,9 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | SS_NOTIFY,
         cx - DETAIL_WIDTH - 16, 48, DETAIL_WIDTH, cy - 64,
         hwnd, nullptr, hInst, nullptr);
+
+    // Fix: Subclass the STATIC detail panel so WM_COMMAND from child buttons reaches TabDevices
+    SetWindowSubclass(_hDetailPanel, DetailPanelProc, 0, 0);
 
     // Detail controls inside panel
     auto makeLbl = [&](const wchar_t* text, int y, int h = 18) -> HWND {
@@ -221,16 +282,14 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"blocked");
     dy += 30;
 
-    // Save + Close buttons
+    // Save + Close buttons — owner-drawn
     _hDetailSave = CreateWindowEx(0, L"BUTTON", L"Save",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        8, dy, 80, 26, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
-    SendMessage(_hDetailSave, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        8, dy, 100, 36, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
 
     _hDetailClose = CreateWindowEx(0, L"BUTTON", L"Close",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        DETAIL_WIDTH - 90, dy, 82, 26, _hDetailPanel, (HMENU)9500, hInst, nullptr);
-    SendMessage(_hDetailClose, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        DETAIL_WIDTH - 108, dy, 100, 36, _hDetailPanel, (HMENU)9500, hInst, nullptr);
 }
 
 void TabDevices::LayoutControls(int cx, int cy) {
@@ -261,7 +320,20 @@ LRESULT TabDevices::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, Theme::BrushApp());
+    FillRect(hdc, &rc, Theme::BrushSurface());
+
+    // Section separator under toolbar
+    RECT sep = { 16, 44, rc.right - 16, 45 };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+    // Section label — caption style
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
+    RECT hdr = { 16, 34, 200, 46 };
+    DrawText(hdc, L"DEVICE LIST", -1, &hdr, DT_LEFT | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
     EndPaint(hwnd, &ps);
     return 0;
 }
@@ -356,7 +428,7 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
                 else if (row % 2 == 1)
                     bg = Theme::BG_ROW_ALT;
                 else
-                    bg = Theme::BG_APP;
+                    bg = Theme::BG_SURFACE;
 
                 cd->clrTextBk = bg;
                 cd->clrText   = Theme::TEXT_PRIMARY;
@@ -375,6 +447,30 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
                     }
                     cd->clrText = online ? Theme::SUCCESS : Theme::TEXT_MUTED;
                     return CDRF_NEWFONT;
+                }
+                // Monospace for IP (col 2), MAC (col 3), Ports (col 7)
+                if (cd->iSubItem == 2 || cd->iSubItem == 3 || cd->iSubItem == 7) {
+                    SelectObject(cd->nmcd.hdc, Theme::FontMono());
+                    cd->clrText = Theme::TEXT_SECONDARY;
+                    return CDRF_NEWFONT;
+                }
+                // Trust column color-coded (col 6)
+                if (cd->iSubItem == 6 && _mainWnd) {
+                    int row = (int)cd->nmcd.dwItemSpec;
+                    if (row < (int)_filteredIndices.size()) {
+                        ScanResult r = _mainWnd->GetLastResult();
+                        int idx = _filteredIndices[row];
+                        if (idx < (int)r.devices.size()) {
+                            auto& trust = r.devices[idx].trustState;
+                            if (trust == L"owned")          cd->clrText = Theme::ACCENT_GREEN;
+                            else if (trust == L"known")     cd->clrText = Theme::ACCENT_BLUE;
+                            else if (trust == L"guest")     cd->clrText = Theme::ACCENT_AMBER;
+                            else if (trust == L"blocked")   cd->clrText = Theme::ACCENT_RED;
+                            else if (trust == L"watchlist") cd->clrText = Theme::ACCENT_PURPLE;
+                            else                            cd->clrText = Theme::TEXT_TERTIARY;
+                            return CDRF_NEWFONT;
+                        }
+                    }
                 }
                 return CDRF_DODEFAULT;
             }
@@ -730,24 +826,23 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     if (cmd == 0) return;
 
-    // Validate IP string for command injection prevention
-    bool isValidIp = true;
-    for (wchar_t c : dev.ip) {
-        if (!iswalnum(c) && c != L'.' && c != L':' && c != L'-') {
-            isValidIp = false;
-            break;
-        }
-    }
+    if (!ScanEngine::IsSafeIP(dev.ip)) return;
 
     switch (cmd) {
     case 12001: { // Ping
-        if (!isValidIp) break;
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12002: { // Traceroute
-        if (!isValidIp) break;
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -812,7 +907,10 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
-        if (!isValidIp) break;
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -836,7 +934,10 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
-        if (!isValidIp) break;
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;

@@ -135,7 +135,7 @@ void testDeviceOffline() {
 #if defined(_MSC_VER) || defined(UNICODE)
 int wmain(int argc, wchar_t** argv) {
 #else
-int main(int argc, char** argv) {
+int main() {
 #endif
     testNewDevice();
     testRiskyPort();
