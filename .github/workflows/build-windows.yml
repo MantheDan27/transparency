@@ -19,7 +19,6 @@ on:
           - cpp-windows
           - dotnet-windows
           - cpp-linux
-          - electron-linux
           - all
       version_override:
         description: 'Version override (leave empty to auto-detect from branch)'
@@ -142,48 +141,6 @@ jobs:
         prerelease: false
         generate_release_notes: true
         make_latest: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ─── Electron Desktop Build (Linux) ─────────────────────────────────────
-  build-electron-linux:
-    needs: resolve-version
-    runs-on: ubuntu-latest
-    if: >
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && (inputs.build_target == 'electron-linux' || inputs.build_target == 'all'))
-    permissions:
-      contents: write
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.branch || github.ref }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: Install dependencies
-      working-directory: device-monitor-desktop
-      run: npm ci
-
-    - name: Build Electron App
-      working-directory: device-monitor-desktop
-      run: npx electron-builder --linux
-
-    - name: Upload to release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ needs.resolve-version.outputs.tag }}
-        name: "Transparency v${{ needs.resolve-version.outputs.version }}"
-        files: |
-          device-monitor-desktop/dist/*.AppImage
-          device-monitor-desktop/dist/*.snap
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
