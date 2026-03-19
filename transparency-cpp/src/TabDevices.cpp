@@ -4,6 +4,7 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <string>
+#include <cwctype>
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -17,6 +18,15 @@
 #include <shellapi.h>
 
 using std::wstring;
+
+bool IsValidIP(const std::wstring& ip) {
+    if (ip.empty()) return false;
+    for (wchar_t c : ip) {
+        if (!std::iswalnum(c) && c != L'.' && c != L':' && c != L'-') return false;
+    }
+    return true;
+}
+
 
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
 
@@ -819,11 +829,19 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     switch (cmd) {
     case 12001: { // Ping
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12002: { // Traceroute
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -888,6 +906,10 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -911,6 +933,10 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
+        if (!IsValidIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;

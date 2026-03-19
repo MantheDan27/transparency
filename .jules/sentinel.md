@@ -22,3 +22,13 @@ Always wrap dynamically provided executable paths in double quotes: `std::wstrin
 **Vulnerability:** The `ping-host` and `traceroute-host` IPC handlers in `main.js`, and `pingHost`/`getMac` in `scanner.js` pass user-controlled input (`host`/`ip` parameters) directly into a shell command using `exec` without validation. For example: `ping -c 4 ${host}`. A user could enter `127.0.0.1; rm -rf /` or similar to execute arbitrary commands.
 **Learning:** Even internal diagnostic tools must sanitize input. When `exec` or `execPromise` is used to invoke a system command, variables interpolated into the command string must be strictly validated to prevent shell injection, as these functions invoke a subshell which processes shell metacharacters.
 **Prevention:** Use a whitelist-based validation approach (e.g., `^[a-zA-Z0-9.:-]+$`) to ensure only valid hostnames or IP addresses are passed into the command. Alternatively, use `child_process.execFile` or `child_process.spawn` which do not run a subshell and pass arguments directly, making them immune to shell injection.
+## 2026-03-11 - Command Injection in IP Diagnostics Options
+
+**Vulnerability:**
+The `ShowDeviceContextMenu` command handlers in `transparency-cpp/src/TabDevices.cpp` for ping, traceroute, SSH, and reverse DNS directly append user-controlled data (`dev.ip`) into a command string passed to `_wsystem`. A spoofed IP address or manipulated state could contain shell characters (e.g., `&`, `|`, `"`), leading to arbitrary command execution on the host machine.
+
+**Learning:**
+Even if data originates from network scanning contexts (like an IP address variable), it should not be implicitly trusted or directly interpolated into system shell calls without strict validation or sanitation. `_wsystem` inherently invokes `cmd.exe`, which processes all shell meta-characters.
+
+**Prevention:**
+Always strictly validate data against an allowlist pattern before using it in a shell command string. For IP addresses, verify they contain only alphanumeric characters, dots, colons, and hyphens (as implemented via the `IsValidIP` helper). When possible, use `CreateProcess` or similar non-shell APIs with properly quoted arguments.
