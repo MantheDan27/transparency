@@ -1082,11 +1082,22 @@ void App::runTool(const std::string& tool, const std::string& target) {
 
     std::thread([targetCopy, toolCopy, outputWidget]() {
         std::string cmd;
-        // Sanitize target - only allow alphanumeric, dots, colons, hyphens
-        std::string safeTarget;
+        // Strict allowlist validation: reject if contains invalid chars or starts with hyphen
+        bool valid = !targetCopy.empty() && targetCopy[0] != '-';
         for (char c : targetCopy) {
-            if (isalnum(c) || c == '.' || c == ':' || c == '-') safeTarget += c;
+            if (!(isalnum(c) || c == '.' || c == ':' || c == '-')) {
+                valid = false;
+                break;
+            }
         }
+
+        if (!valid) {
+            auto* data = new std::pair<GtkWidget*, std::string>(outputWidget, "Error: Invalid target format");
+            g_idle_add(cb_tool_output_idle, data);
+            return;
+        }
+
+        std::string safeTarget = targetCopy;
 
         if (toolCopy == "ping")
             cmd = "ping -c 4 " + safeTarget + " 2>&1";
