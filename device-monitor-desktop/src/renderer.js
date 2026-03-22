@@ -1416,6 +1416,7 @@ function renderMap() {
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
@@ -1575,7 +1576,7 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      const isNew   = newDeviceIpSet.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
