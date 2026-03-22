@@ -20,13 +20,6 @@
 
 using std::wstring;
 
-bool IsValidIP(const std::wstring& ip) {
-    if (ip.empty()) return false;
-    for (wchar_t c : ip) {
-        if (!std::iswalnum(c) && c != L'.' && c != L':' && c != L'-') return false;
-    }
-    return true;
-}
 
 
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
@@ -830,7 +823,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     switch (cmd) {
     case 12001: { // Ping
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
@@ -839,7 +832,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12002: { // Traceroute
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
@@ -908,7 +901,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
@@ -938,7 +931,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
