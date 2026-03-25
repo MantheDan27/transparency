@@ -16,3 +16,7 @@
 ## 2026-03-08 - Optimize Port Scanning Thread Creation
 **Learning:** In C++ network scanners (like `transparency-linux`), spawning a new `std::thread` for every single port being scanned (up to 65k ports) creates massive overhead and memory pressure, even if throttled by a condition variable.
 **Action:** Use a fixed-size thread pool (e.g., `std::min(32, (int)ports.size())`) with a shared `std::atomic<size_t>` index to distribute task processing. This turns O(N) thread creations into O(1), significantly improving performance.
+
+## 2025-03-25 - O(N*M) Performance Anti-Pattern in Map Rendering
+**Learning:** In `device-monitor-desktop/src/renderer.js`, an identified performance anti-pattern is using $O(N)$ array operations like `Array.prototype.some()` inside mapping/rendering loops (like iterating over network devices).
+**Action:** Optimize by pre-computing lookups into `Map` or `Set` (e.g. `newDeviceIpSet`) for $O(1)$ time complexity, ensuring the initialization is hoisted completely outside the loop.
