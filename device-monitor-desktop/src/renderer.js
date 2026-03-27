@@ -977,7 +977,7 @@ async function applyBulkTags() {
 // ── Device detail panel (tabbed) ──────────────────────────────────────────────
 let detailActiveTab = 'overview';
 
-function openDetailPanel(dev, tab) {
+window.openDetailPanel = function(dev, tab) {
   currentDetailDev = dev;
   detailActiveTab  = tab || detailActiveTab || 'overview';
 
@@ -1047,7 +1047,7 @@ function openDetailPanel(dev, tab) {
         </div>`;
       }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
-  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
   const overviewContent = `
     <div class="detail-section">
@@ -3269,8 +3269,8 @@ window.rotateApiKey = async function() {
 
 // ── Patch openDetailPanel to include IoT risk + confidence alternatives ─────────
 // We inject this after the main openDetailPanel is defined and extend the overviewContent
-const _originalOpenDetailPanel = openDetailPanel;
-function openDetailPanel(dev, tab) {
+const _originalOpenDetailPanel = window.openDetailPanel || openDetailPanel;
+window.openDetailPanel = function(dev, tab) {
   // Call original but intercept the overview content
   _originalOpenDetailPanel.call(this, dev, tab);
 
