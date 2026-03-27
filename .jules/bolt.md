@@ -16,3 +16,7 @@
 ## 2026-03-08 - Optimize Port Scanning Thread Creation
 **Learning:** In C++ network scanners (like `transparency-linux`), spawning a new `std::thread` for every single port being scanned (up to 65k ports) creates massive overhead and memory pressure, even if throttled by a condition variable.
 **Action:** Use a fixed-size thread pool (e.g., `std::min(32, (int)ports.size())`) with a shared `std::atomic<size_t>` index to distribute task processing. This turns O(N) thread creations into O(1), significantly improving performance.
+
+## 2025-03-27 - Optimize Render Maps Device Filtering
+**Learning:** Using `Array.prototype.some()` or `Array.prototype.find()` inside mapping or rendering loops (like drawing device maps) creates an O(N*M) time complexity trap. This scales terribly when N (e.g. number of devices) and M (e.g. number of anomalies) grow, causing severe main thread blocking and laggy UI rendering.
+**Action:** Always pre-compute lookup tables by filtering arrays into a `Set` (or `Map`) *outside* of the render loop. Inside the loop, replace the `some`/`find` calls with an O(1) `Set.has()` or `Map.get()`, reducing overall complexity to O(N+M). Ensure the `Set` creation is securely hoisted before the loops.
