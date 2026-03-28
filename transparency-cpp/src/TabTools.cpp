@@ -85,6 +85,26 @@ LRESULT CALLBACK TabTools::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_TOOL_RESULT: return self->OnToolResult(hwnd, wp, lp);
     case WM_SCAN_COMPLETE: self->RefreshIpList(); return 0;
+    case WM_DRAWITEM: {
+        auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
+        if (dis && dis->CtlType == ODT_BUTTON) {
+            HDC hdc = dis->hDC;
+            RECT rc = dis->rcItem;
+            bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 1);
+
+            wchar_t text[64] = {};
+            GetWindowText(dis->hwndItem, text, 64);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, Theme::TEXT_PRIMARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
@@ -127,7 +147,7 @@ void TabTools::CreateControls(HWND hwnd, int cx, int cy) {
     };
     auto mkBtn = [&](const wchar_t* text, int id, int x, int y, int w, int h) -> HWND {
         HWND hw = CreateWindowEx(0, L"BUTTON", text,
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             x, y, w, h, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         return hw;

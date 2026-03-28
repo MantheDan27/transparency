@@ -64,6 +64,28 @@ LRESULT CALLBACK TabLedger::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_PAINT:      return self->OnPaint(hwnd);
     case WM_ERASEBKGND:{RECT rc;GetClientRect(hwnd,&rc);FillRect((HDC)wp,&rc,Theme::BrushSurface());return 1;}
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
+    case WM_DRAWITEM: {
+        auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
+        if (dis && dis->CtlType == ODT_BUTTON) {
+            HDC hdc = dis->hDC;
+            RECT rc = dis->rcItem;
+            bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+
+            // Clear button gets destructive red glass, others neutral
+            int variant = (dis->CtlID == 9800) ? 2 : 1;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant);
+
+            wchar_t text[64] = {};
+            GetWindowText(dis->hwndItem, text, 64);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, variant == 2 ? RGB(255, 180, 180) : Theme::TEXT_PRIMARY);
+            HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+            DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, old);
+            return TRUE;
+        }
+        return 0;
+    }
     case WM_NOTIFY:     return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
@@ -94,12 +116,12 @@ void TabLedger::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(hHdr, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hBtnExport = CreateWindowEx(0, L"BUTTON", L"Export CSV",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         cx - 188, 12, 88, 26, hwnd, (HMENU)IDC_BTN_EXPORT_LEDGER, hInst, nullptr);
     SendMessage(_hBtnExport, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
     _hBtnClear = CreateWindowEx(0, L"BUTTON", L"Clear",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         cx - 96, 12, 80, 26, hwnd, (HMENU)9800, hInst, nullptr);
     SendMessage(_hBtnClear, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
 
@@ -159,7 +181,7 @@ void TabLedger::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hComboSnap2, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hBtnDiff = CreateWindowEx(0, L"BUTTON", L"Run Diff",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         534, diffTop, 80, 26, hwnd, (HMENU)(INT_PTR)ID_BTN_DIFF, hInst, nullptr);
     SendMessage(_hBtnDiff, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
