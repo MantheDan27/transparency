@@ -321,7 +321,8 @@ inline void DrawGradientButton(HDC hdc, const RECT& rc, int radius,
 // tinted fill with frosted highlight and glow border.
 // variant: 0 = primary (accent), 1 = secondary (neutral), 2 = destructive (red)
 inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
-                            bool pressed, int variant = 0) {
+                            bool pressed, int variant = 0,
+                            bool selected = false) {
     Gdiplus::Graphics g(hdc);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     g.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
@@ -332,6 +333,21 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
     int d = radius * 2;
     if (d > w) d = w; if (d > h) d = h;
 
+    // Blue outer glow when selected — drawn before the button shape
+    if (selected) {
+        for (int i = 4; i > 0; --i) {
+            Gdiplus::GraphicsPath glowPath;
+            glowPath.AddArc(x - i, y - i, d, d, 180, 90);
+            glowPath.AddArc(x + w - d - 1 + i, y - i, d, d, 270, 90);
+            glowPath.AddArc(x + w - d - 1 + i, y + h - d - 1 + i, d, d, 0, 90);
+            glowPath.AddArc(x - i, y + h - d - 1 + i, d, d, 90, 90);
+            glowPath.CloseFigure();
+            BYTE ga = (BYTE)(28 - i * 6);
+            Gdiplus::Pen glowPen(Gdiplus::Color(ga, 61, 140, 255), 1.5f);
+            g.DrawPath(&glowPen, &glowPath);
+        }
+    }
+
     Gdiplus::GraphicsPath path;
     path.AddArc(x, y, d, d, 180, 90);
     path.AddArc(x + w - d - 1, y, d, d, 270, 90);
@@ -339,10 +355,10 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
     path.AddArc(x, y + h - d - 1, d, d, 90, 90);
     path.CloseFigure();
 
-    // Base fill — ultra-low alpha for true transparent glass
-    BYTE baseAlpha = pressed ? (BYTE)35 : (BYTE)18;
-    if (variant == 0) {
-        // Primary: accent blue glass — barely-there blue tint
+    // Base fill — selected gets stronger blue tint, otherwise ultra-low alpha
+    BYTE baseAlpha = selected ? (BYTE)55 : (pressed ? (BYTE)35 : (BYTE)18);
+    if (variant == 0 || selected) {
+        // Primary / selected: accent blue glass
         Gdiplus::LinearGradientBrush grad(
             Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
             Gdiplus::Color(baseAlpha + 12, 40, 100, 220),
@@ -358,13 +374,13 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
         g.FillPath(&fill, &path);
     }
 
-    // Top highlight — subtle shimmer
+    // Top highlight — subtle shimmer (brighter when selected)
     {
         Gdiplus::Region oldClip;
         g.GetClip(&oldClip);
         g.SetClip(&path);
 
-        BYTE highlightAlpha = pressed ? (BYTE)12 : (BYTE)30;
+        BYTE highlightAlpha = selected ? (BYTE)45 : (pressed ? (BYTE)12 : (BYTE)30);
         Gdiplus::LinearGradientBrush shimmer(
             Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
             Gdiplus::Color(highlightAlpha, 255, 255, 255),
@@ -374,8 +390,11 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
         g.SetClip(&oldClip);
     }
 
-    // Border — thin glow edge for definition against dark blue
-    if (variant == 0) {
+    // Border — blue glow when selected, otherwise thin edge
+    if (selected) {
+        Gdiplus::Pen pen(Gdiplus::Color(160, 61, 140, 255), 1.5f);
+        g.DrawPath(&pen, &path);
+    } else if (variant == 0) {
         Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 60, 61, 140, 255), 1.0f);
         g.DrawPath(&pen, &path);
     } else if (variant == 2) {

@@ -83,7 +83,8 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         // Clear All — destructive glass button
         if (dis->CtlID == IDC_BTN_CLEAR_ALERTS) {
-            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 2);
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 2, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -100,7 +101,8 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             bool isDel = (dis->CtlID == IDC_BTN_DEL_RULE);
             bool isAdd = (dis->CtlID == IDC_BTN_ADD_RULE);
             int variant = isAdd ? 0 : isDel ? 2 : 1;
-            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_SM, pressed, variant);
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_SM, pressed, variant, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);

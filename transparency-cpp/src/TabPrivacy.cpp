@@ -420,10 +420,11 @@ LRESULT TabPrivacy::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     HDC hdc = dis->hDC;
     RECT rc = dis->rcItem;
     bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+    bool focused = (dis->itemState & ODS_FOCUS) != 0;
 
     // Destructive buttons get red glass, others neutral
     int variant = (dis->CtlID == IDC_BTN_DELETE_ALL || dis->CtlID == ID_BTN_HOOK_DEL) ? 2 : 1;
-    Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant);
+    Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant, focused);
 
     wchar_t text[64] = {};
     GetWindowText(dis->hwndItem, text, 64);

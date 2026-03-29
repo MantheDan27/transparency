@@ -70,10 +70,11 @@ LRESULT CALLBACK TabLedger::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             HDC hdc = dis->hDC;
             RECT rc = dis->rcItem;
             bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
 
             // Clear button gets destructive red glass, others neutral
             int variant = (dis->CtlID == 9800) ? 2 : 1;
-            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant);
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant, focused);
 
             wchar_t text[64] = {};
             GetWindowText(dis->hwndItem, text, 64);
