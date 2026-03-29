@@ -149,8 +149,9 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         cx - 110, 10, 94, 30, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
 
-    // Alert list
-    int alertH = (cy - 80) / 3;
+    // Alert list (25% of available space)
+    int avail = cy - 80;
+    int alertH = avail * 25 / 100;
     _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
         16, 48, cx - 32, alertH,
@@ -163,7 +164,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 
     struct ColDef { const wchar_t* name; int w; };
     static const ColDef ALERT_COLS[] = {
-        { L"Severity", 80 }, { L"Title", 240 }, { L"Device", 120 },
+        { L"Severity", 80 }, { L"Title", 360 }, { L"Device", 120 },
         { L"Time", 130 }, { L"Status", 80 }
     };
     LVCOLUMN col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col.fmt = LVCFMT_LEFT;
@@ -172,9 +173,9 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         ListView_InsertColumn(_hAlertList, i, &col);
     }
 
-    // Explanation panel (three-part: What / Why / What to do)
+    // Explanation panel (three-part: What / Why / What to do) — 45% of space
     int explainY = 48 + alertH + 6;
-    int explainH = alertH - 6;
+    int explainH = avail * 45 / 100 - 6;
     _hExplainPanel = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", nullptr,
         WS_CHILD | WS_VISIBLE,
         16, explainY, cx - 32, explainH, hwnd, nullptr, hInst, nullptr);
@@ -207,8 +208,8 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     // Default text when no alert selected
     if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
 
-    // Rules section
-    int rulesY = 48 + alertH * 2 + 18;
+    // Rules section (remaining ~30% of space)
+    int rulesY = explainY + explainH + 18;
 
     HWND hRulesHdr = CreateWindowEx(0, L"STATIC", L"ALERT RULES",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -249,15 +250,36 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 }
 
 void TabAlerts::LayoutControls(int cx, int cy) {
-    int alertH = (cy - 80) / 3;
+    int avail = cy - 80;
+    int alertH = avail * 25 / 100;
     if (_hAlertList) SetWindowPos(_hAlertList, nullptr, 16, 48, cx - 32, alertH, SWP_NOZORDER);
     if (_hBtnClearAll) SetWindowPos(_hBtnClearAll, nullptr, cx - 100, 12, 84, 26, SWP_NOZORDER);
 
     int explainY = 48 + alertH + 6;
-    int explainH = alertH - 6;
+    int explainH = avail * 45 / 100 - 6;
     if (_hExplainPanel) SetWindowPos(_hExplainPanel, nullptr, 16, explainY, cx - 32, explainH, SWP_NOZORDER);
 
-    int rulesY = 48 + alertH * 2 + 18;
+    // Re-layout the three explanation sections inside the panel
+    int thirdH = (explainH - 6) / 3 - 20;
+    int ey = 0;
+    // What happened label + edit
+    if (_hExplainWhat) {
+        HWND lblWhat = GetWindow(_hExplainPanel, GW_CHILD);
+        if (lblWhat) SetWindowPos(lblWhat, nullptr, 4, 0, 80, 16, SWP_NOZORDER);
+        SetWindowPos(_hExplainWhat, nullptr, 4, 16, cx - 40, thirdH, SWP_NOZORDER);
+    }
+    ey = 16 + thirdH + 4;
+    // Why it matters label + edit
+    if (_hExplainWhy) {
+        SetWindowPos(_hExplainWhy, nullptr, 4, ey + 16, cx - 40, thirdH, SWP_NOZORDER);
+    }
+    ey += thirdH + 20;
+    // What to do label + edit
+    if (_hExplainDo) {
+        SetWindowPos(_hExplainDo, nullptr, 4, ey + 16, cx - 40, thirdH, SWP_NOZORDER);
+    }
+
+    int rulesY = explainY + explainH + 18;
     int ruleH = cy - rulesY - 16;
     if (_hRuleList) SetWindowPos(_hRuleList, nullptr, 16, rulesY, cx - 32, ruleH, SWP_NOZORDER);
     if (_hBtnAddRule) SetWindowPos(_hBtnAddRule, nullptr, cx - 292, rulesY - 22, 88, 22, SWP_NOZORDER);
