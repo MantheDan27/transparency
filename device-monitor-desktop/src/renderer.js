@@ -1463,6 +1463,12 @@ function renderMap() {
   if (gateway) nodePositions.set(gateway.ip, { x: cx, y: routerY });
 
   const maxPerRow = Math.max(1, Math.floor(W / 120));
+
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute Set of IPs with 'New Device' anomalies outside the render loop
+  // to avoid O(N) array iteration per device inside the mapping loop.
+  const newDeviceIpsMap = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
@@ -1575,7 +1581,7 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      const isNew   = newDeviceIpsMap.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
