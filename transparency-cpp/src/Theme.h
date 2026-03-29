@@ -183,19 +183,19 @@ inline HFONT MakeFont(int pxSize, int weight, bool mono = false) {
 // H1       32px Bold(700)     — Page titles
 // H2       24px SemiBold(600) — Section headers
 // H3       18px SemiBold(600) — Card titles
-// Body     15px Regular(400)  — Default body (minimum for readable content)
-// BodySm   13px Regular(400)  — Descriptions, body small
-// Caption  11px Medium(500)   — Labels, badges (UPPERCASE, +0.04em tracking)
-// Mono     13px Regular(400)  — IPs, MACs, ports, hashes, scan output
+// Body     16px Regular(400)  — Default body (minimum for readable content)
+// BodySm   14px Regular(400)  — Descriptions, body small
+// Caption  12px Medium(500)   — Labels, badges (UPPERCASE, +0.04em tracking)
+// Mono     14px Regular(400)  — IPs, MACs, ports, hashes, scan output
 
 inline HFONT FontDisplay() { static HFONT f = MakeFont(48, FW_BOLD);     return f; }
 inline HFONT FontH1()      { static HFONT f = MakeFont(32, FW_BOLD);     return f; }
 inline HFONT FontH2()      { static HFONT f = MakeFont(24, FW_SEMIBOLD); return f; }
 inline HFONT FontH3()      { static HFONT f = MakeFont(18, FW_SEMIBOLD); return f; }
-inline HFONT FontBody()    { static HFONT f = MakeFont(15, FW_NORMAL);   return f; }
-inline HFONT FontBodySm()  { static HFONT f = MakeFont(13, FW_NORMAL);   return f; }
-inline HFONT FontCaption() { static HFONT f = MakeFont(11, FW_MEDIUM);   return f; }
-inline HFONT FontMono()    { static HFONT f = MakeFont(13, FW_NORMAL, true); return f; }
+inline HFONT FontBody()    { static HFONT f = MakeFont(16, FW_NORMAL);   return f; }
+inline HFONT FontBodySm()  { static HFONT f = MakeFont(14, FW_NORMAL);   return f; }
+inline HFONT FontCaption() { static HFONT f = MakeFont(12, FW_MEDIUM);   return f; }
+inline HFONT FontMono()    { static HFONT f = MakeFont(14, FW_NORMAL, true); return f; }
 
 // Nav-specific fonts (13px, weight varies by state)
 inline HFONT FontNavActive()   { static HFONT f = MakeFont(13, FW_SEMIBOLD); return f; }

@@ -5,7 +5,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/bg_glass_card"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="16dp"
     android:layout_marginBottom="8dp">
 
     <LinearLayout
@@ -34,7 +34,7 @@
             android:background="@drawable/bg_glass_pill"
             android:paddingHorizontal="10dp"
             android:paddingVertical="3dp"
-            android:textSize="10sp"
+            android:textSize="12sp"
             android:textAllCaps="true" />
     </LinearLayout>
 
@@ -51,7 +51,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="@color/accent_cyan"
-            android:textSize="13sp"
+            android:textSize="15sp"
             android:fontFamily="monospace" />
 
         <!-- MAC -->
@@ -60,7 +60,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/text_tertiary"
-            android:textSize="11sp"
+            android:textSize="13sp"
             android:fontFamily="monospace" />
     </LinearLayout>
 
@@ -69,7 +69,7 @@
         android:id="@+id/deviceVendor"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
+        android:textSize="14sp" />
 </LinearLayout>

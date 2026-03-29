@@ -5,7 +5,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/bg_glass_card"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="16dp"
     android:layout_marginBottom="8dp">
 
     <LinearLayout
@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="@color/text_primary"
-            android:textSize="14sp"
+            android:textSize="16sp"
             android:textStyle="bold" />
 
         <TextView
@@ -36,15 +36,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/text_tertiary"
-            android:textSize="11sp" />
+            android:textSize="13sp" />
     </LinearLayout>
 
     <TextView
         android:id="@+id/alertDesc"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="8dp"
         android:layout_marginStart="18dp"
         android:textColor="@color/text_secondary"
-        android:textSize="13sp" />
+        android:textSize="15sp"
+        android:lineSpacingMultiplier="1.3" />
 </LinearLayout>

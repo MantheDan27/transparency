@@ -111,7 +111,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/text_tertiary"
-                android:textSize="12sp"
+                android:textSize="14sp"
                 android:fontFamily="monospace" />
         </LinearLayout>
 
@@ -181,8 +181,9 @@
             android:layout_height="wrap_content"
             android:text="@string/no_devices"
             android:textColor="@color/text_tertiary"
-            android:textSize="14sp"
+            android:textSize="16sp"
             android:textAlignment="center"
+            android:lineSpacingMultiplier="1.4"
             android:padding="32dp" />
     </LinearLayout>
 </ScrollView>

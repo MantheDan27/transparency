@@ -96,11 +96,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_glass_card"
-            android:padding="16dp"
+            android:padding="20dp"
             android:textColor="@color/accent_cyan"
-            android:textSize="12sp"
+            android:textSize="14sp"
             android:fontFamily="monospace"
-            android:minHeight="200dp"
+            android:lineSpacingMultiplier="1.35"
+            android:minHeight="280dp"
             android:gravity="top" />
     </LinearLayout>
 </ScrollView>
