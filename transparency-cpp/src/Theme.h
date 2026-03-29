@@ -333,7 +333,7 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
     int d = radius * 2;
     if (d > w) d = w; if (d > h) d = h;
 
-    // Blue outer glow when selected — drawn before the button shape
+    // Cyan outer glow when selected — drawn before the button shape
     if (selected) {
         for (int i = 4; i > 0; --i) {
             Gdiplus::GraphicsPath glowPath;
@@ -343,7 +343,7 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
             glowPath.AddArc(x - i, y + h - d - 1 + i, d, d, 90, 90);
             glowPath.CloseFigure();
             BYTE ga = (BYTE)(28 - i * 6);
-            Gdiplus::Pen glowPen(Gdiplus::Color(ga, 61, 140, 255), 1.5f);
+            Gdiplus::Pen glowPen(Gdiplus::Color(ga, 0, 229, 255), 1.5f);
             g.DrawPath(&glowPen, &glowPath);
         }
     }
@@ -355,10 +355,17 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
     path.AddArc(x, y + h - d - 1, d, d, 90, 90);
     path.CloseFigure();
 
-    // Base fill — selected gets stronger blue tint, otherwise ultra-low alpha
+    // Base fill — selected gets cyan tint, otherwise ultra-low alpha
     BYTE baseAlpha = selected ? (BYTE)55 : (pressed ? (BYTE)35 : (BYTE)18);
-    if (variant == 0 || selected) {
-        // Primary / selected: accent blue glass
+    if (selected) {
+        // Selected: cyan-tinted glass
+        Gdiplus::LinearGradientBrush grad(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
+            Gdiplus::Color(baseAlpha + 12, 0, 180, 210),
+            Gdiplus::Color(baseAlpha, 0, 140, 170));
+        g.FillPath(&grad, &path);
+    } else if (variant == 0) {
+        // Primary: accent blue glass
         Gdiplus::LinearGradientBrush grad(
             Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
             Gdiplus::Color(baseAlpha + 12, 40, 100, 220),
@@ -390,9 +397,9 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
         g.SetClip(&oldClip);
     }
 
-    // Border — blue glow when selected, otherwise thin edge
+    // Border — cyan glow when selected, otherwise thin edge
     if (selected) {
-        Gdiplus::Pen pen(Gdiplus::Color(160, 61, 140, 255), 1.5f);
+        Gdiplus::Pen pen(Gdiplus::Color(160, 0, 229, 255), 1.5f);
         g.DrawPath(&pen, &path);
     } else if (variant == 0) {
         Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 60, 61, 140, 255), 1.0f);
