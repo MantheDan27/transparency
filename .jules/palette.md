@@ -1,3 +1,6 @@
 ## 2024-05-18 - Added global :focus-visible styles
 **Learning:** Found that most interactive elements stripped default focus outlines via `outline: none` without providing an alternative, breaking keyboard navigation accessibility.
 **Action:** Adding a global `*:focus-visible` outline mapped to the theme's `--accent` color ensures universal keyboard accessibility while preserving the intended mouse/touch design. Always implement `:focus-visible` before stripping `:focus` outlines.
+## 2024-03-30 - Missing Focus Indicators and Tooltips on Action Buttons
+**Learning:** Found an accessibility pattern where icon-only action buttons (like `#logout-btn` and `#detail-close`) missed `title` tooltips and there was no global `:focus-visible` styling, severely degrading navigability for keyboard and screen reader users. Injected templates using JS `.map().join('')` may also bypass standard a11y linters checking static HTML.
+**Action:** Implemented global `:focus-visible` CSS rules on `button`, `a`, `input`, and `select` to visually indicate keyboard focus, and ensured `aria-label` and `title` attributes are applied to static icon buttons. For future components, manually audit dynamic HTML injections for accessibility gaps.

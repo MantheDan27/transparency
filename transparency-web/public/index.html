@@ -27,7 +27,7 @@
       </div>
 
       <div class="auth-card">
-        <div id="auth-error" class="auth-error hidden"></div>
+        <div id="auth-error" class="auth-error hidden" aria-live="assertive"></div>
 
         <!-- Login Form -->
         <form id="login-form">
@@ -102,7 +102,7 @@
             <span class="user-email" id="user-email">user@example.com</span>
           </div>
         </div>
-        <button id="logout-btn" class="btn-logout">
+        <button id="logout-btn" class="btn-logout" aria-label="Log Out" title="Log Out">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
@@ -259,7 +259,7 @@
               <h2 id="detail-name">Device Name</h2>
               <span id="detail-trust-badge" class="trust-badge trust-unknown">UNKNOWN</span>
             </div>
-            <button id="detail-close" class="btn-icon" aria-label="Close detail panel">
+            <button id="detail-close" class="btn-icon" aria-label="Close detail panel" title="Close detail panel">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
