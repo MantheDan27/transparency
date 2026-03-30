@@ -31,4 +31,4 @@ The `ShowDeviceContextMenu` command handlers in `transparency-cpp/src/TabDevices
 Even if data originates from network scanning contexts (like an IP address variable), it should not be implicitly trusted or directly interpolated into system shell calls without strict validation or sanitation. `_wsystem` inherently invokes `cmd.exe`, which processes all shell meta-characters.
 
 **Prevention:**
-Always strictly validate data against an allowlist pattern before using it in a shell command string. For IP addresses, verify they contain only alphanumeric characters, dots, colons, and hyphens (as implemented via the `IsValidIP` helper). When possible, use `CreateProcess` or similar non-shell APIs with properly quoted arguments.
+Always strictly validate data against an allowlist pattern before using it in a shell command string. For IP addresses, use `ScanEngine::IsSafeIP` utilizing `InetPtonW` from `<ws2tcpip.h>` to strictly validate that the input is a legitimate IPv4 or IPv6 address.
