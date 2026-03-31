@@ -549,8 +549,8 @@
             </div>
             <div class="tool-card-body">
               <div class="tool-input-row">
-                <input type="text" class="tool-input" id="pingTarget" placeholder="Host or IP">
-                <input type="number" class="tool-input tool-input-sm" id="pingCount" value="4" min="1" max="100" title="Count">
+                <input type="text" class="tool-input" id="pingTarget" aria-label="Ping target host or IP" placeholder="Host or IP">
+                <input type="number" class="tool-input tool-input-sm" id="pingCount" aria-label="Ping count" value="4" min="1" max="100" title="Count">
                 <button class="btn btn-primary btn-sm" onclick="window.runPing()">Run</button>
               </div>
               <pre class="tool-output hidden" id="pingOutput"></pre>
@@ -564,7 +564,7 @@
             </div>
             <div class="tool-card-body">
               <div class="tool-input-row">
-                <input type="text" class="tool-input" id="traceTarget" placeholder="Host or IP">
+                <input type="text" class="tool-input" id="traceTarget" aria-label="Traceroute target host or IP" placeholder="Host or IP">
                 <button class="btn btn-primary btn-sm" onclick="window.runTraceroute()">Run</button>
               </div>
               <pre class="tool-output hidden" id="traceOutput"></pre>
@@ -578,7 +578,7 @@
             </div>
             <div class="tool-card-body">
               <div class="tool-input-row">
-                <input type="text" class="tool-input" id="dnsTarget" placeholder="Hostname or IP">
+                <input type="text" class="tool-input" id="dnsTarget" aria-label="DNS lookup target hostname or IP" placeholder="Hostname or IP">
                 <select class="tool-select" id="dnsType">
                   <option value="A">A</option>
                   <option value="AAAA">AAAA</option>
@@ -600,8 +600,8 @@
             </div>
             <div class="tool-card-body">
               <div class="tool-input-row">
-                <input type="text" class="tool-input" id="tcpHost" placeholder="Host or IP">
-                <input type="number" class="tool-input tool-input-sm" id="tcpPort" placeholder="Port" min="1" max="65535">
+                <input type="text" class="tool-input" id="tcpHost" aria-label="TCP connect host or IP" placeholder="Host or IP">
+                <input type="number" class="tool-input tool-input-sm" id="tcpPort" aria-label="TCP connect port" placeholder="Port" min="1" max="65535">
                 <button class="btn btn-primary btn-sm" onclick="window.runTCPTest()">Test</button>
               </div>
               <pre class="tool-output hidden" id="tcpResult"></pre>
@@ -615,7 +615,7 @@
             </div>
             <div class="tool-card-body">
               <div class="tool-input-row">
-                <input type="text" class="tool-input" id="portScanHost" placeholder="Host or IP">
+                <input type="text" class="tool-input" id="portScanHost" aria-label="Port scan target host or IP" placeholder="Host or IP">
                 <button class="btn btn-primary btn-sm" onclick="window.runPortScan()">Scan</button>
               </div>
               <div class="port-presets">
@@ -623,7 +623,7 @@
                 <button class="port-preset-btn" data-preset="top100" onclick="window.setPortPreset(this)">Top 100</button>
                 <button class="port-preset-btn" data-preset="custom" onclick="window.setPortPreset(this)">Custom</button>
               </div>
-              <input type="text" class="tool-input hidden" id="portScanRange" placeholder="e.g. 22,80,443 or 1-1024">
+              <input type="text" class="tool-input hidden" id="portScanRange" aria-label="Port scan custom range" placeholder="e.g. 22,80,443 or 1-1024">
               <div class="hidden" id="portScanStatus"></div>
               <div class="port-scan-results" id="portScanResults"></div>
             </div>
@@ -636,7 +636,7 @@
             </div>
             <div class="tool-card-body">
               <div class="tool-input-row">
-                <input type="text" class="tool-input" id="wolMac" placeholder="MAC Address (e.g. AA:BB:CC:DD:EE:FF)">
+                <input type="text" class="tool-input" id="wolMac" aria-label="Wake-on-LAN target MAC address" placeholder="MAC Address (e.g. AA:BB:CC:DD:EE:FF)">
                 <button class="btn btn-primary btn-sm" onclick="window.runWOL()">Wake</button>
               </div>
               <pre class="tool-output hidden" id="wolResult"></pre>

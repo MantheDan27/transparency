@@ -1,3 +1,3 @@
-## 2024-05-18 - Added global :focus-visible styles
-**Learning:** Found that most interactive elements stripped default focus outlines via `outline: none` without providing an alternative, breaking keyboard navigation accessibility.
-**Action:** Adding a global `*:focus-visible` outline mapped to the theme's `--accent` color ensures universal keyboard accessibility while preserving the intended mouse/touch design. Always implement `:focus-visible` before stripping `:focus` outlines.
+## 2024-05-14 - Add ARIA labels to tool inputs
+**Learning:** Diagnostic tool inputs relied solely on placeholder text which is an accessibility anti-pattern for screen readers.
+**Action:** Always ensure input fields without explicit `<label>` tags have descriptive `aria-label` attributes to improve screen reader accessibility.
