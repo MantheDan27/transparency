@@ -16,3 +16,6 @@
 ## 2026-03-08 - Optimize Port Scanning Thread Creation
 **Learning:** In C++ network scanners (like `transparency-linux`), spawning a new `std::thread` for every single port being scanned (up to 65k ports) creates massive overhead and memory pressure, even if throttled by a condition variable.
 **Action:** Use a fixed-size thread pool (e.g., `std::min(32, (int)ports.size())`) with a shared `std::atomic<size_t>` index to distribute task processing. This turns O(N) thread creations into O(1), significantly improving performance.
+## 2026-03-31 - [Optimize array iterations for performance]
+**Learning:** Chaining `.filter().map()` methods when populating a `Set` creates unnecessary intermediate arrays and iterates over the original array multiple times. This introduces redundant O(N) operations and memory allocations.
+**Action:** Replace chained `.filter().map()` operations with a single `for...of` loop that directly checks conditions and adds the mapped value to the `Set` in a single pass.
