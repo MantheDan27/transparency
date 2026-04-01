@@ -1416,6 +1416,9 @@ function renderMap() {
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computing newDeviceIpSet avoids an O(N*M) nested array search inside the tierDevices loop below.
+  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
@@ -1575,7 +1578,7 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      const isNew   = newDeviceIpSet.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
@@ -2762,6 +2765,9 @@ function renderConfidenceAlternatives(dev) {
   const mainType = dev.deviceType || 'Unknown Device';
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computing portSet changes O(N) includes() lookups into O(1) Set.has() checks below.
+  const portSet = new Set(ports);
 
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST
@@ -2769,10 +2775,10 @@ function renderConfidenceAlternatives(dev) {
     .map(t => {
       let score = Math.max(5, mainConf - 20 - Math.floor(Math.random() * 25));
       // Adjust based on signals
-      if (t === 'Router/Gateway' && ports.some(p => [53,80,443].includes(p))) score += 10;
-      if (t === 'NAS' && ports.some(p => [445,2049,548].includes(p))) score += 10;
-      if (t === 'Printer' && ports.some(p => [631,9100].includes(p))) score += 10;
-      if (t === 'Camera / DVR' && ports.some(p => [554,8080].includes(p))) score += 10;
+      if (t === 'Router/Gateway' && [53,80,443].some(p => portSet.has(p))) score += 10;
+      if (t === 'NAS' && [445,2049,548].some(p => portSet.has(p))) score += 10;
+      if (t === 'Printer' && [631,9100].some(p => portSet.has(p))) score += 10;
+      if (t === 'Camera / DVR' && [554,8080].some(p => portSet.has(p))) score += 10;
       return { type: t, score: Math.min(score, mainConf - 5) };
     })
     .sort((a, b) => b.score - a.score)
