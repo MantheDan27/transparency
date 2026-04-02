@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Transparency</string>
+    <string name="tab_overview">Overview</string>
+    <string name="tab_devices">Devices</string>
+    <string name="tab_alerts">Alerts</string>
+    <string name="tab_tools">Tools</string>
+    <string name="scan_quick">Quick Scan</string>
+    <string name="scan_deep">Deep Scan</string>
+    <string name="devices_online">Devices Online</string>
+    <string name="wifi_network">Wi-Fi Network</string>
+    <string name="gateway">Gateway</string>
+    <string name="no_devices">No devices discovered yet. Run a scan to find devices on your network.</string>
+    <string name="scanning">Scanning network&#8230;</string>
+    <string name="ping_tool">Ping</string>
+    <string name="dns_tool">DNS Lookup</string>
+    <string name="traceroute_tool">Traceroute</string>
+    <string name="port_scan_tool">Port Scan</string>
+    <string name="trust_owned">Owned</string>
+    <string name="trust_known">Known</string>
+    <string name="trust_guest">Guest</string>
+    <string name="trust_unknown">Unknown</string>
+    <string name="trust_blocked">Blocked</string>
+</resources>
