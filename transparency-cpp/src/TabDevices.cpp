@@ -100,10 +100,11 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             HDC hdc = dis->hDC;
             RECT rc = dis->rcItem;
             bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
             bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
 
             Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
-                                   isSave ? 0 : 1);
+                                   isSave ? 0 : 1, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
