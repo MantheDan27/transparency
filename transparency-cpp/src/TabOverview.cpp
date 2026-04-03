@@ -428,6 +428,7 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
         RECT rc = dis->rcItem;
         bool pressed = (dis->itemState & ODS_SELECTED) != 0;
         bool disabled = (dis->itemState & ODS_DISABLED) != 0;
+        bool focused = (dis->itemState & ODS_FOCUS) != 0;
 
         // Primary buttons get accent glass, secondary get neutral glass
         bool isPrimary = (dis->CtlID == IDC_BTN_SCAN_QUICK);
@@ -437,7 +438,7 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
                 Theme::BG_ELEVATED, Theme::BORDER_SUBTLE);
         } else {
             Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
-                                   isPrimary ? 0 : 1);
+                                   isPrimary ? 0 : 1, focused);
         }
 
         // Button text

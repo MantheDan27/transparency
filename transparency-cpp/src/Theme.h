@@ -17,17 +17,17 @@
 namespace Theme {
 
 // ── Backgrounds (4-layer depth system — never skip layers) ──────────────────
-constexpr COLORREF BG_ROOT      = RGB(10,  12,  16);   // #0A0C10 — Layer 1: app background, sidebar
-constexpr COLORREF BG_SURFACE   = RGB(18,  21,  28);   // #12151C — Layer 2: content area, panels
-constexpr COLORREF BG_ELEVATED  = RGB(26,  30,  40);   // #1A1E28 — Layer 3: cards, hover states
-constexpr COLORREF BG_OVERLAY   = RGB(34,  40,  56);   // #222838 — Layer 4: modals, dropdowns, popovers
+constexpr COLORREF BG_ROOT      = RGB(6,   10,  28);   // #060A1C — Layer 1: deep dark blue background
+constexpr COLORREF BG_SURFACE   = RGB(10,  16,  40);   // #0A1028 — Layer 2: content area, panels
+constexpr COLORREF BG_ELEVATED  = RGB(16,  24,  56);   // #101838 — Layer 3: cards, hover states
+constexpr COLORREF BG_OVERLAY   = RGB(22,  32,  72);   // #162048 — Layer 4: modals, dropdowns, popovers
 
 // Derived background states
-constexpr COLORREF BG_INPUT     = RGB(10,  12,  16);   // inputs use root layer
-constexpr COLORREF BG_ROW_ALT   = RGB(14,  17,  22);   // subtle alternation on root
-constexpr COLORREF BG_ROW_HOV   = RGB(26,  30,  40);   // hover = elevated layer
-constexpr COLORREF BG_ROW_SEL   = RGB(24,  37,  62);   // accent_blue @ 15% on surface
-constexpr COLORREF BG_NAV_ACTIVE= RGB(18,  29,  52);   // accent_blue @ 15% on root
+constexpr COLORREF BG_INPUT     = RGB(6,   10,  28);   // inputs use root layer
+constexpr COLORREF BG_ROW_ALT   = RGB(8,   13,  34);   // subtle alternation on root
+constexpr COLORREF BG_ROW_HOV   = RGB(16,  24,  56);   // hover = elevated layer
+constexpr COLORREF BG_ROW_SEL   = RGB(20,  36,  80);   // accent_blue @ 15% on surface
+constexpr COLORREF BG_NAV_ACTIVE= RGB(14,  26,  64);   // accent_blue @ 15% on root
 
 // Backward compatibility aliases
 constexpr COLORREF BG_APP     = BG_ROOT;
@@ -35,8 +35,8 @@ constexpr COLORREF BG_SIDEBAR = BG_ROOT;
 constexpr COLORREF BG_CARD    = BG_ELEVATED;
 
 // ── Borders ──────────────────────────────────────────────────────────────────
-constexpr COLORREF BORDER_DEFAULT = RGB(42,  48,  64);  // #2A3040 — card borders, dividers
-constexpr COLORREF BORDER_SUBTLE  = RGB(30,  35,  48);  // #1E2330 — subtle separators
+constexpr COLORREF BORDER_DEFAULT = RGB(30,  42,  80);  // #1E2A50 — card borders, dividers
+constexpr COLORREF BORDER_SUBTLE  = RGB(20,  30,  60);  // #141E3C — subtle separators
 constexpr COLORREF BORDER_FOCUS   = RGB(61,  127, 255); // #3D7FFF — focus rings, active borders
 
 // Backward compatibility
@@ -183,19 +183,19 @@ inline HFONT MakeFont(int pxSize, int weight, bool mono = false) {
 // H1       32px Bold(700)     — Page titles
 // H2       24px SemiBold(600) — Section headers
 // H3       18px SemiBold(600) — Card titles
-// Body     15px Regular(400)  — Default body (minimum for readable content)
-// BodySm   13px Regular(400)  — Descriptions, body small
-// Caption  11px Medium(500)   — Labels, badges (UPPERCASE, +0.04em tracking)
-// Mono     13px Regular(400)  — IPs, MACs, ports, hashes, scan output
+// Body     16px Regular(400)  — Default body (minimum for readable content)
+// BodySm   14px Regular(400)  — Descriptions, body small
+// Caption  12px Medium(500)   — Labels, badges (UPPERCASE, +0.04em tracking)
+// Mono     14px Regular(400)  — IPs, MACs, ports, hashes, scan output
 
 inline HFONT FontDisplay() { static HFONT f = MakeFont(48, FW_BOLD);     return f; }
 inline HFONT FontH1()      { static HFONT f = MakeFont(32, FW_BOLD);     return f; }
 inline HFONT FontH2()      { static HFONT f = MakeFont(24, FW_SEMIBOLD); return f; }
 inline HFONT FontH3()      { static HFONT f = MakeFont(18, FW_SEMIBOLD); return f; }
-inline HFONT FontBody()    { static HFONT f = MakeFont(15, FW_NORMAL);   return f; }
-inline HFONT FontBodySm()  { static HFONT f = MakeFont(13, FW_NORMAL);   return f; }
-inline HFONT FontCaption() { static HFONT f = MakeFont(11, FW_MEDIUM);   return f; }
-inline HFONT FontMono()    { static HFONT f = MakeFont(13, FW_NORMAL, true); return f; }
+inline HFONT FontBody()    { static HFONT f = MakeFont(16, FW_NORMAL);   return f; }
+inline HFONT FontBodySm()  { static HFONT f = MakeFont(14, FW_NORMAL);   return f; }
+inline HFONT FontCaption() { static HFONT f = MakeFont(12, FW_MEDIUM);   return f; }
+inline HFONT FontMono()    { static HFONT f = MakeFont(14, FW_NORMAL, true); return f; }
 
 // Nav-specific fonts (13px, weight varies by state)
 inline HFONT FontNavActive()   { static HFONT f = MakeFont(13, FW_SEMIBOLD); return f; }
@@ -317,17 +317,36 @@ inline void DrawGradientButton(HDC hdc, const RECT& rc, int radius,
 }
 
 // ── Glassmorphism button ─────────────────────────────────────────────────────
-// Semi-transparent fill with frosted highlight at top, subtle glow border.
+// True glass effect: parent background painted first, then semi-transparent
+// tinted fill with frosted highlight and glow border.
 // variant: 0 = primary (accent), 1 = secondary (neutral), 2 = destructive (red)
 inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
-                            bool pressed, int variant = 0) {
+                            bool pressed, int variant = 0,
+                            bool selected = false) {
     Gdiplus::Graphics g(hdc);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    g.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+    g.SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
     int x = rc.left, y = rc.top;
     int w = rc.right - rc.left, h = rc.bottom - rc.top;
     if (w <= 0 || h <= 0) return;
     int d = radius * 2;
     if (d > w) d = w; if (d > h) d = h;
+
+    // Cyan outer glow when selected — drawn before the button shape
+    if (selected) {
+        for (int i = 4; i > 0; --i) {
+            Gdiplus::GraphicsPath glowPath;
+            glowPath.AddArc(x - i, y - i, d, d, 180, 90);
+            glowPath.AddArc(x + w - d - 1 + i, y - i, d, d, 270, 90);
+            glowPath.AddArc(x + w - d - 1 + i, y + h - d - 1 + i, d, d, 0, 90);
+            glowPath.AddArc(x - i, y + h - d - 1 + i, d, d, 90, 90);
+            glowPath.CloseFigure();
+            BYTE ga = (BYTE)(28 - i * 6);
+            Gdiplus::Pen glowPen(Gdiplus::Color(ga, 0, 229, 255), 1.5f);
+            g.DrawPath(&glowPen, &glowPath);
+        }
+    }
 
     Gdiplus::GraphicsPath path;
     path.AddArc(x, y, d, d, 180, 90);
@@ -336,38 +355,39 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
     path.AddArc(x, y + h - d - 1, d, d, 90, 90);
     path.CloseFigure();
 
-    // Base fill — semi-transparent tinted surface
-    BYTE baseAlpha = pressed ? (BYTE)180 : (BYTE)120;
-    if (variant == 0) {
+    // Base fill — selected gets cyan tint, otherwise ultra-low alpha
+    BYTE baseAlpha = selected ? (BYTE)55 : (pressed ? (BYTE)35 : (BYTE)18);
+    if (selected) {
+        // Selected: cyan-tinted glass
+        Gdiplus::LinearGradientBrush grad(
+            Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
+            Gdiplus::Color(baseAlpha + 12, 0, 180, 210),
+            Gdiplus::Color(baseAlpha, 0, 140, 170));
+        g.FillPath(&grad, &path);
+    } else if (variant == 0) {
         // Primary: accent blue glass
         Gdiplus::LinearGradientBrush grad(
             Gdiplus::Point(x, y), Gdiplus::Point(x, y + h),
-            Gdiplus::Color(baseAlpha, 30, 70, 160),
-            Gdiplus::Color(baseAlpha, 20, 45, 110));
+            Gdiplus::Color(baseAlpha + 12, 40, 100, 220),
+            Gdiplus::Color(baseAlpha, 20, 60, 180));
         g.FillPath(&grad, &path);
     } else if (variant == 2) {
-        // Destructive: red-tinted glass
-        Gdiplus::SolidBrush fill(Gdiplus::Color(pressed ? 100 : 70, 200, 40, 60));
+        // Destructive: barely-there red tint
+        Gdiplus::SolidBrush fill(Gdiplus::Color(baseAlpha, 220, 50, 70));
         g.FillPath(&fill, &path);
     } else {
-        // Secondary: neutral dark glass
-        Gdiplus::SolidBrush fill(GdipColor(BG_ELEVATED, baseAlpha));
+        // Secondary: barely-there frosted tint
+        Gdiplus::SolidBrush fill(Gdiplus::Color(baseAlpha, 160, 180, 220));
         g.FillPath(&fill, &path);
     }
 
-    // Top highlight — frosted edge shimmer
+    // Top highlight — subtle shimmer (brighter when selected)
     {
-        Gdiplus::GraphicsPath topClip;
-        topClip.AddArc(x, y, d, d, 180, 90);
-        topClip.AddArc(x + w - d - 1, y, d, d, 270, 90);
-        topClip.AddLine(x + w - 1, y + d / 2, x, y + d / 2);
-        topClip.CloseFigure();
-
         Gdiplus::Region oldClip;
         g.GetClip(&oldClip);
-        g.SetClip(&path);  // confine to button shape
+        g.SetClip(&path);
 
-        BYTE highlightAlpha = pressed ? (BYTE)15 : (BYTE)40;
+        BYTE highlightAlpha = selected ? (BYTE)45 : (pressed ? (BYTE)12 : (BYTE)30);
         Gdiplus::LinearGradientBrush shimmer(
             Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
             Gdiplus::Color(highlightAlpha, 255, 255, 255),
@@ -377,15 +397,18 @@ inline void DrawGlassButton(HDC hdc, const RECT& rc, int radius,
         g.SetClip(&oldClip);
     }
 
-    // Border — colored glow edge
-    if (variant == 0) {
-        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 70, 61, 127, 255), 1.0f);
+    // Border — cyan glow when selected, otherwise thin edge
+    if (selected) {
+        Gdiplus::Pen pen(Gdiplus::Color(160, 0, 229, 255), 1.5f);
+        g.DrawPath(&pen, &path);
+    } else if (variant == 0) {
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 60, 61, 140, 255), 1.0f);
         g.DrawPath(&pen, &path);
     } else if (variant == 2) {
-        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 100 : 60, 255, 64, 96), 1.0f);
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 90 : 55, 255, 80, 100), 1.0f);
         g.DrawPath(&pen, &path);
     } else {
-        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 50 : 30, 255, 255, 255), 1.0f);
+        Gdiplus::Pen pen(Gdiplus::Color(pressed ? 50 : 30, 180, 200, 240), 1.0f);
         g.DrawPath(&pen, &path);
     }
 }
@@ -409,20 +432,20 @@ inline void DrawGlassPill(HDC hdc, const RECT& rc, int radius,
     path.CloseFigure();
 
     if (active) {
-        // Active: accent-tinted glass
-        Gdiplus::SolidBrush fill(Gdiplus::Color(100, 30, 70, 160));
+        // Active: transparent accent-tinted glass
+        Gdiplus::SolidBrush fill(Gdiplus::Color(45, 30, 70, 180));
         g.FillPath(&fill, &path);
-        Gdiplus::Pen pen(Gdiplus::Color(90, 61, 127, 255), 1.0f);
+        Gdiplus::Pen pen(Gdiplus::Color(60, 61, 127, 255), 1.0f);
         g.DrawPath(&pen, &path);
     } else if (pressed) {
-        Gdiplus::SolidBrush fill(GdipColor(BG_OVERLAY, 140));
+        Gdiplus::SolidBrush fill(Gdiplus::Color(30, 40, 60, 120));
         g.FillPath(&fill, &path);
-        Gdiplus::Pen pen(Gdiplus::Color(25, 255, 255, 255), 1.0f);
+        Gdiplus::Pen pen(Gdiplus::Color(20, 255, 255, 255), 1.0f);
         g.DrawPath(&pen, &path);
     } else {
-        Gdiplus::SolidBrush fill(GdipColor(BG_ELEVATED, 100));
+        Gdiplus::SolidBrush fill(Gdiplus::Color(15, 80, 120, 200));
         g.FillPath(&fill, &path);
-        Gdiplus::Pen pen(Gdiplus::Color(18, 255, 255, 255), 1.0f);
+        Gdiplus::Pen pen(Gdiplus::Color(14, 255, 255, 255), 1.0f);
         g.DrawPath(&pen, &path);
     }
 
@@ -433,7 +456,7 @@ inline void DrawGlassPill(HDC hdc, const RECT& rc, int radius,
         g.SetClip(&path);
         Gdiplus::LinearGradientBrush shimmer(
             Gdiplus::Point(x, y), Gdiplus::Point(x, y + h / 2),
-            Gdiplus::Color(25, 255, 255, 255),
+            Gdiplus::Color(18, 255, 255, 255),
             Gdiplus::Color(0, 255, 255, 255));
         g.FillRectangle(&shimmer, x, y, w, h / 2);
         g.SetClip(&oldClip);
@@ -456,7 +479,7 @@ inline void DrawConfidenceBar(HDC hdc, int x, int y, int w, int h, int pct) {
 }
 
 inline void DrawGlassPanel(HDC hdc, const RECT& rc, int radius,
-                           BYTE alpha = 153) {
+                           BYTE alpha = 100) {
     Gdiplus::Graphics g(hdc);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     int x = rc.left, y = rc.top;
