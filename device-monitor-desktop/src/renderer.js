@@ -2723,7 +2723,11 @@ const VULNERABLE_COMBOS = [
 function getIoTRiskProfile(dev) {
   if (!IOT_CATEGORIES.has(dev.deviceType)) return null;
   const ports = dev.ports || [];
-  const vulns = VULNERABLE_COMBOS.filter(c => ports.includes(c.port));
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup to replace O(N) array includes
+  // inside the filter loop.
+  const portSet = new Set(ports);
+  const vulns = VULNERABLE_COMBOS.filter(c => portSet.has(c.port));
   if (!vulns.length) return null;
 
   const maxRisk = vulns.reduce((max, v) => {
@@ -2774,16 +2778,24 @@ function renderConfidenceAlternatives(dev) {
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute boolean condition checks outside the map loop to prevent O(N) array
+  // operations from executing repeatedly inside the O(M) device type rendering loop.
+  const hasRouterPorts = ports.some(p => p === 53 || p === 80 || p === 443);
+  const hasNasPorts = ports.some(p => p === 445 || p === 2049 || p === 548);
+  const hasPrinterPorts = ports.some(p => p === 631 || p === 9100);
+  const hasCameraPorts = ports.some(p => p === 554 || p === 8080);
+
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST
     .filter(t => t !== mainType)
     .map(t => {
       let score = Math.max(5, mainConf - 20 - Math.floor(Math.random() * 25));
       // Adjust based on signals
-      if (t === 'Router/Gateway' && ports.some(p => [53,80,443].includes(p))) score += 10;
-      if (t === 'NAS' && ports.some(p => [445,2049,548].includes(p))) score += 10;
-      if (t === 'Printer' && ports.some(p => [631,9100].includes(p))) score += 10;
-      if (t === 'Camera / DVR' && ports.some(p => [554,8080].includes(p))) score += 10;
+      if (t === 'Router/Gateway' && hasRouterPorts) score += 10;
+      if (t === 'NAS' && hasNasPorts) score += 10;
+      if (t === 'Printer' && hasPrinterPorts) score += 10;
+      if (t === 'Camera / DVR' && hasCameraPorts) score += 10;
       return { type: t, score: Math.min(score, mainConf - 5) };
     })
     .sort((a, b) => b.score - a.score)
