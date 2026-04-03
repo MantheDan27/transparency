@@ -1568,6 +1568,14 @@ function renderMap() {
   });
 
   // Device nodes
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup for new devices to avoid O(N*M) nested
+  // searches inside the map rendering loop (activeTiers.forEach -> tierDevices.forEach).
+  // This significantly reduces main-thread blocking during map render for large networks.
+  const newMapDeviceIps = new Set(
+    allAnomalies.filter(a => a.type === 'New Device').map(a => a.device)
+  );
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
@@ -1578,7 +1586,7 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = newDeviceIpSet.has(dev.ip);
+      const isNew   = newMapDeviceIps.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
