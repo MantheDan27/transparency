@@ -1178,7 +1178,7 @@ function openDetailPanel(dev, tab) {
       <div class="policy-hint">Controls scan depth for this device.</div>
     </div>
     <div class="policy-field">
-      <label>Expected Open Ports</label>
+      <label for="policyExpectedPorts">Expected Open Ports</label>
       <input type="text" class="policy-ports-input" id="policyExpectedPorts" placeholder="e.g. 80, 443, 22" value="${escHtml((policy.expectedPorts||[]).join(', '))}">
       <div class="policy-hint">Alert if ports differ from this profile.</div>
     </div>
