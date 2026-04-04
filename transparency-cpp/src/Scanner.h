@@ -35,6 +35,7 @@ public:
     ~ScanEngine();
 
     // Network discovery
+    static bool IsSafeIP(const std::wstring& ip);
     static std::vector<NetworkInterface> GetLocalNetworks();
     static std::vector<NetworkInterface> RankNetworkInterfaces();
     static std::wstring LookupVendor(const std::wstring& mac);

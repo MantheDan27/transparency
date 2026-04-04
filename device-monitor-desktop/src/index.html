@@ -95,7 +95,7 @@
       </div>
       <div class="footer-row">
         <span class="footer-label">Version</span>
-        <span style="color:var(--text-muted); font-size:0.72rem">v3.0.0</span>
+        <span style="color:var(--text-muted); font-size:0.72rem">v4.4.0</span>
       </div>
     </div>
   </aside>
@@ -247,9 +247,9 @@
                 <div id="mapEmptyState" class="empty-state-sm">Run a scan to generate the network map.</div>
                 <div class="map-tooltip hidden" id="mapTooltip"></div>
                 <div class="map-controls">
-                  <button class="btn btn-secondary" onclick="window.mapZoomIn()" title="Zoom in">+</button>
-                  <button class="btn btn-secondary" onclick="window.mapZoomOut()" title="Zoom out">−</button>
-                  <button class="btn btn-secondary" onclick="window.mapResetView()" title="Reset view">⟳</button>
+                  <button class="btn btn-secondary" onclick="window.mapZoomIn()" aria-label="Zoom in" title="Zoom in">+</button>
+                  <button class="btn btn-secondary" onclick="window.mapZoomOut()" aria-label="Zoom out" title="Zoom out">−</button>
+                  <button class="btn btn-secondary" onclick="window.mapResetView()" aria-label="Reset view" title="Reset view">⟳</button>
                 </div>
               </div>
             </div>
@@ -328,7 +328,7 @@
 
         <!-- Filter bar -->
         <div class="filter-bar">
-          <input type="text" class="search-input" id="deviceSearch" placeholder="Search name, IP, MAC, vendor…">
+          <input type="text" class="search-input" id="deviceSearch" placeholder="Search name, IP, MAC, vendor…" aria-label="Search devices">
           <button class="filter-btn active" data-filter="all">All <span class="fbadge" id="fAll">0</span></button>
           <button class="filter-btn" data-filter="online">Online <span class="fbadge" id="fOnline">0</span></button>
           <button class="filter-btn" data-filter="unknown">Unknown <span class="fbadge fbadge-warning" id="fUnknown">0</span></button>
@@ -434,9 +434,9 @@
           </div>
           <div class="map-tooltip hidden" id="mapTooltipFull"></div>
           <div class="map-controls">
-            <button class="btn btn-secondary" onclick="window.mapZoomIn()" title="Zoom in">+</button>
-            <button class="btn btn-secondary" onclick="window.mapZoomOut()" title="Zoom out">−</button>
-            <button class="btn btn-secondary" onclick="window.mapResetView()" title="Reset view">⟳</button>
+            <button class="btn btn-secondary" onclick="window.mapZoomIn()" aria-label="Zoom in" title="Zoom in">+</button>
+            <button class="btn btn-secondary" onclick="window.mapZoomOut()" aria-label="Zoom out" title="Zoom out">−</button>
+            <button class="btn btn-secondary" onclick="window.mapResetView()" aria-label="Reset view" title="Reset view">⟳</button>
           </div>
         </div>
       </section>
