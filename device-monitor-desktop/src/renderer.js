@@ -655,7 +655,7 @@ function renderDeviceTable() {
 
     return `
       <tr class="device-row${selectedDevices.has(dev.ip) ? ' selected' : ''}" data-ip="${escHtml(dev.ip)}">
-        <td class="col-check"><input type="checkbox" data-ip="${escHtml(dev.ip)}" ${checked}></td>
+        <td class="col-check"><input type="checkbox" data-ip="${escHtml(dev.ip)}" ${checked} aria-label="Select device ${escHtml(name)}"></td>
         <td class="col-status"><span class="online-dot" title="Online"></span>${changeDot}</td>
         <td class="col-name">
           <div class="device-name-cell">
