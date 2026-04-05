@@ -20,13 +20,6 @@
 
 using std::wstring;
 
-bool IsValidIP(const std::wstring& ip) {
-    if (ip.empty()) return false;
-    for (wchar_t c : ip) {
-        if (!std::iswalnum(c) && c != L'.' && c != L':' && c != L'-') return false;
-    }
-    return true;
-}
 
 
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
@@ -107,10 +100,11 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             HDC hdc = dis->hDC;
             RECT rc = dis->rcItem;
             bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
             bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
 
             Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
-                                   isSave ? 0 : 1);
+                                   isSave ? 0 : 1, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -830,7 +824,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     switch (cmd) {
     case 12001: { // Ping
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
@@ -839,7 +833,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12002: { // Traceroute
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
@@ -908,7 +902,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
@@ -938,7 +932,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
-        if (!IsValidIP(dev.ip)) {
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
             MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
             break;
         }
