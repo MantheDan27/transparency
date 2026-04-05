@@ -820,7 +820,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     if (cmd == 0) return;
 
-    if (!ScanEngine::IsSafeIP(dev.ip)) return;
+
 
     switch (cmd) {
     case 12001: { // Ping
