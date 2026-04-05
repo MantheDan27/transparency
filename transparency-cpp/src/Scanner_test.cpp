@@ -96,11 +96,7 @@ void test_MultipleRisks() {
     assert(risk.find(L"HIGH: FTP") != wstring::npos);
 }
 
-#if defined(_MSC_VER) || defined(UNICODE)
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-#else
 int main() {
-#endif
     std::cout << "Running Scanner tests...\n";
 
     test_NoRiskPorts();
