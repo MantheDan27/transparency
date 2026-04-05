@@ -1434,6 +1434,12 @@ function renderMap() {
     if (a.type === 'New Device') newDeviceSet.add(a.device);
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N*M) nested array search (allAnomalies.some inside tierDevices.forEach)
+  // with O(N+M) Set lookup. This significantly improves map rendering time for networks
+  // with many devices and frequent changes.
+  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
+
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
   const withoutLatency = devices.filter(d => latencyOf(d) === null);
