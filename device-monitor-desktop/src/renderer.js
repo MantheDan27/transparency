@@ -2751,7 +2751,11 @@ const VULNERABLE_COMBOS = [
 function getIoTRiskProfile(dev) {
   if (!IOT_CATEGORIES.has(dev.deviceType)) return null;
   const ports = dev.ports || [];
-  const vulns = VULNERABLE_COMBOS.filter(c => ports.includes(c.port));
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup to replace O(N) array includes
+  // inside the filter loop.
+  const portSet = new Set(ports);
+  const vulns = VULNERABLE_COMBOS.filter(c => portSet.has(c.port));
   if (!vulns.length) return null;
 
   const maxRisk = vulns.reduce((max, v) => {
@@ -2809,6 +2813,14 @@ function renderConfidenceAlternatives(dev) {
   // Pre-compute O(1) Set lookups outside the loop to avoid O(N*M) nested
   // searches inside the candidates array map operation.
   const pSet = new Set(ports);
+
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute boolean condition checks outside the map loop to prevent O(N) array
+  // operations from executing repeatedly inside the O(M) device type rendering loop.
+  const hasRouterPorts = ports.some(p => p === 53 || p === 80 || p === 443);
+  const hasNasPorts = ports.some(p => p === 445 || p === 2049 || p === 548);
+  const hasPrinterPorts = ports.some(p => p === 631 || p === 9100);
+  const hasCameraPorts = ports.some(p => p === 554 || p === 8080);
 
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST
