@@ -247,9 +247,9 @@
                 <div id="mapEmptyState" class="empty-state-sm">Run a scan to generate the network map.</div>
                 <div class="map-tooltip hidden" id="mapTooltip"></div>
                 <div class="map-controls">
-                  <button class="btn btn-secondary" onclick="window.mapZoomIn()" title="Zoom in">+</button>
-                  <button class="btn btn-secondary" onclick="window.mapZoomOut()" title="Zoom out">−</button>
-                  <button class="btn btn-secondary" onclick="window.mapResetView()" title="Reset view">⟳</button>
+                  <button class="btn btn-secondary" onclick="window.mapZoomIn()" aria-label="Zoom in" title="Zoom in">+</button>
+                  <button class="btn btn-secondary" onclick="window.mapZoomOut()" aria-label="Zoom out" title="Zoom out">−</button>
+                  <button class="btn btn-secondary" onclick="window.mapResetView()" aria-label="Reset view" title="Reset view">⟳</button>
                 </div>
               </div>
             </div>
@@ -328,7 +328,7 @@
 
         <!-- Filter bar -->
         <div class="filter-bar">
-          <input type="text" class="search-input" id="deviceSearch" placeholder="Search name, IP, MAC, vendor…">
+          <input type="text" class="search-input" id="deviceSearch" placeholder="Search name, IP, MAC, vendor…" aria-label="Search devices">
           <button class="filter-btn active" data-filter="all">All <span class="fbadge" id="fAll">0</span></button>
           <button class="filter-btn" data-filter="online">Online <span class="fbadge" id="fOnline">0</span></button>
           <button class="filter-btn" data-filter="unknown">Unknown <span class="fbadge fbadge-warning" id="fUnknown">0</span></button>
@@ -434,9 +434,9 @@
           </div>
           <div class="map-tooltip hidden" id="mapTooltipFull"></div>
           <div class="map-controls">
-            <button class="btn btn-secondary" onclick="window.mapZoomIn()" title="Zoom in">+</button>
-            <button class="btn btn-secondary" onclick="window.mapZoomOut()" title="Zoom out">−</button>
-            <button class="btn btn-secondary" onclick="window.mapResetView()" title="Reset view">⟳</button>
+            <button class="btn btn-secondary" onclick="window.mapZoomIn()" aria-label="Zoom in" title="Zoom in">+</button>
+            <button class="btn btn-secondary" onclick="window.mapZoomOut()" aria-label="Zoom out" title="Zoom out">−</button>
+            <button class="btn btn-secondary" onclick="window.mapResetView()" aria-label="Reset view" title="Reset view">⟳</button>
           </div>
         </div>
       </section>
@@ -1033,12 +1033,12 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     <div class="modal-body">
       <div class="rule-form">
         <div class="rule-form-group">
-          <label>Rule Name</label>
+          <label for="rbName">Rule Name</label>
           <input type="text" class="tool-input" id="rbName" placeholder="e.g. Alert on new unknown SSH">
         </div>
         <div class="rule-form-row">
           <div class="rule-form-group">
-            <label>Device Filter</label>
+            <label for="rbDeviceFilter">Device Filter</label>
             <select class="tool-select" id="rbDeviceFilter">
               <option value="all">All devices</option>
               <option value="unknown">Unknown only</option>
@@ -1049,7 +1049,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
             </select>
           </div>
           <div class="rule-form-group">
-            <label>Event Type</label>
+            <label for="rbEventType">Event Type</label>
             <select class="tool-select" id="rbEventType">
               <option value="new_device">New device detected</option>
               <option value="device_offline">Device went offline</option>
@@ -1067,7 +1067,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
         </div>
         <div class="rule-form-row">
           <div class="rule-form-group">
-            <label>Severity</label>
+            <label for="rbSeverity">Severity</label>
             <select class="tool-select" id="rbSeverity">
               <option value="high">High</option>
               <option value="medium" selected>Medium</option>
@@ -1075,22 +1075,22 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
             </select>
           </div>
           <div class="rule-form-group">
-            <label>Debounce (minutes)</label>
+            <label for="rbDebounce">Debounce (minutes)</label>
             <input type="number" class="tool-input" id="rbDebounce" value="5" min="0" max="1440">
           </div>
         </div>
         <div class="rule-form-row">
           <div class="rule-form-group">
-            <label>Quiet Hours Start</label>
+            <label for="rbQuietStart">Quiet Hours Start</label>
             <input type="time" class="tool-input" id="rbQuietStart">
           </div>
           <div class="rule-form-group">
-            <label>Quiet Hours End</label>
+            <label for="rbQuietEnd">Quiet Hours End</label>
             <input type="time" class="tool-input" id="rbQuietEnd">
           </div>
         </div>
         <div class="rule-form-group">
-          <label>Webhook URL (optional)</label>
+          <label for="rbWebhook">Webhook URL (optional)</label>
           <input type="text" class="tool-input" id="rbWebhook" placeholder="https://...">
         </div>
         <label class="toggle-switch" style="margin-top:0.5rem">
@@ -1130,9 +1130,9 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     <div class="modal-body">
       <div class="rule-form">
         <div class="rule-form-row">
-          <div class="rule-form-group"><label>Interval (minutes)</label><input type="number" class="tool-input" id="mcInterval" value="5" min="1" max="60"></div>
-          <div class="rule-form-group"><label>Quiet Start</label><input type="time" class="tool-input" id="mcQuietStart"></div>
-          <div class="rule-form-group"><label>Quiet End</label><input type="time" class="tool-input" id="mcQuietEnd"></div>
+          <div class="rule-form-group"><label for="mcInterval">Interval (minutes)</label><input type="number" class="tool-input" id="mcInterval" value="5" min="1" max="60"></div>
+          <div class="rule-form-group"><label for="mcQuietStart">Quiet Start</label><input type="time" class="tool-input" id="mcQuietStart"></div>
+          <div class="rule-form-group"><label for="mcQuietEnd">Quiet End</label><input type="time" class="tool-input" id="mcQuietEnd"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.75rem">
           <label class="toggle-switch"><input type="checkbox" id="mcAlertOutage" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on internet outage</span></label>
@@ -1141,7 +1141,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
           <label class="toggle-switch"><input type="checkbox" id="mcAlertLatency"><span class="toggle-knob"></span><span class="toggle-text">Alert on high latency</span></label>
         </div>
         <div class="rule-form-group" style="margin-top:0.5rem">
-          <label>High Latency Threshold (ms)</label>
+          <label for="mcLatencyThreshold">High Latency Threshold (ms)</label>
           <input type="number" class="tool-input" id="mcLatencyThreshold" value="100" min="10" max="5000">
         </div>
       </div>
@@ -1162,9 +1162,9 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     </div>
     <div class="modal-body">
       <div style="display:flex;gap:0.75rem;margin-bottom:1rem;align-items:flex-end">
-        <div style="flex:1"><label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:0.25rem">Snapshot A</label><select class="sel-input" id="diffSnapshotA" style="width:100%"></select></div>
+        <div style="flex:1"><label for="diffSnapshotA" style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:0.25rem">Snapshot A</label><select class="sel-input" id="diffSnapshotA" style="width:100%"></select></div>
         <span style="color:var(--text-muted);font-size:0.85rem;padding-bottom:0.5rem">vs</span>
-        <div style="flex:1"><label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:0.25rem">Snapshot B</label><select class="sel-input" id="diffSnapshotB" style="width:100%"></select></div>
+        <div style="flex:1"><label for="diffSnapshotB" style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:0.25rem">Snapshot B</label><select class="sel-input" id="diffSnapshotB" style="width:100%"></select></div>
         <button class="btn btn-primary btn-sm" onclick="window.runSnapshotDiff()">Compare</button>
       </div>
       <div class="diff-summary" id="diffSummary" style="display:none;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1rem"></div>
@@ -1182,13 +1182,13 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     </div>
     <div class="modal-body">
       <div class="rule-form">
-        <div class="rule-form-group"><label>Name</label><input type="text" class="tool-input" id="schedName" placeholder="e.g. Weekly Deep Scan"></div>
+        <div class="rule-form-group"><label for="schedName">Name</label><input type="text" class="tool-input" id="schedName" placeholder="e.g. Weekly Deep Scan"></div>
         <div class="rule-form-row">
-          <div class="rule-form-group"><label>Scan Mode</label><select class="tool-select" id="schedMode"><option value="quick">Quick</option><option value="standard" selected>Standard</option><option value="deep">Deep</option></select></div>
-          <div class="rule-form-group"><label>Frequency</label><select class="tool-select" id="schedFreq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div>
+          <div class="rule-form-group"><label for="schedMode">Scan Mode</label><select class="tool-select" id="schedMode"><option value="quick">Quick</option><option value="standard" selected>Standard</option><option value="deep">Deep</option></select></div>
+          <div class="rule-form-group"><label for="schedFreq">Frequency</label><select class="tool-select" id="schedFreq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div>
         </div>
-        <div class="rule-form-group"><label>Time</label><input type="time" class="tool-input" id="schedTime" value="03:00"></div>
-        <div class="rule-form-group"><label>Auto-Export Format</label><select class="tool-select" id="schedExportFormat"><option value="">None</option><option value="json">JSON</option><option value="csv">CSV</option><option value="pdf">PDF</option></select></div>
+        <div class="rule-form-group"><label for="schedTime">Time</label><input type="time" class="tool-input" id="schedTime" value="03:00"></div>
+        <div class="rule-form-group"><label for="schedExportFormat">Auto-Export Format</label><select class="tool-select" id="schedExportFormat"><option value="">None</option><option value="json">JSON</option><option value="csv">CSV</option><option value="pdf">PDF</option></select></div>
         <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="schedExport"><span class="toggle-knob"></span><span class="toggle-text">Auto-export after scan</span></label>
       </div>
     </div>
@@ -1208,9 +1208,9 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     </div>
     <div class="modal-body">
       <div class="rule-form">
-        <div class="rule-form-group"><label>Trigger Event</label><select class="tool-select" id="hookEvent"><option value="scan_complete">Scan Complete</option><option value="new_device">New Device Detected</option><option value="device_offline">Device Went Offline</option><option value="alert_fired">Alert Fired</option><option value="port_changed">Port Changed</option></select></div>
-        <div class="rule-form-group"><label>Script / Command</label><input type="text" class="tool-input" id="hookCmd" placeholder="/path/to/script.sh or command"></div>
-        <div class="rule-form-group"><label>Description</label><input type="text" class="tool-input" id="hookDesc" placeholder="Optional description"></div>
+        <div class="rule-form-group"><label for="hookEvent">Trigger Event</label><select class="tool-select" id="hookEvent"><option value="scan_complete">Scan Complete</option><option value="new_device">New Device Detected</option><option value="device_offline">Device Went Offline</option><option value="alert_fired">Alert Fired</option><option value="port_changed">Port Changed</option></select></div>
+        <div class="rule-form-group"><label for="hookCmd">Script / Command</label><input type="text" class="tool-input" id="hookCmd" placeholder="/path/to/script.sh or command"></div>
+        <div class="rule-form-group"><label for="hookDesc">Description</label><input type="text" class="tool-input" id="hookDesc" placeholder="Optional description"></div>
         <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="hookEnabled" checked><span class="toggle-knob"></span><span class="toggle-text">Hook Enabled</span></label>
       </div>
     </div>
@@ -1228,7 +1228,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     <div class="modal-body">
       <div class="rule-form">
         <div class="rule-form-group">
-          <label>Location</label>
+          <label for="locationSelect">Location</label>
           <select class="tool-select" id="locationSelect">
             <option value="">No location</option>
             <option value="Home Office">Home Office</option>
@@ -1241,7 +1241,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
           </select>
         </div>
         <div class="rule-form-group">
-          <label>Custom Location</label>
+          <label for="locationCustom">Custom Location</label>
           <input type="text" class="tool-input" id="locationCustom" placeholder="Or type a custom location">
         </div>
       </div>
@@ -1262,9 +1262,9 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
     </div>
     <div class="modal-body">
       <div class="rule-form">
-        <div class="rule-form-group"><label>Segment Name</label><input type="text" class="tool-input" id="segName" placeholder="e.g. IoT VLAN, Guest Network"></div>
-        <div class="rule-form-group"><label>Subnet (CIDR)</label><input type="text" class="tool-input" id="segSubnet" placeholder="e.g. 192.168.10.0/24"></div>
-        <div class="rule-form-group"><label>Gateway IP (optional)</label><input type="text" class="tool-input" id="segGateway" placeholder="e.g. 192.168.10.1"></div>
+        <div class="rule-form-group"><label for="segName">Segment Name</label><input type="text" class="tool-input" id="segName" placeholder="e.g. IoT VLAN, Guest Network"></div>
+        <div class="rule-form-group"><label for="segSubnet">Subnet (CIDR)</label><input type="text" class="tool-input" id="segSubnet" placeholder="e.g. 192.168.10.0/24"></div>
+        <div class="rule-form-group"><label for="segGateway">Gateway IP (optional)</label><input type="text" class="tool-input" id="segGateway" placeholder="e.g. 192.168.10.1"></div>
         <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="segEnabled" checked><span class="toggle-knob"></span><span class="toggle-text">Include in scans</span></label>
       </div>
     </div>
