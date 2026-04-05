@@ -4,6 +4,7 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <string>
+#include <cwctype>
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include "Resource.h"
 #include "Scanner.h"
 #include <shellapi.h>
+#include <ws2tcpip.h>
 
 using std::wstring;
 
@@ -23,6 +25,13 @@ const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
 static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
 };
+
+// Subclass proc for detail panel — forwards WM_COMMAND to parent
+static LRESULT CALLBACK DetailPanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
+    if (msg == WM_COMMAND) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    if (msg == WM_DRAWITEM) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
 
 bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
@@ -73,13 +82,7 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             int filterIdx = dis->CtlID - IDC_BTN_FILTER_ALL;
             bool active = (filterIdx == self->_filterMode);
 
-            if (active) {
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_NAV_ACTIVE, Theme::ACCENT_BLUE);
-            } else if (pressed) {
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT);
-            } else {
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
-            }
+            Theme::DrawGlassPill(hdc, rc, 15, active, pressed);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -95,16 +98,11 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             HDC hdc = dis->hDC;
             RECT rc = dis->rcItem;
             bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
             bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
 
-            if (isSave) {
-                COLORREF top = pressed ? RGB(41,96,217) : RGB(61,127,255);
-                COLORREF bot = RGB(41, 96, 217);
-                Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_MD, top, bot);
-            } else {
-                COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
-                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, Theme::BORDER_DEFAULT);
-            }
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
+                                   isSave ? 0 : 1, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -200,6 +198,9 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | SS_NOTIFY,
         cx - DETAIL_WIDTH - 16, 48, DETAIL_WIDTH, cy - 64,
         hwnd, nullptr, hInst, nullptr);
+
+    // Fix: Subclass the STATIC detail panel so WM_COMMAND from child buttons reaches TabDevices
+    SetWindowSubclass(_hDetailPanel, DetailPanelProc, 0, 0);
 
     // Detail controls inside panel
     auto makeLbl = [&](const wchar_t* text, int y, int h = 18) -> HWND {
@@ -817,13 +818,23 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     if (cmd == 0) return;
 
+    if (!ScanEngine::IsSafeIP(dev.ip)) return;
+
     switch (cmd) {
     case 12001: { // Ping
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k ping " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12002: { // Traceroute
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k tracert " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
@@ -879,6 +890,7 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12020: { // Open in Browser
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring url = L"http://" + dev.ip;
         for (int p : dev.openPorts) {
             if (p == 443 || p == 8443) { url = L"https://" + dev.ip; break; }
@@ -888,20 +900,27 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12021: { // SSH
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k ssh " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;
     }
     case 12022: { // RDP
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         ShellExecute(nullptr, L"open", L"mstsc.exe", (L"/v:" + dev.ip).c_str(), nullptr, SW_SHOW);
         break;
     }
     case 12023: { // FTP
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring url = L"ftp://" + dev.ip;
         ShellExecute(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOW);
         break;
     }
     case 12024: { // Network share
+        if (!ScanEngine::IsSafeIP(dev.ip)) { MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR); break; }
         wstring path = L"\\\\" + dev.ip;
         ShellExecute(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOW);
         break;
@@ -911,6 +930,10 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
         break;
     }
     case 12031: { // Reverse DNS
+        if (!ScanEngine::IsSafeIP(dev.ip)) {
+            MessageBox(hwnd, L"Invalid IP address format.", L"Security Error", MB_OK | MB_ICONERROR);
+            break;
+        }
         wstring cmdLine = L"cmd /c start cmd /k nslookup " + dev.ip;
         _wsystem(cmdLine.c_str());
         break;

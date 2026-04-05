@@ -10,6 +10,19 @@
 #include <unistd.h>
 #include <array>
 
+// ─── Input Validation ───────────────────────────────────────────────────────
+static bool isValidTarget(const std::string& target) {
+    if (target.empty() || target.length() > 255) return false;
+    // Prevent flag injection
+    if (target[0] == '-') return false;
+
+    // Alphanumeric, dots, hyphens and colons (for IPv6)
+    for (char c : target) {
+        if (!isalnum(c) && c != '.' && c != '-' && c != ':') return false;
+    }
+    return true;
+}
+
 // ─── Color constants ────────────────────────────────────────────────────────
 #define COL_BG       "#0b0e14"
 #define COL_SIDEBAR  "#111520"
@@ -1082,11 +1095,14 @@ void App::runTool(const std::string& tool, const std::string& target) {
 
     std::thread([targetCopy, toolCopy, outputWidget]() {
         std::string cmd;
-        // Sanitize target - only allow alphanumeric, dots, colons, hyphens
-        std::string safeTarget;
-        for (char c : targetCopy) {
-            if (isalnum(c) || c == '.' || c == ':' || c == '-') safeTarget += c;
+
+        // Strictly validate target before execution
+        if (!isValidTarget(targetCopy)) {
+            auto* data = new std::pair<GtkWidget*, std::string>(outputWidget, "Error: Invalid target format\n");
+            g_idle_add(cb_tool_output_idle, data);
+            return;
         }
+        std::string safeTarget = targetCopy;
 
         if (toolCopy == "ping")
             cmd = "ping -c 4 " + safeTarget + " 2>&1";

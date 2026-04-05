@@ -1,5 +1,4 @@
 # Transparency
-
 A native Windows desktop application for monitoring devices on your local network. Built with C++ and Win32 APIs — no runtime or installer required.
 
 ## Features

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Dark blue rounded square -->
+    <path
+        android:fillColor="#060A1C"
+        android:pathData="M8,2h32a6,6 0,0 1,6 6v32a6,6 0,0 1,-6 6h-32a6,6 0,0 1,-6 -6v-32a6,6 0,0 1,6 -6z" />
+    <!-- Cyan T -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M14,12h20v4h-8v20h-4v-20h-8z" />
+</vector>
