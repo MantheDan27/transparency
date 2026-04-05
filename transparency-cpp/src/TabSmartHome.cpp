@@ -472,9 +472,9 @@ LRESULT TabSmartHome::OnVScroll(HWND hwnd, WPARAM wp) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, TRUE);
+        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
+            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+        UpdateScrollBar(hwnd);
     }
     return 0;
 }
@@ -489,9 +489,9 @@ LRESULT TabSmartHome::OnMouseWheel(HWND hwnd, int delta) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, TRUE);
+        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
+            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+        UpdateScrollBar(hwnd);
     }
     return 0;
 }
@@ -754,36 +754,6 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
 
 void TabSmartHome::LayoutControls(int cx, int cy) {
     _viewHeight = cy;
-
-    int sOff = -_scrollY;
-
-    // Shift every child window by scroll offset
-    HWND child = GetWindow(_hwnd, GW_CHILD);
-    while (child) {
-        RECT rc;
-        GetWindowRect(child, &rc);
-        MapWindowPoints(HWND_DESKTOP, _hwnd, (LPPOINT)&rc, 2);
-
-        int origY = (int)(INT_PTR)GetProp(child, L"OrigY");
-        if (!GetProp(child, L"OrigYSet")) {
-            origY = rc.top;
-            SetProp(child, L"OrigY", (HANDLE)(INT_PTR)origY);
-            SetProp(child, L"OrigYSet", (HANDLE)(INT_PTR)1);
-        }
-
-        int w = rc.right - rc.left;
-        int h = rc.bottom - rc.top;
-
-        // Resize multiline readonly edits and listviews to track width
-        DWORD style = GetWindowLong(child, GWL_STYLE);
-        if ((style & ES_MULTILINE) && (style & ES_READONLY)) {
-            w = cx - 32;
-        }
-
-        SetWindowPos(child, nullptr, rc.left, origY + sOff, w, h, SWP_NOZORDER);
-        child = GetWindow(child, GW_HWNDNEXT);
-    }
-
     UpdateScrollBar(_hwnd);
 }
 
@@ -803,7 +773,23 @@ void TabSmartHome::AlexaOpenAuth() {
     GetWindowText(_hAlexaRedirectUri, redirectUri, 512);
 
     if (!clientId[0]) {
-        AppendTokenLog(L"[ERROR] Client ID is required");
+        MessageBox(_hwnd,
+            L"Enter your Client ID in the \"Alexa Access Token Retrieval\" section below, "
+            L"then click \"Open Authorization URL\".",
+            L"Alexa Setup", MB_OK | MB_ICONINFORMATION);
+        // Scroll down to make the OAuth section visible
+        int maxScroll = _contentHeight - _viewHeight;
+        if (maxScroll > 0) {
+            int target = maxScroll / 3; // roughly where the OAuth section starts
+            if (target > maxScroll) target = maxScroll;
+            int delta = target - _scrollY;
+            if (delta != 0) {
+                _scrollY = target;
+                ScrollWindowEx(_hwnd, 0, -delta, nullptr, nullptr, nullptr, nullptr,
+                    SW_SCROLLCHILDREN | SW_INVALIDATE);
+                UpdateScrollBar(_hwnd);
+            }
+        }
         return;
     }
 

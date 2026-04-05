@@ -293,29 +293,36 @@ void TabOverview::LayoutControls(int cx, int cy) {
     int tileW, pillY, btnY, listY;
     GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
 
+    // Batch all repositioning to reduce flicker
+    HDWP hdwp = BeginDeferWindowPos(20);
+
+    auto deferMove = [&](HWND hw, int x, int y, int w, int h) {
+        if (hw && hdwp)
+            hdwp = DeferWindowPos(hdwp, hw, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+    };
+
     for (int i = 0; i < 4; i++) {
         int x = 16 + i * (tileW + 8);
-        if (_hKpi[i]) SetWindowPos(_hKpi[i], nullptr, x, TILE_Y + sOff, tileW, TILE_H, SWP_NOZORDER);
+        deferMove(_hKpi[i], x, TILE_Y + sOff, tileW, TILE_H);
     }
 
-    // Reposition scan mode pills + action buttons with scroll offset
-    if (_hModeQuick)    SetWindowPos(_hModeQuick, nullptr, 16, pillY + sOff, 80, 24, SWP_NOZORDER);
-    if (_hModeStandard) SetWindowPos(_hModeStandard, nullptr, 102, pillY + sOff, 90, 24, SWP_NOZORDER);
-    if (_hModeDeep)     SetWindowPos(_hModeDeep, nullptr, 198, pillY + sOff, 75, 24, SWP_NOZORDER);
-    if (_hCheckGentle)  SetWindowPos(_hCheckGentle, nullptr, 290, pillY + sOff, 110, 24, SWP_NOZORDER);
+    deferMove(_hModeQuick, 16, pillY + sOff, 80, 24);
+    deferMove(_hModeStandard, 102, pillY + sOff, 90, 24);
+    deferMove(_hModeDeep, 198, pillY + sOff, 75, 24);
+    deferMove(_hCheckGentle, 290, pillY + sOff, 110, 24);
 
-    if (_hBtnQuickScan) SetWindowPos(_hBtnQuickScan, nullptr, Theme::SP4, btnY + sOff, 120, BTN_H, SWP_NOZORDER);
-    if (_hBtnDeepScan)  SetWindowPos(_hBtnDeepScan, nullptr, Theme::SP4 + 128, btnY + sOff, 120, BTN_H, SWP_NOZORDER);
-    if (_hBtnMonStart)  SetWindowPos(_hBtnMonStart, nullptr, Theme::SP4 + 256, btnY + sOff, 130, BTN_H, SWP_NOZORDER);
-    if (_hBtnMonStop)   SetWindowPos(_hBtnMonStop, nullptr, Theme::SP4 + 394, btnY + sOff, 130, BTN_H, SWP_NOZORDER);
-    if (_hBtnExport)    SetWindowPos(_hBtnExport, nullptr, Theme::SP4 + 532, btnY + sOff, 130, BTN_H, SWP_NOZORDER);
+    deferMove(_hBtnQuickScan, Theme::SP4, btnY + sOff, 120, BTN_H);
+    deferMove(_hBtnDeepScan, Theme::SP4 + 128, btnY + sOff, 120, BTN_H);
+    deferMove(_hBtnMonStart, Theme::SP4 + 256, btnY + sOff, 130, BTN_H);
+    deferMove(_hBtnMonStop, Theme::SP4 + 394, btnY + sOff, 130, BTN_H);
+    deferMove(_hBtnExport, Theme::SP4 + 532, btnY + sOff, 130, BTN_H);
 
-    if (_hStatusText) SetWindowPos(_hStatusText, nullptr, 16, btnY + BTN_H + 8 + sOff,  cx - 32, 20, SWP_NOZORDER);
-    if (_hProgressBar)SetWindowPos(_hProgressBar, nullptr, 16, btnY + BTN_H + 32 + sOff, cx - 32,  8, SWP_NOZORDER);
-    if (_hNetworkInfo) SetWindowPos(_hNetworkInfo, nullptr, 16, 16 + sOff, cx - 400, 40, SWP_NOZORDER);
-    if (_hNicCombo) SetWindowPos(_hNicCombo, nullptr, 16, 44 + sOff, 380, 160, SWP_NOZORDER);
-    if (_hNicPin) SetWindowPos(_hNicPin, nullptr, 402, 44 + sOff, 50, 24, SWP_NOZORDER);
-    if (_hNicReason) SetWindowPos(_hNicReason, nullptr, 16, 72 + sOff, cx - 32, 30, SWP_NOZORDER);
+    deferMove(_hStatusText, 16, btnY + BTN_H + 8 + sOff, cx - 32, 20);
+    deferMove(_hProgressBar, 16, btnY + BTN_H + 32 + sOff, cx - 32, 8);
+    deferMove(_hNetworkInfo, 16, 16 + sOff, cx - 400, 40);
+    deferMove(_hNicCombo, 16, 44 + sOff, 380, 160);
+    deferMove(_hNicPin, 402, 44 + sOff, 50, 24);
+    deferMove(_hNicReason, 16, 72 + sOff, cx - 32, 30);
 
     // Topology map rect (left 60%) — enforce minimum height
     int mapW = (cx - 40) * 6 / 10;
@@ -325,9 +332,9 @@ void TabOverview::LayoutControls(int cx, int cy) {
     // Changes list (right 40%)
     int listX = 16 + mapW + 8;
     int listW = cx - listX - 16;
-    if (_hChangesList)
-        SetWindowPos(_hChangesList, nullptr, listX, listY + sOff,
-                     std::max(listW, 100), std::max(mapH, 50), SWP_NOZORDER);
+    deferMove(_hChangesList, listX, listY + sOff, std::max(listW, 100), std::max(mapH, 50));
+
+    if (hdwp) EndDeferWindowPos(hdwp);
 
     UpdateScrollBar(_hwnd);
 }
@@ -371,7 +378,8 @@ LRESULT TabOverview::OnVScroll(HWND hwnd, WPARAM wp) {
     if (_scrollY != oldPos) {
         RECT rc; GetClientRect(hwnd, &rc);
         LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, TRUE);
+        InvalidateRect(hwnd, nullptr, FALSE);
+        UpdateWindow(hwnd);
     }
     return 0;
 }
@@ -388,7 +396,8 @@ LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
     if (_scrollY != oldPos) {
         RECT rc; GetClientRect(hwnd, &rc);
         LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, TRUE);
+        InvalidateRect(hwnd, nullptr, FALSE);
+        UpdateWindow(hwnd);
     }
     return 0;
 }

@@ -315,39 +315,6 @@ void TabTools::CreateControls(HWND hwnd, int cx, int cy) {
 
 void TabTools::LayoutControls(int cx, int cy) {
     _viewHeight = cy;
-
-    // Scroll all child controls by enumerating and shifting Y positions
-    // We stored _contentHeight during CreateControls; use scroll offset
-    int sOff = -_scrollY;
-
-    // Shift every child window by the scroll offset relative to its original position
-    HWND child = GetWindow(_hwnd, GW_CHILD);
-    while (child) {
-        RECT rc;
-        GetWindowRect(child, &rc);
-        MapWindowPoints(HWND_DESKTOP, _hwnd, (LPPOINT)&rc, 2);
-
-        // Store original Y in window property (set once)
-        int origY = (int)(INT_PTR)GetProp(child, L"OrigY");
-        if (!GetProp(child, L"OrigYSet")) {
-            origY = rc.top;
-            SetProp(child, L"OrigY", (HANDLE)(INT_PTR)origY);
-            SetProp(child, L"OrigYSet", (HANDLE)(INT_PTR)1);
-        }
-
-        int w = rc.right - rc.left;
-        int h = rc.bottom - rc.top;
-
-        // Resize width for output boxes only (multi-line edits)
-        DWORD style = GetWindowLong(child, GWL_STYLE);
-        if ((style & ES_MULTILINE) && (style & ES_READONLY)) {
-            w = cx - 32;
-        }
-
-        SetWindowPos(child, nullptr, rc.left, origY + sOff, w, h, SWP_NOZORDER);
-        child = GetWindow(child, GW_HWNDNEXT);
-    }
-
     UpdateScrollBar(_hwnd);
 }
 
@@ -383,9 +350,9 @@ LRESULT TabTools::OnVScroll(HWND hwnd, WPARAM wp) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, TRUE);
+        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
+            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+        UpdateScrollBar(hwnd);
     }
     return 0;
 }
@@ -400,9 +367,9 @@ LRESULT TabTools::OnMouseWheel(HWND hwnd, int delta) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, TRUE);
+        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
+            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+        UpdateScrollBar(hwnd);
     }
     return 0;
 }
