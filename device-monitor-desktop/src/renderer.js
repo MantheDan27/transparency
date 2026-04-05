@@ -1586,7 +1586,9 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = newMapDeviceIps.has(dev.ip);
+      // ⚡ Bolt Performance Optimization:
+      // O(1) Set lookup instead of O(N) array search inside mapping loop
+      const isNew   = newDeviceIpSet.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
