@@ -552,8 +552,12 @@ window.applyDeviceFilter = applyDeviceFilter;
 
 function getFilteredDevices() {
   const search = ($('deviceSearch').value || '').toLowerCase();
-  const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
-  const changedIpSet = new Set(allAnomalies.filter(a => a.type === 'Ports Changed' || a.type === 'New Device').map(a => a.device));
+  const anomalyIpSet = new Set();
+  const changedIpSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.severity === 'High') anomalyIpSet.add(a.device);
+    if (a.type === 'Ports Changed' || a.type === 'New Device') changedIpSet.add(a.device);
+  }
 
   return allDevices.filter(dev => {
     // Trust/filter match
@@ -578,8 +582,12 @@ function getFilteredDevices() {
 
 function updateFilterCounts() {
   const total   = allDevices.length;
-  const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
-  const changedSet   = new Set(allAnomalies.filter(a => a.type === 'Ports Changed' || a.type === 'New Device').map(a => a.device));
+  const anomalyIpSet = new Set();
+  const changedSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.severity === 'High') anomalyIpSet.add(a.device);
+    if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
+  }
 
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
