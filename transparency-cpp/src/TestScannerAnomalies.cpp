@@ -132,11 +132,7 @@ void testDeviceOffline() {
     std::cout << "testDeviceOffline passed" << std::endl;
 }
 
-#if defined(_MSC_VER) || defined(UNICODE)
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-#else
 int main() {
-#endif
     testNewDevice();
     testRiskyPort();
     testPortChanged();
