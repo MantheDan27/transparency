@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Transparency" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/accent_cyan</item>
+        <item name="colorPrimaryContainer">@color/bg_elevated</item>
+        <item name="colorOnPrimary">@color/bg_root</item>
+        <item name="colorSecondary">@color/accent_blue</item>
+        <item name="colorSecondaryContainer">@color/bg_overlay</item>
+        <item name="colorSurface">@color/bg_surface</item>
+        <item name="colorSurfaceVariant">@color/bg_elevated</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorError">@color/accent_red</item>
+        <item name="android:colorBackground">@color/bg_root</item>
+        <item name="android:windowBackground">@color/bg_root</item>
+        <item name="android:statusBarColor">@color/bg_root</item>
+        <item name="android:navigationBarColor">@color/bg_root</item>
+    </style>
+</resources>
