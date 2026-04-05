@@ -1047,7 +1047,7 @@ function openDetailPanel(dev, tab) {
         </div>`;
       }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
-  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
   const overviewContent = `
     <div class="detail-section">
@@ -1416,6 +1416,8 @@ function renderMap() {
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+  // ⚡ Bolt Performance Optimization:
+  // Precompute new device lookup to avoid O(N) array search inside the O(M) device render loop
   const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
@@ -1566,6 +1568,14 @@ function renderMap() {
   });
 
   // Device nodes
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup for new devices to avoid O(N*M) nested
+  // searches inside the map rendering loop (activeTiers.forEach -> tierDevices.forEach).
+  // This significantly reduces main-thread blocking during map render for large networks.
+  const newMapDeviceIps = new Set(
+    allAnomalies.filter(a => a.type === 'New Device').map(a => a.device)
+  );
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
