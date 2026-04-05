@@ -18,6 +18,7 @@
 
 class ScanEngine {
 public:
+    static bool IsSafeIP(const std::wstring& ip);
     struct NetworkInterface {
         std::wstring name;
         std::wstring localIp;
