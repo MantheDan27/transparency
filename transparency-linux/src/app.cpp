@@ -1104,8 +1104,6 @@ void App::runTool(const std::string& tool, const std::string& target) {
         }
         std::string safeTarget = targetCopy;
 
-        std::string safeTarget = targetCopy;
-
         if (toolCopy == "ping")
             cmd = "ping -c 4 " + safeTarget + " 2>&1";
         else if (toolCopy == "traceroute")
