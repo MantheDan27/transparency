@@ -28,13 +28,31 @@ private:
     LRESULT OnPaint(HWND hwnd);
     LRESULT OnCommand(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnNotify(HWND hwnd, NMHDR* hdr);
+    LRESULT OnVScroll(HWND hwnd, WPARAM wp);
+    LRESULT OnMouseWheel(HWND hwnd, int delta);
 
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
+    void UpdateScrollBar(HWND hwnd);
     void PopulateSmartDevices();
+
+    // Alexa token retrieval
+    void AlexaOpenAuth();
+    void AlexaExchangeToken();
+    void AlexaRefreshToken();
+    static std::string WideToUtf8(const std::wstring& w);
+    static std::wstring Utf8ToWide(const std::string& s);
+    static std::string HttpPost(const std::wstring& host, const std::wstring& path,
+                                const std::string& body);
+    void AppendTokenLog(const std::wstring& text);
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
+
+    // Scrolling state
+    int _scrollY = 0;
+    int _contentHeight = 0;
+    int _viewHeight = 0;
 
     // Smart device list
     HWND _hDeviceList = nullptr;
@@ -47,6 +65,20 @@ private:
     HWND _hBtnAlexaLink = nullptr;
     HWND _hBtnAlexaDiscover = nullptr;
     HWND _hAlexaOut = nullptr;
+
+    // Alexa Access Token Retrieval
+    HWND _hAlexaClientId = nullptr;
+    HWND _hAlexaClientSecret = nullptr;
+    HWND _hAlexaAuthCode = nullptr;
+    HWND _hAlexaRedirectUri = nullptr;
+    HWND _hBtnAlexaOpenAuth = nullptr;
+    HWND _hBtnAlexaGetToken = nullptr;
+    HWND _hBtnAlexaRefresh = nullptr;
+    HWND _hAlexaTokenOut = nullptr;
+
+    // Stored tokens
+    std::wstring _alexaAccessToken;
+    std::wstring _alexaRefreshToken;
 
     // Google Home controls
     HWND _hBtnGoogleLink = nullptr;

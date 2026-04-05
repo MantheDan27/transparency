@@ -3,10 +3,14 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <winhttp.h>
+#include <shellapi.h>
 #include <string>
 #include <sstream>
 #include <vector>
 #include <thread>
+
+#pragma comment(lib, "winhttp.lib")
 
 #include "TabSmartHome.h"
 #include "MainWindow.h"
@@ -14,10 +18,12 @@
 #include "Resource.h"
 
 using std::wstring;
+using std::string;
 
 const wchar_t* TabSmartHome::s_className = L"TabSmartHomeWnd";
 
-// Helper: Create a section header
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 static HWND MakeSection(HWND parent, const wchar_t* text, int& y, int cx, HINSTANCE hInst) {
     HWND hw = CreateWindowEx(0, L"STATIC", text,
         WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -25,6 +31,132 @@ static HWND MakeSection(HWND parent, const wchar_t* text, int& y, int cx, HINSTA
     SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
     return hw;
 }
+
+std::string TabSmartHome::WideToUtf8(const std::wstring& w) {
+    if (w.empty()) return "";
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (n <= 0) return "";
+    std::string s(n - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+std::wstring TabSmartHome::Utf8ToWide(const std::string& s) {
+    if (s.empty()) return L"";
+    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+    if (n <= 0) return L"";
+    std::wstring w(n - 1, 0);
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], n);
+    return w;
+}
+
+// URL-encode a UTF-8 string
+static std::string UrlEncode(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() * 2);
+    for (unsigned char c : s) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
+            out += (char)c;
+        } else {
+            char hex[4];
+            sprintf_s(hex, "%%%02X", c);
+            out += hex;
+        }
+    }
+    return out;
+}
+
+// Simple JSON value extractor (no dependency needed for flat responses)
+static std::string JsonExtract(const std::string& json, const std::string& key) {
+    std::string search = "\"" + key + "\"";
+    auto pos = json.find(search);
+    if (pos == std::string::npos) return "";
+    pos = json.find(':', pos + search.size());
+    if (pos == std::string::npos) return "";
+    pos++;
+    // skip whitespace
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
+    if (pos >= json.size()) return "";
+
+    if (json[pos] == '"') {
+        // string value
+        pos++;
+        auto end = json.find('"', pos);
+        if (end == std::string::npos) return "";
+        return json.substr(pos, end - pos);
+    } else {
+        // numeric value
+        auto end = json.find_first_of(",} \t\r\n", pos);
+        if (end == std::string::npos) end = json.size();
+        return json.substr(pos, end - pos);
+    }
+}
+
+// ── WinHTTP POST ─────────────────────────────────────────────────────────────
+
+std::string TabSmartHome::HttpPost(const std::wstring& host, const std::wstring& path,
+                                   const std::string& body) {
+    std::string result;
+
+    HINTERNET hSession = WinHttpOpen(L"Transparency/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) return "Error: WinHttpOpen failed";
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(),
+        INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConnect) { WinHttpCloseHandle(hSession); return "Error: WinHttpConnect failed"; }
+
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
+        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+        WINHTTP_FLAG_SECURE);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return "Error: WinHttpOpenRequest failed";
+    }
+
+    const wchar_t* hdrs = L"Content-Type: application/x-www-form-urlencoded";
+    BOOL sent = WinHttpSendRequest(hRequest, hdrs, (DWORD)-1,
+        (LPVOID)body.c_str(), (DWORD)body.size(), (DWORD)body.size(), 0);
+
+    if (sent) {
+        WinHttpReceiveResponse(hRequest, nullptr);
+
+        DWORD statusCode = 0;
+        DWORD statusSize = sizeof(statusCode);
+        WinHttpQueryHeaders(hRequest,
+            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize,
+            WINHTTP_NO_HEADER_INDEX);
+
+        // Read response body
+        DWORD bytesAvail = 0;
+        do {
+            WinHttpQueryDataAvailable(hRequest, &bytesAvail);
+            if (bytesAvail > 0) {
+                std::vector<char> buf(bytesAvail + 1, 0);
+                DWORD bytesRead = 0;
+                WinHttpReadData(hRequest, buf.data(), bytesAvail, &bytesRead);
+                result.append(buf.data(), bytesRead);
+            }
+        } while (bytesAvail > 0);
+
+        if (statusCode != 200) {
+            result = "HTTP " + std::to_string(statusCode) + ": " + result;
+        }
+    } else {
+        result = "Error: WinHttpSendRequest failed (" + std::to_string(GetLastError()) + ")";
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return result;
+}
+
+// ── Window setup ─────────────────────────────────────────────────────────────
 
 bool TabSmartHome::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
@@ -74,6 +206,71 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
     case WM_SCAN_COMPLETE:
         self->RefreshDevices();
         return 0;
+    case WM_VSCROLL:
+        return self->OnVScroll(hwnd, wp);
+    case WM_MOUSEWHEEL:
+        return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
+    // Async token exchange result
+    case WM_APP + 100: {
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            std::string narrow = WideToUtf8(*resp);
+            std::string token = JsonExtract(narrow, "access_token");
+            std::string refresh = JsonExtract(narrow, "refresh_token");
+            std::string expires = JsonExtract(narrow, "expires_in");
+            std::string error = JsonExtract(narrow, "error");
+
+            if (!token.empty()) {
+                self->_alexaAccessToken = Utf8ToWide(token);
+                self->_alexaRefreshToken = Utf8ToWide(refresh);
+                self->AppendTokenLog(L"\r\n[SUCCESS] Access token retrieved!");
+                self->AppendTokenLog(L"[TOKEN] " + Utf8ToWide(token.substr(0, 20)) + L"...");
+                self->AppendTokenLog(L"[REFRESH] " + Utf8ToWide(refresh.substr(0, 20)) + L"...");
+                self->AppendTokenLog(L"[EXPIRES] " + Utf8ToWide(expires) + L" seconds");
+                if (self->_hAlexaStatus)
+                    SetWindowText(self->_hAlexaStatus, L"Status: Connected (token acquired)");
+            } else {
+                self->AppendTokenLog(L"\r\n[ERROR] Token exchange failed");
+                if (!error.empty())
+                    self->AppendTokenLog(L"[DETAIL] " + Utf8ToWide(error));
+                self->AppendTokenLog(L"[RESPONSE] " + *resp);
+                if (self->_hAlexaStatus)
+                    SetWindowText(self->_hAlexaStatus, L"Status: Token exchange failed");
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    // Async token refresh result
+    case WM_APP + 101: {
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            std::string narrow = WideToUtf8(*resp);
+            std::string token = JsonExtract(narrow, "access_token");
+            std::string refresh = JsonExtract(narrow, "refresh_token");
+            std::string expires = JsonExtract(narrow, "expires_in");
+            std::string error = JsonExtract(narrow, "error");
+
+            if (!token.empty()) {
+                self->_alexaAccessToken = Utf8ToWide(token);
+                if (!refresh.empty())
+                    self->_alexaRefreshToken = Utf8ToWide(refresh);
+                self->AppendTokenLog(L"\r\n[SUCCESS] Token refreshed!");
+                self->AppendTokenLog(L"[TOKEN] " + Utf8ToWide(token.substr(0, 20)) + L"...");
+                self->AppendTokenLog(L"[EXPIRES] " + Utf8ToWide(expires) + L" seconds");
+                if (self->_hAlexaStatus)
+                    SetWindowText(self->_hAlexaStatus, L"Status: Connected (token refreshed)");
+            } else {
+                self->AppendTokenLog(L"\r\n[ERROR] Token refresh failed");
+                if (!error.empty())
+                    self->AppendTokenLog(L"[DETAIL] " + Utf8ToWide(error));
+                if (self->_hAlexaStatus)
+                    SetWindowText(self->_hAlexaStatus, L"Status: Refresh failed");
+            }
+            delete resp;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORLISTBOX:
@@ -112,29 +309,88 @@ LRESULT TabSmartHome::OnPaint(HWND hwnd) {
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
 
-    // Title — H2 (24px SemiBold)
+    int sOff = -_scrollY;
+
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_PRIMARY);
     HFONT old = (HFONT)SelectObject(hdc, Theme::FontH2());
-    RECT titleRc = { Theme::SP4, Theme::SP3, rc.right - Theme::SP4, 42 };
+    RECT titleRc = { Theme::SP4, Theme::SP3 + sOff, rc.right - Theme::SP4, 42 + sOff };
     DrawText(hdc, L"Smart Home", -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old);
 
-    // Subtitle — Body Small, text_secondary
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
     old = (HFONT)SelectObject(hdc, Theme::FontBodySm());
-    RECT subRc = { Theme::SP4, 42, rc.right - Theme::SP4, 58 };
+    RECT subRc = { Theme::SP4, 42 + sOff, rc.right - Theme::SP4, 58 + sOff };
     DrawText(hdc, L"Control smart devices, set up automations, and manage integrations", -1, &subRc,
              DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old);
 
-    // Separator
-    RECT sep2 = { Theme::SP4, 62, rc.right - Theme::SP4, 63 };
+    RECT sep2 = { Theme::SP4, 62 + sOff, rc.right - Theme::SP4, 63 + sOff };
     FillRect(hdc, &sep2, Theme::BrushBorderSubtle());
 
     EndPaint(hwnd, &ps);
     return 0;
 }
+
+// ── Scroll support ───────────────────────────────────────────────────────────
+
+void TabSmartHome::UpdateScrollBar(HWND hwnd) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = _contentHeight;
+    si.nPage  = _viewHeight;
+    si.nPos   = _scrollY;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+}
+
+LRESULT TabSmartHome::OnVScroll(HWND hwnd, WPARAM wp) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_ALL;
+    GetScrollInfo(hwnd, SB_VERT, &si);
+
+    int oldPos = _scrollY;
+    switch (LOWORD(wp)) {
+    case SB_LINEUP:     _scrollY -= 30; break;
+    case SB_LINEDOWN:   _scrollY += 30; break;
+    case SB_PAGEUP:     _scrollY -= si.nPage; break;
+    case SB_PAGEDOWN:   _scrollY += si.nPage; break;
+    case SB_THUMBTRACK: _scrollY = si.nTrackPos; break;
+    }
+
+    int maxScroll = _contentHeight - _viewHeight;
+    if (maxScroll < 0) maxScroll = 0;
+    if (_scrollY < 0) _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, TRUE);
+    }
+    return 0;
+}
+
+LRESULT TabSmartHome::OnMouseWheel(HWND hwnd, int delta) {
+    int oldPos = _scrollY;
+    _scrollY -= delta / 2;
+
+    int maxScroll = _contentHeight - _viewHeight;
+    if (maxScroll < 0) maxScroll = 0;
+    if (_scrollY < 0) _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, TRUE);
+    }
+    return 0;
+}
+
+// ── Controls ─────────────────────────────────────────────────────────────────
 
 void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
@@ -164,7 +420,7 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
 
     int y = 68;
 
-    // -- Smart Devices Discovered --
+    // ── Smart Devices Discovered ─────────────────────────────────────────────
     MakeSection(hwnd, L"Smart Devices on Network", y, cx, hInst);
     y += 24;
 
@@ -175,7 +431,6 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     ListView_SetExtendedListViewStyle(_hDeviceList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
     Theme::ApplyDarkScrollbar(_hDeviceList);
 
-    // Add columns
     LVCOLUMN col = {};
     col.mask = LVCF_TEXT | LVCF_WIDTH;
     col.pszText = (LPWSTR)L"IP Address";  col.cx = 130; ListView_InsertColumn(_hDeviceList, 0, &col);
@@ -186,7 +441,7 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
 
     y += 150;
 
-    // -- Amazon Alexa Integration --
+    // ── Amazon Alexa Integration ─────────────────────────────────────────────
     MakeSection(hwnd, L"Amazon Alexa Integration", y, cx, hInst);
     y += 24;
 
@@ -205,7 +460,60 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
         L"  \"Alexa, ask Transparency for security status\"");
     y += 78;
 
-    // -- Google Home Integration --
+    // ── Alexa Access Token Retrieval ─────────────────────────────────────────
+    MakeSection(hwnd, L"Alexa Access Token Retrieval (OAuth 2.0)", y, cx, hInst);
+    y += 24;
+
+    mkLbl(L"CLIENT ID", 16, y, 80);
+    _hAlexaClientId = mkEdit(L"amzn1.application-oa2-client.xxxxx", IDC_ALEXA_CLIENT_ID,
+        100, y - 2, cx - 116, 24);
+    y += 28;
+
+    mkLbl(L"CLIENT SECRET", 16, y, 100);
+    _hAlexaClientSecret = mkEdit(L"Your client secret", IDC_ALEXA_CLIENT_SECRET,
+        120, y - 2, cx - 136, 24);
+    // Mask the secret input
+    SendMessage(_hAlexaClientSecret, EM_SETPASSWORDCHAR, (WPARAM)L'\x2022', 0);
+    y += 28;
+
+    mkLbl(L"REDIRECT URI", 16, y, 100);
+    _hAlexaRedirectUri = mkEdit(L"https://localhost/callback", IDC_ALEXA_REDIRECT_URI,
+        120, y - 2, cx - 136, 24);
+    SetWindowText(_hAlexaRedirectUri, L"https://localhost/callback");
+    y += 28;
+
+    _hBtnAlexaOpenAuth = mkBtn(L"1. Open Authorization URL", IDC_BTN_ALEXA_OPEN_AUTH,
+        16, y, 200, 28);
+    y += 36;
+
+    mkLbl(L"AUTH CODE", 16, y, 80);
+    _hAlexaAuthCode = mkEdit(L"Paste authorization code from redirect", IDC_ALEXA_AUTH_CODE,
+        100, y - 2, cx - 116, 24);
+    y += 28;
+
+    _hBtnAlexaGetToken = mkBtn(L"2. Exchange for Token", IDC_BTN_ALEXA_GET_TOKEN,
+        16, y, 180, 28);
+    _hBtnAlexaRefresh = mkBtn(L"3. Refresh Token", IDC_BTN_ALEXA_REFRESH,
+        204, y, 150, 28);
+    y += 36;
+
+    mkLbl(L"TOKEN LOG", 16, y, 80);
+    y += 18;
+    _hAlexaTokenOut = mkEdit(nullptr, IDC_ALEXA_TOKEN_OUT, 16, y, cx - 32, 100, true);
+    SetWindowText(_hAlexaTokenOut,
+        L"Alexa Access Token Retrieval API\r\n"
+        L"─────────────────────────────────\r\n"
+        L"1. Enter your Client ID & Secret from the Alexa Developer Console\r\n"
+        L"2. Click \"Open Authorization URL\" to authenticate in your browser\r\n"
+        L"3. Paste the authorization code from the redirect URL\r\n"
+        L"4. Click \"Exchange for Token\" to retrieve access & refresh tokens\r\n"
+        L"5. Use \"Refresh Token\" when the access token expires (1 hour)\r\n"
+        L"\r\n"
+        L"Endpoint: https://api.amazon.com/auth/o2/token\r\n"
+        L"Scope: alexa::all");
+    y += 108;
+
+    // ── Google Home Integration ──────────────────────────────────────────────
     MakeSection(hwnd, L"Google Home Integration", y, cx, hInst);
     y += 24;
 
@@ -224,7 +532,7 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
         L"  \"Hey Google, ask Transparency if my network is secure\"");
     y += 78;
 
-    // -- Automation Triggers --
+    // ── Automation Triggers ──────────────────────────────────────────────────
     MakeSection(hwnd, L"Automation Triggers", y, cx, hInst);
     y += 24;
 
@@ -272,7 +580,7 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
 
     y += 110;
 
-    // -- Scenes --
+    // ── Scenes ───────────────────────────────────────────────────────────────
     MakeSection(hwnd, L"Scenes", y, cx, hInst);
     y += 24;
 
@@ -291,18 +599,170 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     col.pszText = (LPWSTR)L"Scene";    col.cx = 200; ListView_InsertColumn(_hSceneList, 0, &col);
     col.pszText = (LPWSTR)L"Devices";  col.cx = 120; ListView_InsertColumn(_hSceneList, 1, &col);
     col.pszText = (LPWSTR)L"Actions";  col.cx = 150; ListView_InsertColumn(_hSceneList, 2, &col);
+
+    y += 100;
+    _contentHeight = y;
 }
 
 void TabSmartHome::LayoutControls(int cx, int cy) {
-    // For now, fixed layout -- controls are positioned in CreateControls
+    _viewHeight = cy;
+
+    int sOff = -_scrollY;
+
+    // Shift every child window by scroll offset
+    HWND child = GetWindow(_hwnd, GW_CHILD);
+    while (child) {
+        RECT rc;
+        GetWindowRect(child, &rc);
+        MapWindowPoints(HWND_DESKTOP, _hwnd, (LPPOINT)&rc, 2);
+
+        int origY = (int)(INT_PTR)GetProp(child, L"OrigY");
+        if (!GetProp(child, L"OrigYSet")) {
+            origY = rc.top;
+            SetProp(child, L"OrigY", (HANDLE)(INT_PTR)origY);
+            SetProp(child, L"OrigYSet", (HANDLE)(INT_PTR)1);
+        }
+
+        int w = rc.right - rc.left;
+        int h = rc.bottom - rc.top;
+
+        // Resize multiline readonly edits and listviews to track width
+        DWORD style = GetWindowLong(child, GWL_STYLE);
+        if ((style & ES_MULTILINE) && (style & ES_READONLY)) {
+            w = cx - 32;
+        }
+
+        SetWindowPos(child, nullptr, rc.left, origY + sOff, w, h, SWP_NOZORDER);
+        child = GetWindow(child, GW_HWNDNEXT);
+    }
+
+    UpdateScrollBar(_hwnd);
 }
+
+// ── Alexa Token Retrieval ────────────────────────────────────────────────────
+
+void TabSmartHome::AppendTokenLog(const std::wstring& text) {
+    if (!_hAlexaTokenOut) return;
+    int len = GetWindowTextLength(_hAlexaTokenOut);
+    SendMessage(_hAlexaTokenOut, EM_SETSEL, len, len);
+    SendMessage(_hAlexaTokenOut, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+void TabSmartHome::AlexaOpenAuth() {
+    wchar_t clientId[512] = {};
+    wchar_t redirectUri[512] = {};
+    GetWindowText(_hAlexaClientId, clientId, 512);
+    GetWindowText(_hAlexaRedirectUri, redirectUri, 512);
+
+    if (!clientId[0]) {
+        AppendTokenLog(L"[ERROR] Client ID is required");
+        return;
+    }
+
+    // Build the authorization URL
+    std::string cid = UrlEncode(WideToUtf8(clientId));
+    std::string ruri = UrlEncode(WideToUtf8(redirectUri));
+
+    std::string url = "https://www.amazon.com/ap/oa?"
+        "client_id=" + cid +
+        "&scope=alexa%3A%3Aall"
+        "&response_type=code"
+        "&redirect_uri=" + ruri;
+
+    wstring wurl = Utf8ToWide(url);
+    ShellExecute(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+
+    AppendTokenLog(L"[INFO] Authorization URL opened in browser");
+    AppendTokenLog(L"[INFO] After login, copy the 'code' parameter from the redirect URL");
+    if (_hAlexaStatus)
+        SetWindowText(_hAlexaStatus, L"Status: Waiting for authorization code...");
+}
+
+void TabSmartHome::AlexaExchangeToken() {
+    wchar_t clientId[512] = {}, clientSecret[512] = {};
+    wchar_t authCode[1024] = {}, redirectUri[512] = {};
+    GetWindowText(_hAlexaClientId, clientId, 512);
+    GetWindowText(_hAlexaClientSecret, clientSecret, 512);
+    GetWindowText(_hAlexaAuthCode, authCode, 1024);
+    GetWindowText(_hAlexaRedirectUri, redirectUri, 512);
+
+    if (!clientId[0] || !clientSecret[0] || !authCode[0]) {
+        AppendTokenLog(L"[ERROR] Client ID, Client Secret, and Auth Code are all required");
+        return;
+    }
+
+    AppendTokenLog(L"[INFO] Exchanging authorization code for tokens...");
+    if (_hAlexaStatus)
+        SetWindowText(_hAlexaStatus, L"Status: Exchanging token...");
+
+    // Build POST body
+    std::string body =
+        "grant_type=authorization_code"
+        "&code=" + UrlEncode(WideToUtf8(authCode)) +
+        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
+        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret)) +
+        "&redirect_uri=" + UrlEncode(WideToUtf8(redirectUri));
+
+    // Run in background thread to avoid blocking UI
+    HWND hwnd = _hwnd;
+    std::thread([this, body, hwnd]() {
+        std::string resp = HttpPost(L"api.amazon.com", L"/auth/o2/token", body);
+
+        // Post result back to UI thread
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 100, 0, (LPARAM)result);
+    }).detach();
+}
+
+void TabSmartHome::AlexaRefreshToken() {
+    if (_alexaRefreshToken.empty()) {
+        AppendTokenLog(L"[ERROR] No refresh token available. Exchange an auth code first.");
+        return;
+    }
+
+    wchar_t clientId[512] = {}, clientSecret[512] = {};
+    GetWindowText(_hAlexaClientId, clientId, 512);
+    GetWindowText(_hAlexaClientSecret, clientSecret, 512);
+
+    if (!clientId[0] || !clientSecret[0]) {
+        AppendTokenLog(L"[ERROR] Client ID and Client Secret are required for refresh");
+        return;
+    }
+
+    AppendTokenLog(L"[INFO] Refreshing access token...");
+    if (_hAlexaStatus)
+        SetWindowText(_hAlexaStatus, L"Status: Refreshing token...");
+
+    std::string body =
+        "grant_type=refresh_token"
+        "&refresh_token=" + UrlEncode(WideToUtf8(_alexaRefreshToken)) +
+        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
+        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret));
+
+    HWND hwnd = _hwnd;
+    std::thread([this, body, hwnd]() {
+        std::string resp = HttpPost(L"api.amazon.com", L"/auth/o2/token", body);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 101, 0, (LPARAM)result);
+    }).detach();
+}
+
+// ── Command handling ─────────────────────────────────────────────────────────
 
 LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     int id = LOWORD(wp);
     switch (id) {
     case IDC_BTN_ALEXA_LINK:
-        if (_hAlexaStatus)
-            SetWindowText(_hAlexaStatus, L"Status: Linking... (OAuth flow would open here)");
+    case IDC_BTN_ALEXA_OPEN_AUTH:
+        AlexaOpenAuth();
+        break;
+
+    case IDC_BTN_ALEXA_GET_TOKEN:
+        AlexaExchangeToken();
+        break;
+
+    case IDC_BTN_ALEXA_REFRESH:
+        AlexaRefreshToken();
         break;
 
     case IDC_BTN_ALEXA_DISCOVER:
@@ -378,6 +838,9 @@ LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         break;
     }
     }
+
+    // Handle async token response (WM_APP+100 = exchange, WM_APP+101 = refresh)
+    // These are dispatched via WM_COMMAND fallthrough — actually handled in WndProc
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
 }
 
@@ -392,11 +855,9 @@ void TabSmartHome::PopulateSmartDevices() {
     ScanResult r = _mainWnd->GetLastResult();
     int idx = 0;
     for (auto& d : r.devices) {
-        // Detect likely smart home devices by type or open ports
         bool isSmart = false;
         wstring platform = L"Unknown";
 
-        // Check for common smart home indicators
         for (int p : d.openPorts) {
             if (p == 8008 || p == 8009 || p == 8443) { isSmart = true; platform = L"Google/Cast"; }
             if (p == 8123)   { isSmart = true; platform = L"Home Assistant"; }

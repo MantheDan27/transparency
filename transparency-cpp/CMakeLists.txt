@@ -111,6 +111,8 @@ target_link_libraries(Transparency PRIVATE
     wlanapi
     ntdll
     comdlg32
+    winhttp
+    crypt32
 )
 
 set_target_properties(Transparency PROPERTIES
