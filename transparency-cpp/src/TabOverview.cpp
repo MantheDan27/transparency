@@ -151,7 +151,7 @@ static int ComputeContentHeight(int cx, int cy) {
     int tileW, pillY, btnY, listY;
     GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
     int mapH = std::max(cy - listY - 16, MAP_MIN_H);
-    return listY + mapH + 16;
+    return listY + mapH + 40;
 }
 
 void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {

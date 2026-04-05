@@ -151,7 +151,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 
     // Alert list (25% of available space)
     int avail = cy - 80;
-    int alertH = avail * 25 / 100;
+    int alertH = avail * 15 / 100;
     _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
         16, 48, cx - 32, alertH,
@@ -173,9 +173,9 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         ListView_InsertColumn(_hAlertList, i, &col);
     }
 
-    // Explanation panel (three-part: What / Why / What to do) — 45% of space
+    // Explanation panel (three-part: What / Why / What to do) — 60% of space
     int explainY = 48 + alertH + 6;
-    int explainH = avail * 45 / 100 - 6;
+    int explainH = avail * 60 / 100 - 6;
     _hExplainPanel = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", nullptr,
         WS_CHILD | WS_VISIBLE,
         16, explainY, cx - 32, explainH, hwnd, nullptr, hInst, nullptr);
@@ -196,7 +196,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         return hw;
     };
     int ey = 2;
-    int thirdH = (explainH - 6) / 3 - 20;
+    int thirdH = (explainH - 6) / 3 - 6;
     mkExplainLbl(L"What happened:", 0, 16);
     _hExplainWhat = mkExplainEdit(9650, 16, thirdH);
     ey = 16 + thirdH + 4;
@@ -251,16 +251,16 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 
 void TabAlerts::LayoutControls(int cx, int cy) {
     int avail = cy - 80;
-    int alertH = avail * 25 / 100;
+    int alertH = avail * 15 / 100;
     if (_hAlertList) SetWindowPos(_hAlertList, nullptr, 16, 48, cx - 32, alertH, SWP_NOZORDER);
     if (_hBtnClearAll) SetWindowPos(_hBtnClearAll, nullptr, cx - 100, 12, 84, 26, SWP_NOZORDER);
 
     int explainY = 48 + alertH + 6;
-    int explainH = avail * 45 / 100 - 6;
+    int explainH = avail * 60 / 100 - 6;
     if (_hExplainPanel) SetWindowPos(_hExplainPanel, nullptr, 16, explainY, cx - 32, explainH, SWP_NOZORDER);
 
     // Re-layout the three explanation sections inside the panel
-    int thirdH = (explainH - 6) / 3 - 20;
+    int thirdH = (explainH - 6) / 3 - 6;
     int ey = 0;
     // What happened label + edit
     if (_hExplainWhat) {

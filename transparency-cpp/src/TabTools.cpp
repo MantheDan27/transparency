@@ -85,6 +85,8 @@ LRESULT CALLBACK TabTools::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_TOOL_RESULT: return self->OnToolResult(hwnd, wp, lp);
     case WM_SCAN_COMPLETE: self->RefreshIpList(); return 0;
+    case WM_VSCROLL:    return self->OnVScroll(hwnd, wp);
+    case WM_MOUSEWHEEL: return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
     case WM_DRAWITEM: {
         auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
         if (dis && dis->CtlType == ODT_BUTTON) {
@@ -306,18 +308,103 @@ void TabTools::CreateControls(HWND hwnd, int cx, int cy) {
     MakeSection(hwnd, L"Gateway & DNS Info", y, cx, hInst);
     y += 22;
     _hGwInfo = mkEdit(nullptr, 9721, 16, y, cx - 32, 80, true);
+    y += 88;
+
+    _contentHeight = y;
 }
 
 void TabTools::LayoutControls(int cx, int cy) {
-    // Reflow all controls - simplified: just resize output boxes
-    if (_hPingOut)  SetWindowPos(_hPingOut,  nullptr, 16, 0, cx - 32, 80, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hTraceOut) SetWindowPos(_hTraceOut, nullptr, 16, 0, cx - 32, 90, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hDnsOut)   SetWindowPos(_hDnsOut,   nullptr, 16, 0, cx - 32, 60, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hTcpOut)   SetWindowPos(_hTcpOut,   nullptr, 16, 0, cx - 32, 44, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hHttpOut)  SetWindowPos(_hHttpOut,  nullptr, 16, 0, cx - 32, 60, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hWifiInfo) SetWindowPos(_hWifiInfo, nullptr, 16, 0, cx - 32, 70, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hGwInfo)   SetWindowPos(_hGwInfo,   nullptr, 16, 0, cx - 32, 80, SWP_NOMOVE | SWP_NOZORDER);
-    if (_hFlowOut)  SetWindowPos(_hFlowOut,  nullptr, 16, 0, cx - 32, 60, SWP_NOMOVE | SWP_NOZORDER);
+    _viewHeight = cy;
+
+    // Scroll all child controls by enumerating and shifting Y positions
+    // We stored _contentHeight during CreateControls; use scroll offset
+    int sOff = -_scrollY;
+
+    // Shift every child window by the scroll offset relative to its original position
+    HWND child = GetWindow(_hwnd, GW_CHILD);
+    while (child) {
+        RECT rc;
+        GetWindowRect(child, &rc);
+        MapWindowPoints(HWND_DESKTOP, _hwnd, (LPPOINT)&rc, 2);
+
+        // Store original Y in window property (set once)
+        int origY = (int)(INT_PTR)GetProp(child, L"OrigY");
+        if (!GetProp(child, L"OrigYSet")) {
+            origY = rc.top;
+            SetProp(child, L"OrigY", (HANDLE)(INT_PTR)origY);
+            SetProp(child, L"OrigYSet", (HANDLE)(INT_PTR)1);
+        }
+
+        int w = rc.right - rc.left;
+        int h = rc.bottom - rc.top;
+
+        // Resize width for output boxes only (multi-line edits)
+        DWORD style = GetWindowLong(child, GWL_STYLE);
+        if ((style & ES_MULTILINE) && (style & ES_READONLY)) {
+            w = cx - 32;
+        }
+
+        SetWindowPos(child, nullptr, rc.left, origY + sOff, w, h, SWP_NOZORDER);
+        child = GetWindow(child, GW_HWNDNEXT);
+    }
+
+    UpdateScrollBar(_hwnd);
+}
+
+void TabTools::UpdateScrollBar(HWND hwnd) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = _contentHeight;
+    si.nPage  = _viewHeight;
+    si.nPos   = _scrollY;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+}
+
+LRESULT TabTools::OnVScroll(HWND hwnd, WPARAM wp) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_ALL;
+    GetScrollInfo(hwnd, SB_VERT, &si);
+
+    int oldPos = _scrollY;
+    switch (LOWORD(wp)) {
+    case SB_LINEUP:        _scrollY -= 30; break;
+    case SB_LINEDOWN:      _scrollY += 30; break;
+    case SB_PAGEUP:        _scrollY -= si.nPage; break;
+    case SB_PAGEDOWN:      _scrollY += si.nPage; break;
+    case SB_THUMBTRACK:    _scrollY = si.nTrackPos; break;
+    }
+
+    int maxScroll = _contentHeight - _viewHeight;
+    if (maxScroll < 0) maxScroll = 0;
+    if (_scrollY < 0) _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, TRUE);
+    }
+    return 0;
+}
+
+LRESULT TabTools::OnMouseWheel(HWND hwnd, int delta) {
+    int oldPos = _scrollY;
+    _scrollY -= delta / 2;
+
+    int maxScroll = _contentHeight - _viewHeight;
+    if (maxScroll < 0) maxScroll = 0;
+    if (_scrollY < 0) _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        InvalidateRect(hwnd, nullptr, TRUE);
+    }
+    return 0;
 }
 
 LRESULT TabTools::OnSize(HWND hwnd, int cx, int cy) {
