@@ -1472,6 +1472,12 @@ function renderMap() {
   if (gateway) nodePositions.set(gateway.ip, { x: cx, y: routerY });
 
   const maxPerRow = Math.max(1, Math.floor(W / 120));
+
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute Set of IPs with 'New Device' anomalies outside the render loop
+  // to avoid O(N) array iteration per device inside the mapping loop.
+  const newDeviceIpsMap = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
