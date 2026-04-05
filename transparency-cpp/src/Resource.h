@@ -160,6 +160,13 @@
 #define IDC_ALEXA_TOKEN_OUT         11056
 #define IDC_BTN_ALEXA_OPEN_AUTH     11057
 
+// Alexa Smart Home Skill API
+#define IDC_ALEXA_SH_REGION         11060
+#define IDC_BTN_ALEXA_SH_DISCOVER   11061
+#define IDC_BTN_ALEXA_SH_STATE      11062
+#define IDC_BTN_ALEXA_SH_CHANGE     11063
+#define IDC_ALEXA_SH_LOG            11064
+
 // Nav IDs
 #define IDC_NAV_SMARTHOME   2007
 #define IDC_PANEL_SMARTHOME 3007

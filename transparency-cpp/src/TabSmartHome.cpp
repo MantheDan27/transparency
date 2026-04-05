@@ -156,6 +156,74 @@ std::string TabSmartHome::HttpPost(const std::wstring& host, const std::wstring&
     return result;
 }
 
+// ── WinHTTP POST (JSON + Bearer auth) ────────────────────────────────────────
+
+std::string TabSmartHome::HttpPostJson(const std::wstring& host, const std::wstring& path,
+                                       const std::string& json, const std::wstring& bearerToken) {
+    std::string result;
+
+    HINTERNET hSession = WinHttpOpen(L"Transparency/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) return "Error: WinHttpOpen failed";
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(),
+        INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConnect) { WinHttpCloseHandle(hSession); return "Error: WinHttpConnect failed"; }
+
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
+        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+        WINHTTP_FLAG_SECURE);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return "Error: WinHttpOpenRequest failed";
+    }
+
+    // Build headers: Content-Type + Authorization
+    wstring hdrs = L"Content-Type: application/json\r\n"
+                   L"Authorization: Bearer " + bearerToken;
+
+    BOOL sent = WinHttpSendRequest(hRequest, hdrs.c_str(), (DWORD)-1,
+        (LPVOID)json.c_str(), (DWORD)json.size(), (DWORD)json.size(), 0);
+
+    if (sent) {
+        WinHttpReceiveResponse(hRequest, nullptr);
+
+        DWORD statusCode = 0;
+        DWORD statusSize = sizeof(statusCode);
+        WinHttpQueryHeaders(hRequest,
+            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize,
+            WINHTTP_NO_HEADER_INDEX);
+
+        DWORD bytesAvail = 0;
+        do {
+            WinHttpQueryDataAvailable(hRequest, &bytesAvail);
+            if (bytesAvail > 0) {
+                std::vector<char> buf(bytesAvail + 1, 0);
+                DWORD bytesRead = 0;
+                WinHttpReadData(hRequest, buf.data(), bytesAvail, &bytesRead);
+                result.append(buf.data(), bytesRead);
+            }
+        } while (bytesAvail > 0);
+
+        // For event gateway, 202 Accepted is success (no body)
+        if (statusCode == 200 || statusCode == 202) {
+            if (result.empty()) result = "OK (HTTP " + std::to_string(statusCode) + ")";
+        } else {
+            result = "HTTP " + std::to_string(statusCode) + ": " + result;
+        }
+    } else {
+        result = "Error: WinHttpSendRequest failed (" + std::to_string(GetLastError()) + ")";
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return result;
+}
+
 // ── Window setup ─────────────────────────────────────────────────────────────
 
 bool TabSmartHome::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -266,6 +334,44 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
                     self->AppendTokenLog(L"[DETAIL] " + Utf8ToWide(error));
                 if (self->_hAlexaStatus)
                     SetWindowText(self->_hAlexaStatus, L"Status: Refresh failed");
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    // Async Smart Home Skill API responses
+    case WM_APP + 102: { // Discovery response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            if (resp->find(L"OK") == 0 || resp->find(L"HTTP 2") != wstring::npos) {
+                self->AppendSHLog(L"[SUCCESS] Discovery AddOrUpdateReport accepted by Alexa");
+                self->AppendSHLog(L"[RESPONSE] " + *resp);
+            } else {
+                self->AppendSHLog(L"[ERROR] Discovery failed: " + *resp);
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    case WM_APP + 103: { // State report response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            if (resp->find(L"OK") == 0 || resp->find(L"HTTP 2") != wstring::npos) {
+                self->AppendSHLog(L"[SUCCESS] StateReport accepted");
+            } else {
+                self->AppendSHLog(L"[ERROR] StateReport failed: " + *resp);
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    case WM_APP + 104: { // Change report response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            if (resp->find(L"OK") == 0 || resp->find(L"HTTP 2") != wstring::npos) {
+                self->AppendSHLog(L"[SUCCESS] ChangeReport (proactive) accepted by Event Gateway");
+            } else {
+                self->AppendSHLog(L"[ERROR] ChangeReport failed: " + *resp);
             }
             delete resp;
         }
@@ -513,6 +619,48 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
         L"Scope: alexa::all");
     y += 108;
 
+    // ── Alexa Smart Home Skill API ──────────────────────────────────────────
+    MakeSection(hwnd, L"Alexa Smart Home Skill API (Event Gateway)", y, cx, hInst);
+    y += 24;
+
+    mkLbl(L"REGION", 16, y, 60);
+    _hAlexaSHRegion = CreateWindowEx(0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+        80, y - 2, 240, 120, hwnd, (HMENU)(INT_PTR)IDC_ALEXA_SH_REGION, hInst, nullptr);
+    SendMessage(_hAlexaSHRegion, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    SendMessage(_hAlexaSHRegion, CB_ADDSTRING, 0, (LPARAM)L"North America (api.amazonalexa.com)");
+    SendMessage(_hAlexaSHRegion, CB_ADDSTRING, 0, (LPARAM)L"Europe (api.eu.amazonalexa.com)");
+    SendMessage(_hAlexaSHRegion, CB_ADDSTRING, 0, (LPARAM)L"Far East (api.fe.amazonalexa.com)");
+    SendMessage(_hAlexaSHRegion, CB_SETCURSEL, 0, 0);
+    y += 30;
+
+    _hBtnAlexaSHDiscover = mkBtn(L"Send Discovery", IDC_BTN_ALEXA_SH_DISCOVER, 16, y, 140, 28);
+    _hBtnAlexaSHState = mkBtn(L"Send State Report", IDC_BTN_ALEXA_SH_STATE, 164, y, 150, 28);
+    _hBtnAlexaSHChange = mkBtn(L"Send Change Report", IDC_BTN_ALEXA_SH_CHANGE, 322, y, 160, 28);
+    y += 36;
+
+    mkLbl(L"SKILL API LOG", 16, y, 100);
+    y += 18;
+    _hAlexaSHLog = mkEdit(nullptr, IDC_ALEXA_SH_LOG, 16, y, cx - 32, 140, true);
+    SetWindowText(_hAlexaSHLog,
+        L"Alexa Smart Home Skill API\r\n"
+        L"──────────────────────────────\r\n"
+        L"Interfaces: Alexa.Discovery, Alexa.EndpointHealth, Alexa.PowerController\r\n"
+        L"\r\n"
+        L"Send Discovery:      POST AddOrUpdateReport to Event Gateway\r\n"
+        L"                     Registers network devices as Alexa endpoints\r\n"
+        L"                     with connectivity & power capabilities\r\n"
+        L"\r\n"
+        L"Send State Report:   POST Alexa.StateReport for selected device\r\n"
+        L"                     Reports current connectivity & reachability\r\n"
+        L"\r\n"
+        L"Send Change Report:  POST Alexa.ChangeReport (proactive)\r\n"
+        L"                     Notifies Alexa when device state changes\r\n"
+        L"                     (online/offline, new device, port changes)\r\n"
+        L"\r\n"
+        L"Requires a valid access token from the section above.");
+    y += 148;
+
     // ── Google Home Integration ──────────────────────────────────────────────
     MakeSection(hwnd, L"Google Home Integration", y, cx, hInst);
     y += 24;
@@ -747,6 +895,365 @@ void TabSmartHome::AlexaRefreshToken() {
     }).detach();
 }
 
+// ── Alexa Smart Home Skill API ───────────────────────────────────────────────
+
+void TabSmartHome::AppendSHLog(const std::wstring& text) {
+    if (!_hAlexaSHLog) return;
+    int len = GetWindowTextLength(_hAlexaSHLog);
+    SendMessage(_hAlexaSHLog, EM_SETSEL, len, len);
+    SendMessage(_hAlexaSHLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+std::wstring TabSmartHome::GetAlexaEventGatewayHost() const {
+    int sel = _hAlexaSHRegion ? (int)SendMessage(_hAlexaSHRegion, CB_GETCURSEL, 0, 0) : 0;
+    switch (sel) {
+    case 1:  return L"api.eu.amazonalexa.com";
+    case 2:  return L"api.fe.amazonalexa.com";
+    default: return L"api.amazonalexa.com";
+    }
+}
+
+std::string TabSmartHome::GenerateMessageId() {
+    // Simple pseudo-unique ID using timestamp + random
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    char buf[64];
+    sprintf_s(buf, "%08x-%04x-%04x-%04x-%012llx",
+        (unsigned)(li.QuadPart & 0xFFFFFFFF),
+        (unsigned)((li.QuadPart >> 32) & 0xFFFF),
+        0x4000 | (unsigned)(li.QuadPart & 0x0FFF),
+        0x8000 | (unsigned)((li.QuadPart >> 12) & 0x3FFF),
+        (unsigned long long)(GetTickCount64()));
+    return buf;
+}
+
+std::string TabSmartHome::BuildDiscoveryPayload() {
+    // Build Alexa.Discovery.AddOrUpdateReport event
+    // Registers all discovered smart devices as Alexa endpoints
+
+    if (!_mainWnd) return "{}";
+    ScanResult r = _mainWnd->GetLastResult();
+    std::string msgId = GenerateMessageId();
+    std::string token = WideToUtf8(_alexaAccessToken);
+
+    // Build endpoints array
+    std::string endpoints;
+    int count = 0;
+    for (auto& d : r.devices) {
+        bool isSmart = false;
+        for (int p : d.openPorts) {
+            if (p == 8008 || p == 8009 || p == 8443 || p == 8123 ||
+                p == 1883 || p == 8883 || p == 49152 || p == 49153)
+                isSmart = true;
+        }
+        if (d.deviceType == L"IoT Device" || d.deviceType == L"Smart Speaker" ||
+            d.deviceType == L"Smart TV" || d.deviceType == L"Camera")
+            isSmart = true;
+        if (!d.vendor.empty() &&
+            (d.vendor.find(L"Amazon") != wstring::npos || d.vendor.find(L"Google") != wstring::npos ||
+             d.vendor.find(L"Philips") != wstring::npos || d.vendor.find(L"TP-Link") != wstring::npos ||
+             d.vendor.find(L"Ring") != wstring::npos || d.vendor.find(L"Sonos") != wstring::npos))
+            isSmart = true;
+
+        if (!isSmart) continue;
+
+        std::string epId = WideToUtf8(d.mac.empty() ? d.ip : d.mac);
+        std::string name = WideToUtf8(
+            !d.customName.empty() ? d.customName :
+            !d.hostname.empty()   ? d.hostname :
+            !d.vendor.empty()     ? d.vendor : L"Network Device");
+        std::string desc = WideToUtf8(d.deviceType) + " at " + WideToUtf8(d.ip);
+        std::string manufacturer = WideToUtf8(d.vendor.empty() ? L"Unknown" : d.vendor);
+
+        // Map device type to Alexa display category
+        std::string category = "OTHER";
+        std::string dType = WideToUtf8(d.deviceType);
+        if (dType.find("Speaker") != string::npos) category = "SPEAKER";
+        else if (dType.find("TV") != string::npos) category = "TV";
+        else if (dType.find("Camera") != string::npos) category = "CAMERA";
+        else if (dType.find("Light") != string::npos) category = "LIGHT";
+        else if (dType.find("Switch") != string::npos || dType.find("Plug") != string::npos) category = "SMARTPLUG";
+
+        if (count > 0) endpoints += ",";
+        endpoints +=
+            "{"
+            "\"endpointId\":\"" + epId + "\","
+            "\"manufacturerName\":\"" + manufacturer + "\","
+            "\"friendlyName\":\"" + name + "\","
+            "\"description\":\"" + desc + "\","
+            "\"displayCategories\":[\"" + category + "\"],"
+            "\"capabilities\":["
+                "{"
+                    "\"type\":\"AlexaInterface\","
+                    "\"interface\":\"Alexa.EndpointHealth\","
+                    "\"version\":\"3.2\","
+                    "\"properties\":{"
+                        "\"supported\":[{\"name\":\"connectivity\"}],"
+                        "\"proactivelyReported\":true,"
+                        "\"retrievable\":true"
+                    "}"
+                "},"
+                "{"
+                    "\"type\":\"AlexaInterface\","
+                    "\"interface\":\"Alexa.PowerController\","
+                    "\"version\":\"3\","
+                    "\"properties\":{"
+                        "\"supported\":[{\"name\":\"powerState\"}],"
+                        "\"proactivelyReported\":true,"
+                        "\"retrievable\":true"
+                    "}"
+                "},"
+                "{"
+                    "\"type\":\"AlexaInterface\","
+                    "\"interface\":\"Alexa\","
+                    "\"version\":\"3\""
+                "}"
+            "]"
+            "}";
+        count++;
+    }
+
+    // Full AddOrUpdateReport event
+    return
+        "{"
+        "\"event\":{"
+            "\"header\":{"
+                "\"namespace\":\"Alexa.Discovery\","
+                "\"name\":\"AddOrUpdateReport\","
+                "\"payloadVersion\":\"3\","
+                "\"messageId\":\"" + msgId + "\""
+            "},"
+            "\"payload\":{"
+                "\"endpoints\":[" + endpoints + "],"
+                "\"scope\":{"
+                    "\"type\":\"BearerToken\","
+                    "\"token\":\"" + token + "\""
+                "}"
+            "}"
+        "}"
+        "}";
+}
+
+std::string TabSmartHome::BuildStateReportPayload(const std::wstring& endpointId,
+                                                   const std::wstring& ip, bool online) {
+    std::string msgId = GenerateMessageId();
+    std::string corrId = GenerateMessageId();
+    std::string token = WideToUtf8(_alexaAccessToken);
+    std::string epId = WideToUtf8(endpointId);
+    std::string connectivity = online ? "OK" : "UNREACHABLE";
+    std::string powerState = online ? "ON" : "OFF";
+
+    // Get current ISO timestamp
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    char ts[64];
+    sprintf_s(ts, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+    return
+        "{"
+        "\"event\":{"
+            "\"header\":{"
+                "\"namespace\":\"Alexa\","
+                "\"name\":\"StateReport\","
+                "\"payloadVersion\":\"3\","
+                "\"messageId\":\"" + msgId + "\","
+                "\"correlationToken\":\"" + corrId + "\""
+            "},"
+            "\"endpoint\":{"
+                "\"endpointId\":\"" + epId + "\","
+                "\"scope\":{"
+                    "\"type\":\"BearerToken\","
+                    "\"token\":\"" + token + "\""
+                "}"
+            "},"
+            "\"payload\":{}"
+        "},"
+        "\"context\":{"
+            "\"properties\":["
+                "{"
+                    "\"namespace\":\"Alexa.EndpointHealth\","
+                    "\"name\":\"connectivity\","
+                    "\"value\":{\"value\":\"" + connectivity + "\"},"
+                    "\"timeOfSample\":\"" + string(ts) + "\","
+                    "\"uncertaintyInMilliseconds\":0"
+                "},"
+                "{"
+                    "\"namespace\":\"Alexa.PowerController\","
+                    "\"name\":\"powerState\","
+                    "\"value\":\"" + powerState + "\","
+                    "\"timeOfSample\":\"" + string(ts) + "\","
+                    "\"uncertaintyInMilliseconds\":0"
+                "}"
+            "]"
+        "}"
+        "}";
+}
+
+std::string TabSmartHome::BuildChangeReportPayload(const std::wstring& endpointId,
+                                                    const std::wstring& ip, bool online) {
+    std::string msgId = GenerateMessageId();
+    std::string token = WideToUtf8(_alexaAccessToken);
+    std::string epId = WideToUtf8(endpointId);
+    std::string connectivity = online ? "OK" : "UNREACHABLE";
+    std::string powerState = online ? "ON" : "OFF";
+
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    char ts[64];
+    sprintf_s(ts, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+    // ChangeReport: proactive state update pushed to Alexa Event Gateway
+    // cause.type = PHYSICAL_INTERACTION when device changes state on its own
+    return
+        "{"
+        "\"event\":{"
+            "\"header\":{"
+                "\"namespace\":\"Alexa\","
+                "\"name\":\"ChangeReport\","
+                "\"payloadVersion\":\"3\","
+                "\"messageId\":\"" + msgId + "\""
+            "},"
+            "\"endpoint\":{"
+                "\"endpointId\":\"" + epId + "\","
+                "\"scope\":{"
+                    "\"type\":\"BearerToken\","
+                    "\"token\":\"" + token + "\""
+                "}"
+            "},"
+            "\"payload\":{"
+                "\"change\":{"
+                    "\"cause\":{\"type\":\"PHYSICAL_INTERACTION\"},"
+                    "\"properties\":["
+                        "{"
+                            "\"namespace\":\"Alexa.EndpointHealth\","
+                            "\"name\":\"connectivity\","
+                            "\"value\":{\"value\":\"" + connectivity + "\"},"
+                            "\"timeOfSample\":\"" + string(ts) + "\","
+                            "\"uncertaintyInMilliseconds\":0"
+                        "}"
+                    "]"
+                "}"
+            "}"
+        "},"
+        "\"context\":{"
+            "\"properties\":["
+                "{"
+                    "\"namespace\":\"Alexa.PowerController\","
+                    "\"name\":\"powerState\","
+                    "\"value\":\"" + powerState + "\","
+                    "\"timeOfSample\":\"" + string(ts) + "\","
+                    "\"uncertaintyInMilliseconds\":0"
+                "}"
+            "]"
+        "}"
+        "}";
+}
+
+void TabSmartHome::AlexaSHSendDiscovery() {
+    if (_alexaAccessToken.empty()) {
+        AppendSHLog(L"[ERROR] No access token. Complete OAuth flow first.");
+        return;
+    }
+
+    AppendSHLog(L"[INFO] Building Alexa.Discovery.AddOrUpdateReport...");
+    std::string payload = BuildDiscoveryPayload();
+
+    wstring host = GetAlexaEventGatewayHost();
+    wstring token = _alexaAccessToken;
+    AppendSHLog(L"[INFO] POST to " + host + L"/v3/events");
+
+    HWND hwnd = _hwnd;
+    std::thread([this, payload, host, token, hwnd]() {
+        std::string resp = HttpPostJson(host, L"/v3/events", payload, token);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 102, 0, (LPARAM)result);
+    }).detach();
+}
+
+void TabSmartHome::AlexaSHSendStateReport() {
+    if (_alexaAccessToken.empty()) {
+        AppendSHLog(L"[ERROR] No access token. Complete OAuth flow first.");
+        return;
+    }
+
+    // Get selected device from device list
+    if (!_hDeviceList) return;
+    int sel = ListView_GetNextItem(_hDeviceList, -1, LVNI_SELECTED);
+    if (sel < 0) {
+        AppendSHLog(L"[ERROR] Select a device from the Smart Devices list first.");
+        return;
+    }
+
+    wchar_t ipBuf[128], nameBuf[128], statusBuf[32];
+    ListView_GetItemText(_hDeviceList, sel, 0, ipBuf, 128);
+    ListView_GetItemText(_hDeviceList, sel, 1, nameBuf, 128);
+    ListView_GetItemText(_hDeviceList, sel, 4, statusBuf, 32);
+    bool online = (wcscmp(statusBuf, L"Online") == 0);
+
+    // Use IP as endpoint ID (or MAC if available from scan)
+    wstring endpointId = ipBuf;
+    ScanResult r = _mainWnd->GetLastResult();
+    for (auto& d : r.devices) {
+        if (d.ip == ipBuf && !d.mac.empty()) { endpointId = d.mac; break; }
+    }
+
+    AppendSHLog(wstring(L"[INFO] Sending Alexa.StateReport for ") + nameBuf +
+                L" (" + ipBuf + L") — " + (online ? L"OK" : L"UNREACHABLE"));
+
+    std::string payload = BuildStateReportPayload(endpointId, ipBuf, online);
+    wstring host = GetAlexaEventGatewayHost();
+    wstring token = _alexaAccessToken;
+
+    HWND hwnd = _hwnd;
+    std::thread([this, payload, host, token, hwnd]() {
+        std::string resp = HttpPostJson(host, L"/v3/events", payload, token);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 103, 0, (LPARAM)result);
+    }).detach();
+}
+
+void TabSmartHome::AlexaSHSendChangeReport() {
+    if (_alexaAccessToken.empty()) {
+        AppendSHLog(L"[ERROR] No access token. Complete OAuth flow first.");
+        return;
+    }
+
+    if (!_hDeviceList) return;
+    int sel = ListView_GetNextItem(_hDeviceList, -1, LVNI_SELECTED);
+    if (sel < 0) {
+        AppendSHLog(L"[ERROR] Select a device from the Smart Devices list first.");
+        return;
+    }
+
+    wchar_t ipBuf[128], nameBuf[128], statusBuf[32];
+    ListView_GetItemText(_hDeviceList, sel, 0, ipBuf, 128);
+    ListView_GetItemText(_hDeviceList, sel, 1, nameBuf, 128);
+    ListView_GetItemText(_hDeviceList, sel, 4, statusBuf, 32);
+    bool online = (wcscmp(statusBuf, L"Online") == 0);
+
+    wstring endpointId = ipBuf;
+    ScanResult r = _mainWnd->GetLastResult();
+    for (auto& d : r.devices) {
+        if (d.ip == ipBuf && !d.mac.empty()) { endpointId = d.mac; break; }
+    }
+
+    AppendSHLog(wstring(L"[INFO] Sending Alexa.ChangeReport (proactive) for ") + nameBuf +
+                L" — connectivity: " + (online ? L"OK" : L"UNREACHABLE"));
+
+    std::string payload = BuildChangeReportPayload(endpointId, ipBuf, online);
+    wstring host = GetAlexaEventGatewayHost();
+    wstring token = _alexaAccessToken;
+
+    HWND hwnd = _hwnd;
+    std::thread([this, payload, host, token, hwnd]() {
+        std::string resp = HttpPostJson(host, L"/v3/events", payload, token);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 104, 0, (LPARAM)result);
+    }).detach();
+}
+
 // ── Command handling ─────────────────────────────────────────────────────────
 
 LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
@@ -769,6 +1276,18 @@ LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         if (_hAlexaStatus)
             SetWindowText(_hAlexaStatus, L"Status: Discovering Alexa-compatible devices...");
         PopulateSmartDevices();
+        break;
+
+    case IDC_BTN_ALEXA_SH_DISCOVER:
+        AlexaSHSendDiscovery();
+        break;
+
+    case IDC_BTN_ALEXA_SH_STATE:
+        AlexaSHSendStateReport();
+        break;
+
+    case IDC_BTN_ALEXA_SH_CHANGE:
+        AlexaSHSendChangeReport();
         break;
 
     case IDC_BTN_GOOGLE_LINK:

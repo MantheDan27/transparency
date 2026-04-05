@@ -44,7 +44,22 @@ private:
     static std::wstring Utf8ToWide(const std::string& s);
     static std::string HttpPost(const std::wstring& host, const std::wstring& path,
                                 const std::string& body);
+    static std::string HttpPostJson(const std::wstring& host, const std::wstring& path,
+                                    const std::string& json, const std::wstring& bearerToken);
     void AppendTokenLog(const std::wstring& text);
+
+    // Alexa Smart Home Skill API
+    void AlexaSHSendDiscovery();
+    void AlexaSHSendStateReport();
+    void AlexaSHSendChangeReport();
+    void AppendSHLog(const std::wstring& text);
+    std::wstring GetAlexaEventGatewayHost() const;
+    std::string BuildDiscoveryPayload();
+    std::string BuildStateReportPayload(const std::wstring& endpointId,
+                                        const std::wstring& ip, bool online);
+    std::string BuildChangeReportPayload(const std::wstring& endpointId,
+                                         const std::wstring& ip, bool online);
+    static std::string GenerateMessageId();
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
@@ -79,6 +94,13 @@ private:
     // Stored tokens
     std::wstring _alexaAccessToken;
     std::wstring _alexaRefreshToken;
+
+    // Alexa Smart Home Skill API controls
+    HWND _hAlexaSHRegion = nullptr;
+    HWND _hBtnAlexaSHDiscover = nullptr;
+    HWND _hBtnAlexaSHState = nullptr;
+    HWND _hBtnAlexaSHChange = nullptr;
+    HWND _hAlexaSHLog = nullptr;
 
     // Google Home controls
     HWND _hBtnGoogleLink = nullptr;
