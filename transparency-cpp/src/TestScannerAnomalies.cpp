@@ -133,7 +133,7 @@ void testDeviceOffline() {
 }
 
 #if defined(_MSC_VER) || defined(UNICODE)
-int wmain(int argc, wchar_t** argv) {
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 #else
 int main() {
 #endif

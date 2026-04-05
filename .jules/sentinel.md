@@ -32,3 +32,7 @@ Even if data originates from network scanning contexts (like an IP address varia
 
 **Prevention:**
 Always strictly validate data against an allowlist pattern before using it in a shell command string. For IP addresses, verify they contain only alphanumeric characters, dots, colons, and hyphens (as implemented via the `IsValidIP` helper). When possible, use `CreateProcess` or similar non-shell APIs with properly quoted arguments.
+## 2024-05-18 - Prevent Command Injection via IP Parameters
+**Vulnerability:** Weak IP validation (`IsValidIP`) used before calling `_wsystem` and `ShellExecute` allowed potential command injection if malicious payloads were supplied (e.g., via malformed network traffic).
+**Learning:** Always use strict networking primitives like `InetPtonW` to validate IP addresses before passing them to the shell, rather than relying on weak regular expressions or simple character matching.
+**Prevention:** Use `ScanEngine::IsSafeIP` uniformly for all IP-based system shell executions.
