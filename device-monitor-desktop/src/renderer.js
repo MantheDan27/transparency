@@ -1420,6 +1420,12 @@ function renderMap() {
   // Precompute new device lookup to avoid O(N) array search inside the O(M) device render loop
   const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
+  // ⚡ Bolt: Pre-calculate new devices to avoid O(N*M) lookups during rendering
+  const newDeviceSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.type === 'New Device') newDeviceSet.add(a.device);
+  }
+
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
   const withoutLatency = devices.filter(d => latencyOf(d) === null);
