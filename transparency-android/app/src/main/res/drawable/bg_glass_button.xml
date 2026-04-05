@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Focused/selected: cyan glow -->
+    <item android:state_focused="true">
+        <layer-list>
+            <item android:left="-2dp" android:top="-2dp" android:right="-2dp" android:bottom="-2dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/glass_selected" />
+                    <corners android:radius="10dp" />
+                    <stroke android:width="1.5dp" android:color="@color/glow_cyan_strong" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Pressed -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_pressed" />
+            <corners android:radius="10dp" />
+            <stroke android:width="1dp" android:color="#3D3D8CFF" />
+        </shape>
+    </item>
+    <!-- Default -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_primary" />
+            <corners android:radius="10dp" />
+            <stroke android:width="1dp" android:color="#3C3D8CFF" />
+        </shape>
+    </item>
+</selector>

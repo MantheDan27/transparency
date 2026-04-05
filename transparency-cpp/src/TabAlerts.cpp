@@ -70,12 +70,7 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (dis->CtlID >= 9600 && dis->CtlID <= 9604) {
             int filterIdx = dis->CtlID - 9600;
             bool active = (filterIdx == self->_alertFilter);
-            if (active)
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_NAV_ACTIVE, Theme::ACCENT_BLUE);
-            else if (pressed)
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT);
-            else
-                Theme::DrawRoundedCard(hdc, rc, 15, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
+            Theme::DrawGlassPill(hdc, rc, 15, active, pressed);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -86,12 +81,10 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SelectObject(hdc, old);
             return TRUE;
         }
-        // Clear All — destructive button style
+        // Clear All — destructive glass button
         if (dis->CtlID == IDC_BTN_CLEAR_ALERTS) {
-            COLORREF bg = pressed ? Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 25)
-                                  : Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 15);
-            COLORREF border = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 40);
-            Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, bg, border);
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 2, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -107,15 +100,9 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             dis->CtlID == IDC_BTN_DEL_RULE) {
             bool isDel = (dis->CtlID == IDC_BTN_DEL_RULE);
             bool isAdd = (dis->CtlID == IDC_BTN_ADD_RULE);
-            COLORREF bg = pressed ? Theme::BG_OVERLAY : Theme::BG_ELEVATED;
-            if (isAdd && !pressed) {
-                Theme::DrawGradientButton(hdc, rc, Theme::RADIUS_SM, RGB(61,127,255), RGB(41,96,217));
-            } else if (isDel) {
-                bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, pressed ? 20 : 12);
-                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_SM, bg, Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 40));
-            } else {
-                Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_SM, bg, Theme::BORDER_DEFAULT);
-            }
+            int variant = isAdd ? 0 : isDel ? 2 : 1;
+            bool focused = (dis->itemState & ODS_FOCUS) != 0;
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_SM, pressed, variant, focused);
 
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
@@ -162,8 +149,9 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         cx - 110, 10, 94, 30, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
 
-    // Alert list
-    int alertH = (cy - 80) / 3;
+    // Alert list (25% of available space)
+    int avail = cy - 80;
+    int alertH = avail * 25 / 100;
     _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
         16, 48, cx - 32, alertH,
@@ -176,7 +164,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 
     struct ColDef { const wchar_t* name; int w; };
     static const ColDef ALERT_COLS[] = {
-        { L"Severity", 80 }, { L"Title", 240 }, { L"Device", 120 },
+        { L"Severity", 80 }, { L"Title", 360 }, { L"Device", 120 },
         { L"Time", 130 }, { L"Status", 80 }
     };
     LVCOLUMN col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col.fmt = LVCFMT_LEFT;
@@ -185,9 +173,9 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         ListView_InsertColumn(_hAlertList, i, &col);
     }
 
-    // Explanation panel (three-part: What / Why / What to do)
+    // Explanation panel (three-part: What / Why / What to do) — 45% of space
     int explainY = 48 + alertH + 6;
-    int explainH = alertH - 6;
+    int explainH = avail * 45 / 100 - 6;
     _hExplainPanel = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", nullptr,
         WS_CHILD | WS_VISIBLE,
         16, explainY, cx - 32, explainH, hwnd, nullptr, hInst, nullptr);
@@ -220,8 +208,8 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     // Default text when no alert selected
     if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
 
-    // Rules section
-    int rulesY = 48 + alertH * 2 + 18;
+    // Rules section (remaining ~30% of space)
+    int rulesY = explainY + explainH + 18;
 
     HWND hRulesHdr = CreateWindowEx(0, L"STATIC", L"ALERT RULES",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -262,15 +250,36 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 }
 
 void TabAlerts::LayoutControls(int cx, int cy) {
-    int alertH = (cy - 80) / 3;
+    int avail = cy - 80;
+    int alertH = avail * 25 / 100;
     if (_hAlertList) SetWindowPos(_hAlertList, nullptr, 16, 48, cx - 32, alertH, SWP_NOZORDER);
     if (_hBtnClearAll) SetWindowPos(_hBtnClearAll, nullptr, cx - 100, 12, 84, 26, SWP_NOZORDER);
 
     int explainY = 48 + alertH + 6;
-    int explainH = alertH - 6;
+    int explainH = avail * 45 / 100 - 6;
     if (_hExplainPanel) SetWindowPos(_hExplainPanel, nullptr, 16, explainY, cx - 32, explainH, SWP_NOZORDER);
 
-    int rulesY = 48 + alertH * 2 + 18;
+    // Re-layout the three explanation sections inside the panel
+    int thirdH = (explainH - 6) / 3 - 20;
+    int ey = 0;
+    // What happened label + edit
+    if (_hExplainWhat) {
+        HWND lblWhat = GetWindow(_hExplainPanel, GW_CHILD);
+        if (lblWhat) SetWindowPos(lblWhat, nullptr, 4, 0, 80, 16, SWP_NOZORDER);
+        SetWindowPos(_hExplainWhat, nullptr, 4, 16, cx - 40, thirdH, SWP_NOZORDER);
+    }
+    ey = 16 + thirdH + 4;
+    // Why it matters label + edit
+    if (_hExplainWhy) {
+        SetWindowPos(_hExplainWhy, nullptr, 4, ey + 16, cx - 40, thirdH, SWP_NOZORDER);
+    }
+    ey += thirdH + 20;
+    // What to do label + edit
+    if (_hExplainDo) {
+        SetWindowPos(_hExplainDo, nullptr, 4, ey + 16, cx - 40, thirdH, SWP_NOZORDER);
+    }
+
+    int rulesY = explainY + explainH + 18;
     int ruleH = cy - rulesY - 16;
     if (_hRuleList) SetWindowPos(_hRuleList, nullptr, 16, rulesY, cx - 32, ruleH, SWP_NOZORDER);
     if (_hBtnAddRule) SetWindowPos(_hBtnAddRule, nullptr, cx - 292, rulesY - 22, 88, 22, SWP_NOZORDER);

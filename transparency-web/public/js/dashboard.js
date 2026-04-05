@@ -94,7 +94,7 @@ function updateTrustBreakdown(devices) {
   const total = devices.length || 1;
 
   for (const d of devices) {
-    const trust = (d.trust || "unknown").toLowerCase();
+    const trust = sanitizeTrust(d.trust);
     if (trust in counts) counts[trust]++;
     else counts.unknown++;
   }
@@ -115,11 +115,11 @@ function renderOverviewDevices(devices) {
 
   overviewDeviceBody.innerHTML = devices.map((d) => `
     <tr>
-      <td><span class="trust-dot trust-${(d.trust || 'unknown').toLowerCase()}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
+      <td><span class="trust-dot trust-${sanitizeTrust(d.trust)}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
       <td class="mono">${escHtml(d.mac || "")}</td>
       <td class="mono">${escHtml(d.ip || "")}</td>
       <td>${escHtml(d.deviceType || "Unknown")}</td>
-      <td><span class="trust-badge trust-${(d.trust || 'unknown').toLowerCase()}">${escHtml(d.trust || "Unknown")}</span></td>
+      <td><span class="trust-badge trust-${sanitizeTrust(d.trust)}">${escHtml(d.trust || "Unknown")}</span></td>
       <td class="mono">${d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A"}</td>
     </tr>
   `).join("");
@@ -310,13 +310,13 @@ function renderDeviceTable(devices) {
   }
 
   deviceTableBody.innerHTML = devices.map((d, i) => `
-    <tr class="device-row" data-index="${i}" data-trust="${d.trust || 'unknown'}">
-      <td><span class="trust-dot trust-${(d.trust || 'unknown').toLowerCase()}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
+    <tr class="device-row" data-index="${i}" data-trust="${sanitizeTrust(d.trust)}">
+      <td><span class="trust-dot trust-${sanitizeTrust(d.trust)}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
       <td class="mono">${escHtml(d.mac || "")}</td>
       <td class="mono">${escHtml(d.ip || "")}</td>
       <td>${escHtml(d.vendor || "Unknown")}</td>
       <td>${escHtml(d.deviceType || "Unknown")}</td>
-      <td><span class="trust-badge trust-${(d.trust || 'unknown').toLowerCase()}">${escHtml(d.trust || "Unknown")}</span></td>
+      <td><span class="trust-badge trust-${sanitizeTrust(d.trust)}">${escHtml(d.trust || "Unknown")}</span></td>
       <td class="mono">${d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A"}</td>
     </tr>
   `).join("");
@@ -340,7 +340,7 @@ function openDeviceDetail(device) {
   document.getElementById("detail-name").textContent = device.name || device.hostname || "Unknown Device";
 
   const trustBadge = document.getElementById("detail-trust-badge");
-  const trust = (device.trust || "unknown").toLowerCase();
+  const trust = sanitizeTrust(device.trust);
   trustBadge.textContent = device.trust || "Unknown";
   trustBadge.className = `trust-badge trust-${trust}`;
 
@@ -589,7 +589,7 @@ syncDevicesBtn.addEventListener("click", async () => {
 
 function showConnectionStatus(msg, type) {
   connectionStatus.textContent = msg;
-  connectionStatus.className = `connection-status status-${type}`;
+  connectionStatus.className = `connection-status status-${sanitizeSeverity(type)}`;
   connectionStatus.classList.remove("hidden");
 }
 
@@ -663,7 +663,7 @@ function loadAlerts(uid) {
 
 function buildAlertHtml(a) {
   return `
-    <div class="alert-item alert-${a.severity || "info"}">
+    <div class="alert-item alert-${sanitizeSeverity(a.severity)}">
       <div class="alert-header">
         <span class="alert-type">${escHtml(a.type || "alert")}</span>
         <span class="alert-time">${a.timestamp ? timeAgo(toDate(a.timestamp)) : ""}</span>
@@ -692,6 +692,19 @@ onAuthStateChanged(fbAuth, (user) => {
 // ========== HELPERS ==========
 function currentUid() {
   return window._currentUser?.uid;
+}
+
+
+function sanitizeTrust(val) {
+  const allowed = ["owned", "known", "guest", "unknown", "blocked", "watchlist"];
+  const t = (val || "unknown").toLowerCase();
+  return allowed.includes(t) ? t : "unknown";
+}
+
+function sanitizeSeverity(val) {
+  const allowed = ["info", "low", "medium", "high", "critical", "ok", "error"];
+  const s = (val || "info").toLowerCase();
+  return allowed.includes(s) ? s : "info";
 }
 
 function escHtml(str) {
