@@ -16,7 +16,6 @@
 ## 2026-03-08 - Optimize Port Scanning Thread Creation
 **Learning:** In C++ network scanners (like `transparency-linux`), spawning a new `std::thread` for every single port being scanned (up to 65k ports) creates massive overhead and memory pressure, even if throttled by a condition variable.
 **Action:** Use a fixed-size thread pool (e.g., `std::min(32, (int)ports.size())`) with a shared `std::atomic<size_t>` index to distribute task processing. This turns O(N) thread creations into O(1), significantly improving performance.
-
-## 2026-03-08 - Optimize O(N*M) loop inside map rendering
-**Learning:** Checking for an anomaly specific to each device using `.some` over all anomalies inside a `.forEach` loop of all devices creates an O(N*M) performance issue in rendering loops, particularly on large networks.
-**Action:** When a loop involves checking membership in an array of objects based on an attribute match, pre-compute a `Set` or `Map` of those attributes outside the loop, resulting in an O(N+M) process and significantly faster rendering.
+## 2025-03-22 - [O(1) Anomaly Lookups in Map Render]
+**Learning:** Using an $O(N)$ operation like `Array.prototype.some()` inside a mapping or rendering loop over a large array (like `devices` and `anomalies`) creates a massive performance bottleneck ($O(N \times M)$ complexity).
+**Action:** When working on frontends with large rendering scopes, pre-compute lookup tables (`Map` or `Set`) before the rendering loop. Ensure lookups within the loop are $O(1)$ by using `Map.prototype.get()` or `Set.prototype.has()`.
