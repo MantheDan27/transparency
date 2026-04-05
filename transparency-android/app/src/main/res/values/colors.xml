@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background layers (dark blue depth system) -->
+    <color name="bg_root">#FF060A1C</color>
+    <color name="bg_surface">#FF0A1028</color>
+    <color name="bg_elevated">#FF101838</color>
+    <color name="bg_overlay">#FF162048</color>
+
+    <!-- Derived backgrounds -->
+    <color name="bg_row_alt">#FF080D22</color>
+    <color name="bg_row_sel">#FF142450</color>
+    <color name="bg_nav_active">#FF0E1A40</color>
+
+    <!-- Borders -->
+    <color name="border_default">#FF1E2A50</color>
+    <color name="border_subtle">#FF141E3C</color>
+
+    <!-- Text -->
+    <color name="text_primary">#FFE8ECF4</color>
+    <color name="text_secondary">#FF8892A8</color>
+    <color name="text_tertiary">#FF555E72</color>
+
+    <!-- Accents -->
+    <color name="accent_blue">#FF3D7FFF</color>
+    <color name="accent_cyan">#FF00E5FF</color>
+    <color name="accent_green">#FF00E57A</color>
+    <color name="accent_amber">#FFFFC832</color>
+    <color name="accent_red">#FFFF4060</color>
+    <color name="accent_purple">#FFA855F7</color>
+
+    <!-- Glass button fills (low alpha) -->
+    <color name="glass_primary">#1228649C</color>
+    <color name="glass_secondary">#12A0B4DC</color>
+    <color name="glass_selected">#3800E5FF</color>
+    <color name="glass_pressed">#2328649C</color>
+
+    <!-- Glow -->
+    <color name="glow_cyan">#5000E5FF</color>
+    <color name="glow_cyan_strong">#A000E5FF</color>
+</resources>

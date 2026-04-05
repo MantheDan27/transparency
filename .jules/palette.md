@@ -1,3 +1,5 @@
-## $(date +%Y-%m-%d) - Adding ARIA labels to map controls
-**Learning:** Found that map controls (zoom in, zoom out, reset view) had `title` attributes but were missing explicit `aria-label`s for screen readers, a common a11y pattern that needs to be addressed for icon-only buttons.
-**Action:** Ensure all icon-only buttons have explicit `aria-label` attributes for screen readers, rather than relying solely on `title` attributes.
+## 2024-05-24 - Implicit Form Labels in Vanilla HTML/JS
+
+**Learning:** When dealing with standard HTML/JS implementations without React or framework JSX, raw `<label>` elements frequently lack the explicit `for` attribute and instead rely on visual proximity to their input fields. Screen readers and automated accessibility tools cannot properly associate the input without this `for` attribute referencing the target `id`.
+
+**Action:** Always manually audit and inject `for="targetId"` into `<label>` elements linked to inputs, avoiding linking labels to non-labelable elements like `<div>` buttons, to ensure strict compliance with Web Content Accessibility Guidelines (WCAG) and full screen reader operability.

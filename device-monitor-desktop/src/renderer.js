@@ -1,8 +1,21 @@
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════
-   Transparency — Renderer Process v2.0
+   Transparency — Renderer Process v4.4
    ═══════════════════════════════════════════════════════════════════ */
+
+// ── Performance utilities ─────────────────────────────────────────────────────
+function debounce(fn, ms) {
+  let timer;
+  return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), ms); };
+}
+function throttle(fn, ms) {
+  let last = 0;
+  return function(...args) {
+    const now = Date.now();
+    if (now - last >= ms) { last = now; fn.apply(this, args); }
+  };
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const RISKY_PORTS = new Set([23, 135, 139, 445, 3389, 5900]);
@@ -47,6 +60,16 @@ let currentScanMode  = 'standard';
 let editingRuleId    = null;
 
 // ── DOM helper ────────────────────────────────────────────────────────────────
+
+// Performance Optimization: Debounce helper to prevent excessive UI blocking during rapid input
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
 const $ = id => document.getElementById(id);
 
 function escHtml(str) {
@@ -96,7 +119,7 @@ function switchTab(tabName, filter) {
   if (tab) tab.classList.add('active');
   if (tabName === 'ledger')  refreshLedger();
   if (tabName === 'alerts')  loadAlerts();
-  if (tabName === 'privacy') loadDataStats();
+  if (tabName === 'privacy') { loadDataStats(); loadSchedules(); loadHooks(); loadApiKey(); }
   if (tabName === 'devices' && filter) applyDeviceFilter(filter);
 }
 window.switchTab = switchTab;
@@ -169,8 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
     $('cloudToggleLabel').textContent = cloudEnrichEnabled ? 'Enabled' : 'Disabled';
   });
 
-  // Device search
-  $('deviceSearch').addEventListener('input', () => applyDeviceFilter(currentFilter));
+  // Device search (debounced to prevent lag on every keystroke)
+  $('deviceSearch').addEventListener('input', debounce(() => applyDeviceFilter(currentFilter), 150));
 
   // Select all checkbox
   $('selectAll').addEventListener('change', e => {
@@ -586,8 +609,17 @@ function renderDeviceTable() {
   // Build severity map
   const sevMap = {};
   const sevOrder = { High:3, Medium:2, Low:1 };
+
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N*M) nested array searches (allAnomalies.some inside devs.map)
+  // with O(N+M) Set lookups. This improves table rendering time significantly
+  // when handling large networks with many devices and anomalies.
+  const newDeviceIps = new Set();
+  const changedDeviceIps = new Set();
   for (const a of allAnomalies) {
     if (!sevMap[a.device] || sevOrder[a.severity] > sevOrder[sevMap[a.device]]) sevMap[a.device] = a.severity;
+    if (a.type === 'New Device') newDeviceIps.add(a.device);
+    if (a.type === 'Ports Changed') changedDeviceIps.add(a.device);
   }
 
   tbody.innerHTML = devs.map(dev => {
@@ -599,8 +631,8 @@ function renderDeviceTable() {
     const checked = selectedDevices.has(dev.ip) ? 'checked' : '';
     const hist    = dev.history;
     const lastSeen = hist?.lastSeen ? relativeTime(hist.lastSeen) : 'Just now';
-    const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-    const changed = allAnomalies.some(a => (a.type === 'Ports Changed') && a.device === dev.ip);
+    const isNew   = newDeviceIps.has(dev.ip);
+    const changed = changedDeviceIps.has(dev.ip);
 
     const portBadges = dev.ports?.length
       ? dev.ports.slice(0, 6).map(p => {
@@ -654,40 +686,48 @@ function renderDeviceTable() {
         </td>
       </tr>`;
   }).join('');
-
-  // Bind events
-  tbody.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-    cb.addEventListener('change', e => {
-      e.stopPropagation();
-      const ip = cb.dataset.ip;
-      cb.checked ? selectedDevices.add(ip) : selectedDevices.delete(ip);
-      cb.closest('tr').classList.toggle('selected', cb.checked);
-      updateBulkBar();
-    });
-  });
-
-  tbody.querySelectorAll('.device-row').forEach(row => {
-    row.addEventListener('click', e => {
-      if (e.target.type === 'checkbox' || e.target.classList.contains('detail-btn')) return;
-      const ip = row.dataset.ip;
-      const dev = allDevices.find(d => d.ip === ip);
-      if (dev) openDetailPanel(dev);
-    });
-    row.addEventListener('contextmenu', e => {
-      const ip = row.dataset.ip;
-      const dev = allDevices.find(d => d.ip === ip);
-      if (dev) showContextMenu(e, dev);
-    });
-  });
-
-  tbody.querySelectorAll('.detail-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const dev = allDevices.find(d => d.ip === btn.dataset.ip);
-      if (dev) openDetailPanel(dev);
-    });
-  });
 }
+
+// Event delegation for device table — bound ONCE, not on every render
+(function initDeviceTableDelegation() {
+  const tbody = $('deviceBody');
+  if (!tbody) return;
+
+  tbody.addEventListener('change', e => {
+    const cb = e.target;
+    if (cb.type !== 'checkbox' || !cb.dataset.ip) return;
+    e.stopPropagation();
+    const ip = cb.dataset.ip;
+    cb.checked ? selectedDevices.add(ip) : selectedDevices.delete(ip);
+    const row = cb.closest('tr');
+    if (row) row.classList.toggle('selected', cb.checked);
+    updateBulkBar();
+  });
+
+  tbody.addEventListener('click', e => {
+    // Detail button
+    const detailBtn = e.target.closest('.detail-btn');
+    if (detailBtn) {
+      e.stopPropagation();
+      const dev = allDevices.find(d => d.ip === detailBtn.dataset.ip);
+      if (dev) openDetailPanel(dev);
+      return;
+    }
+    // Row click (not checkbox)
+    if (e.target.type === 'checkbox') return;
+    const row = e.target.closest('.device-row');
+    if (!row) return;
+    const dev = allDevices.find(d => d.ip === row.dataset.ip);
+    if (dev) openDetailPanel(dev);
+  });
+
+  tbody.addEventListener('contextmenu', e => {
+    const row = e.target.closest('.device-row');
+    if (!row) return;
+    const dev = allDevices.find(d => d.ip === row.dataset.ip);
+    if (dev) showContextMenu(e, dev);
+  });
+})();
 
 function updateBulkBar() {
   const bar   = $('bulkBar');
@@ -800,19 +840,20 @@ document.addEventListener('contextmenu', e => {
   }
 });
 
-// Context menu action handler — bound once at module load
-document.addEventListener('DOMContentLoaded', () => {
+// Context menu action handler — bound once at module load via event delegation
+{
   const menu = $('deviceContextMenu');
-  if (!menu) return;
-  menu.addEventListener('click', async e => {
-    const item = e.target.closest('.ctx-item');
-    if (!item || !ctxMenuTarget) return;
-    const action = item.dataset.action;
-    const dev = ctxMenuTarget;
-    hideContextMenu();
-    await handleContextMenuAction(action, dev);
-  });
-});
+  if (menu) {
+    menu.addEventListener('click', async e => {
+      const item = e.target.closest('.ctx-item');
+      if (!item || !ctxMenuTarget) return;
+      const action = item.dataset.action;
+      const dev = ctxMenuTarget;
+      hideContextMenu();
+      await handleContextMenuAction(action, dev);
+    });
+  }
+}
 
 async function handleContextMenuAction(action, dev) {
   if (action === 'open-detail') {
@@ -1006,7 +1047,7 @@ function openDetailPanel(dev, tab) {
         </div>`;
       }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
-  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
   const overviewContent = `
     <div class="detail-section">
@@ -1137,7 +1178,7 @@ function openDetailPanel(dev, tab) {
       <div class="policy-hint">Controls scan depth for this device.</div>
     </div>
     <div class="policy-field">
-      <label>Expected Open Ports</label>
+      <label for="policyExpectedPorts">Expected Open Ports</label>
       <input type="text" class="policy-ports-input" id="policyExpectedPorts" placeholder="e.g. 80, 443, 22" value="${escHtml((policy.expectedPorts||[]).join(', '))}">
       <div class="policy-hint">Alert if ports differ from this profile.</div>
     </div>
@@ -1375,6 +1416,9 @@ function renderMap() {
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+  // ⚡ Bolt Performance Optimization:
+  // Precompute new device lookup to avoid O(N) array search inside the O(M) device render loop
+  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
@@ -1524,6 +1568,14 @@ function renderMap() {
   });
 
   // Device nodes
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup for new devices to avoid O(N*M) nested
+  // searches inside the map rendering loop (activeTiers.forEach -> tierDevices.forEach).
+  // This significantly reduces main-thread blocking during map render for large networks.
+  const newMapDeviceIps = new Set(
+    allAnomalies.filter(a => a.type === 'New Device').map(a => a.device)
+  );
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
@@ -1534,7 +1586,9 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      // ⚡ Bolt Performance Optimization:
+      // O(1) Set lookup instead of O(N) array search inside mapping loop
+      const isNew   = newDeviceIpSet.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
@@ -1553,101 +1607,43 @@ function renderMap() {
   svg += '</g>'; // close transform group
 
   mapEl.innerHTML = svg;
+}
 
-  // ── Interactive behaviors ──
-  const transformGroup = mapEl.querySelector('#mapTransformGroup');
+// ── Map interaction: event delegation (bound ONCE, not per render) ──
+let _mapListenersInit = false;
+function initMapListeners() {
+  if (_mapListenersInit) return;
+  _mapListenersInit = true;
 
-  // Hover effects: highlight connections and glow
-  mapEl.querySelectorAll('.map-clickable').forEach(node => {
-    node.addEventListener('mouseenter', e => {
-      const ip = node.dataset.ip;
-      // Highlight node
-      const glow = node.querySelector('.node-glow');
-      if (glow) glow.setAttribute('opacity', '0.5');
-      node.style.transform = node.getAttribute('transform') || '';
-      // Highlight connection
-      const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
-      if (conn) { conn.setAttribute('opacity', '0.7'); conn.setAttribute('stroke-width', '2.5'); }
-      // Tooltip
-      const dev = allDevices.find(d => d.ip === ip);
-      if (!dev) return;
-      const tooltip = $('mapTooltip');
-      const latMs = typeof dev.latencyMs === 'number' && dev.latencyMs > 0 ? `${Math.round(dev.latencyMs)} ms` : '—';
-      const trustLabel = dev.meta?.trustState ? ` · ${dev.meta.trustState}` : '';
-      tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>
-        <span style="opacity:0.7">${escHtml(dev.ip)}</span><br>
-        ${escHtml(dev.deviceType || '—')}${trustLabel}<br>
-        Latency: ${latMs}<br>
-        <span style="font-size:0.65rem;opacity:0.5">Click to view · Drag to move</span>`;
-      tooltip.style.left = (e.clientX + 14) + 'px';
-      tooltip.style.top  = (e.clientY - 12) + 'px';
-      tooltip.classList.remove('hidden');
-    });
+  const mapEl = $('networkMap');
+  if (!mapEl) return;
 
-    node.addEventListener('mouseleave', () => {
-      const ip = node.dataset.ip;
-      const glow = node.querySelector('.node-glow');
-      if (glow) glow.setAttribute('opacity', '0');
-      const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
-      if (conn) { conn.setAttribute('opacity', '0.3'); conn.setAttribute('stroke-width', '1.2'); }
-      $('mapTooltip').classList.add('hidden');
-    });
-
-    // Click to open detail
-    node.addEventListener('click', e => {
-      if (mapDragNode) return; // Don't click after drag
-      const ip = node.dataset.ip;
-      const dev = allDevices.find(d => d.ip === ip);
-      if (dev) openDetailPanel(dev);
-    });
-  });
-
-  // ── Node Dragging ──
-  mapEl.querySelectorAll('.map-draggable').forEach(node => {
-    node.addEventListener('mousedown', e => {
-      e.stopPropagation();
-      e.preventDefault();
-      mapDragNode = node;
-      const pt = mapEl.createSVGPoint();
-      pt.x = e.clientX;
-      pt.y = e.clientY;
-      const svgPt = pt.matrixTransform(transformGroup.getScreenCTM().inverse());
-      mapDragStartX = svgPt.x;
-      mapDragStartY = svgPt.y;
-      node.classList.add('map-dragging');
-      $('mapTooltip').classList.add('hidden');
-    });
-  });
-
-  // ── Pan (drag background) ──
-  mapEl.addEventListener('mousedown', e => {
-    if (mapDragNode) return;
-    if (e.target === mapEl || e.target.closest('#mapTransformGroup') && !e.target.closest('.map-draggable')) {
-      mapDragging = true;
-      mapDragStartX = e.clientX - mapPanX;
-      mapDragStartY = e.clientY - mapPanY;
-      mapEl.style.cursor = 'grabbing';
-    }
-  });
-
-  document.addEventListener('mousemove', e => {
+  // Throttled mousemove for drag/pan performance
+  const onMouseMove = throttle(e => {
+    const transformGroup = mapEl.querySelector('#mapTransformGroup');
+    if (!transformGroup) return;
     // Node dragging
     if (mapDragNode) {
       const pt = mapEl.createSVGPoint();
-      pt.x = e.clientX;
-      pt.y = e.clientY;
+      pt.x = e.clientX; pt.y = e.clientY;
       const svgPt = pt.matrixTransform(transformGroup.getScreenCTM().inverse());
       const ip = mapDragNode.dataset.ip;
       mapNodePositions.set(ip, { x: svgPt.x, y: svgPt.y });
       mapDragNode.setAttribute('transform', `translate(${svgPt.x},${svgPt.y})`);
-      // Update connections
-      if (gateway) {
-        const gPos = nodePositions.get(gateway.ip);
-        const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
-        if (conn && gPos) {
-          const midX = (gPos.x + svgPt.x) / 2;
-          const midY = (gPos.y + 30 + svgPt.y - 24) / 2 - 10;
-          conn.setAttribute('d', `M${gPos.x},${gPos.y + 30} Q${midX},${midY} ${svgPt.x},${svgPt.y - 24}`);
+      // Update connection curve
+      const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
+      if (conn) {
+        const gwNode = mapEl.querySelector('.map-clickable[data-ip]');
+        // Find gateway position from the first connection's start point
+        const d = conn.getAttribute('d');
+        if (d) {
+          const mMatch = d.match(/^M([\d.]+),([\d.]+)/);
+          if (mMatch) {
+            const gx = parseFloat(mMatch[1]), gy = parseFloat(mMatch[2]);
+            const midX = (gx + svgPt.x) / 2;
+            const midY = (gy + svgPt.y - 24) / 2 - 10;
+            conn.setAttribute('d', `M${gx},${gy} Q${midX},${midY} ${svgPt.x},${svgPt.y - 24}`);
+          }
         }
       }
       return;
@@ -1658,7 +1654,83 @@ function renderMap() {
       mapPanY = e.clientY - mapDragStartY;
       transformGroup.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
     }
+  }, 16); // ~60fps
+
+  // Event delegation for hover/click/drag on map nodes
+  mapEl.addEventListener('mouseenter', e => {
+    const node = e.target.closest('.map-clickable');
+    if (!node) return;
+    const ip = node.dataset.ip;
+    const glow = node.querySelector('.node-glow');
+    if (glow) glow.setAttribute('opacity', '0.5');
+    const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
+    if (conn) { conn.setAttribute('opacity', '0.7'); conn.setAttribute('stroke-width', '2.5'); }
+    const dev = allDevices.find(d => d.ip === ip);
+    if (!dev) return;
+    const tooltip = $('mapTooltip');
+    if (!tooltip) return;
+    const latMs = typeof dev.latencyMs === 'number' && dev.latencyMs > 0 ? `${Math.round(dev.latencyMs)} ms` : '—';
+    const trustLabel = dev.meta?.trustState ? ` · ${dev.meta.trustState}` : '';
+    tooltip.innerHTML = `<strong>${escHtml(dev.meta?.customName || dev.hostname || dev.name)}</strong><br>
+      <span style="opacity:0.7">${escHtml(dev.ip)}</span><br>
+      ${escHtml(dev.deviceType || '—')}${trustLabel}<br>
+      Latency: ${latMs}<br>
+      <span style="font-size:0.65rem;opacity:0.5">Click to view · Drag to move</span>`;
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top  = (e.clientY - 12) + 'px';
+    tooltip.classList.remove('hidden');
+  }, true);
+
+  mapEl.addEventListener('mouseleave', e => {
+    const node = e.target.closest('.map-clickable');
+    if (!node) return;
+    const ip = node.dataset.ip;
+    const glow = node.querySelector('.node-glow');
+    if (glow) glow.setAttribute('opacity', '0');
+    const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
+    if (conn) { conn.setAttribute('opacity', '0.3'); conn.setAttribute('stroke-width', '1.2'); }
+    const tooltip = $('mapTooltip');
+    if (tooltip) tooltip.classList.add('hidden');
+  }, true);
+
+  mapEl.addEventListener('click', e => {
+    if (mapDragNode) return;
+    const node = e.target.closest('.map-clickable');
+    if (!node) return;
+    const ip = node.dataset.ip;
+    const dev = allDevices.find(d => d.ip === ip);
+    if (dev) openDetailPanel(dev);
   });
+
+  // Node drag start
+  mapEl.addEventListener('mousedown', e => {
+    const draggable = e.target.closest('.map-draggable');
+    if (draggable) {
+      e.stopPropagation();
+      e.preventDefault();
+      mapDragNode = draggable;
+      const transformGroup = mapEl.querySelector('#mapTransformGroup');
+      if (transformGroup) {
+        const pt = mapEl.createSVGPoint();
+        pt.x = e.clientX; pt.y = e.clientY;
+        const svgPt = pt.matrixTransform(transformGroup.getScreenCTM().inverse());
+        mapDragStartX = svgPt.x; mapDragStartY = svgPt.y;
+      }
+      draggable.classList.add('map-dragging');
+      const tooltip = $('mapTooltip');
+      if (tooltip) tooltip.classList.add('hidden');
+      return;
+    }
+    // Pan start
+    if (!mapDragNode && (e.target === mapEl || (e.target.closest('#mapTransformGroup') && !e.target.closest('.map-draggable')))) {
+      mapDragging = true;
+      mapDragStartX = e.clientX - mapPanX;
+      mapDragStartY = e.clientY - mapPanY;
+      mapEl.style.cursor = 'grabbing';
+    }
+  });
+
+  document.addEventListener('mousemove', onMouseMove);
 
   document.addEventListener('mouseup', () => {
     if (mapDragNode) {
@@ -1667,21 +1739,24 @@ function renderMap() {
     }
     if (mapDragging) {
       mapDragging = false;
-      mapEl.style.cursor = 'grab';
+      const m = $('networkMap');
+      if (m) m.style.cursor = 'grab';
     }
   });
 
-  // ── Zoom (mouse wheel) ──
+  // Zoom (mouse wheel)
   mapEl.addEventListener('wheel', e => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
     mapZoom = Math.max(0.3, Math.min(3, mapZoom + delta));
-    transformGroup.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
-    // Update zoom info
-    const zoomInfo = mapEl.parentElement.querySelector('.map-zoom-info');
+    const tg = mapEl.querySelector('#mapTransformGroup');
+    if (tg) tg.setAttribute('transform', `translate(${mapPanX},${mapPanY}) scale(${mapZoom})`);
+    const zoomInfo = mapEl.parentElement?.querySelector('.map-zoom-info');
     if (zoomInfo) zoomInfo.textContent = `${Math.round(mapZoom * 100)}%`;
   }, { passive: false });
 }
+// Initialize map listeners once DOM is ready
+initMapListeners();
 
 // Map control functions
 window.mapZoomIn = function() {
@@ -1715,9 +1790,9 @@ async function loadAlertRules() {
 function updateAlertBadge() {
   const unacked = allAlerts.filter(a => !a.acknowledged).length;
   const nb = $('navAlertCount');
-  nb.textContent = unacked;
-  nb.classList.toggle('hidden', unacked === 0);
-  $('kpiAlerts').textContent = allAlerts.length;
+  if (nb) { nb.textContent = unacked; nb.classList.toggle('hidden', unacked === 0); }
+  const ka = $('kpiAlerts');
+  if (ka) ka.textContent = allAlerts.length;
 }
 
 function renderAlerts() {
@@ -2630,23 +2705,8 @@ window.toggleAlertGuidance = function(id) {
   if (el) el.classList.toggle('hidden');
 };
 
-// Override renderAlerts to use tri-section format
-const _originalRenderAlerts = window._originalRenderAlerts || null;
-// Patch renderAlerts to use the new format
-(function patchRenderAlerts() {
-  const container = () => $('alertsContainer');
-  // Monkey-patch: intercept the innerHTML set by replacing the alert render inside renderAlerts
-  // We do this by wrapping the DOM update after a short delay
-  const observer = new MutationObserver(() => {
-    const cont = container();
-    if (!cont) return;
-    cont.querySelectorAll('.alert-item').forEach(item => {
-      if (item.dataset.guidancePatch) return;
-      item.dataset.guidancePatch = '1';
-    });
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-})();
+// Note: alert rendering uses the patched renderAlerts at the bottom of the file.
+// No MutationObserver needed — the override handles rendering directly.
 
 // ── IoT Behavioral Risk Profiling ─────────────────────────────────────────────
 const IOT_CATEGORIES = new Set(['Smart Speaker','Smart TV / Stick','Camera / DVR','IoT Device','Printer']);
@@ -2716,16 +2776,21 @@ function renderConfidenceAlternatives(dev) {
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Set lookups outside the loop to avoid O(N*M) nested
+  // searches inside the candidates array map operation.
+  const pSet = new Set(ports);
+
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST
     .filter(t => t !== mainType)
     .map(t => {
       let score = Math.max(5, mainConf - 20 - Math.floor(Math.random() * 25));
       // Adjust based on signals
-      if (t === 'Router/Gateway' && ports.some(p => [53,80,443].includes(p))) score += 10;
-      if (t === 'NAS' && ports.some(p => [445,2049,548].includes(p))) score += 10;
-      if (t === 'Printer' && ports.some(p => [631,9100].includes(p))) score += 10;
-      if (t === 'Camera / DVR' && ports.some(p => [554,8080].includes(p))) score += 10;
+      if (t === 'Router/Gateway' && (pSet.has(53) || pSet.has(80) || pSet.has(443))) score += 10;
+      if (t === 'NAS' && (pSet.has(445) || pSet.has(2049) || pSet.has(548))) score += 10;
+      if (t === 'Printer' && (pSet.has(631) || pSet.has(9100))) score += 10;
+      if (t === 'Camera / DVR' && (pSet.has(554) || pSet.has(8080))) score += 10;
       return { type: t, score: Math.min(score, mainConf - 5) };
     })
     .sort((a, b) => b.score - a.score)
@@ -3292,20 +3357,7 @@ function renderAlerts() {
   container.innerHTML = filtered.map(a => renderAlertWithGuidance(a)).join('');
 }
 
-// ── Privacy page: load all new sections when tab switches ──────────────────────
-const _origSwitchTab = switchTab;
-function switchTab(tabName, filter) {
-  _origSwitchTab(tabName, filter);
-  if (tabName === 'privacy') {
-    loadSchedules();
-    loadHooks();
-    loadApiKey();
-  }
-}
-window.switchTab = switchTab;
+// Privacy page sections are loaded via the main switchTab function above.
 
-// Load initial data for schedules and hooks
-document.addEventListener('DOMContentLoaded', () => {
-  // Load initial API key
-  setTimeout(loadApiKey, 500);
-});
+// Load initial API key (deferred to avoid blocking first paint)
+setTimeout(loadApiKey, 500);
