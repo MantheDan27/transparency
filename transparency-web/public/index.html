@@ -27,7 +27,7 @@
       </div>
 
       <div class="auth-card">
-        <div id="auth-error" class="auth-error hidden"></div>
+        <div id="auth-error" class="auth-error hidden" aria-live="assertive"></div>
 
         <!-- Login Form -->
         <form id="login-form">
@@ -226,11 +226,11 @@
           <button id="upload-scan-btn" class="btn-primary-action">Upload Scan</button>
         </div>
         <div class="devices-toolbar">
-          <select id="network-filter">
+          <select id="network-filter" aria-label="Filter by network">
             <option value="all">All Networks</option>
           </select>
           <div class="toolbar-search">
-            <input type="text" id="device-search" placeholder="Search devices...">
+            <input type="text" id="device-search" placeholder="Search devices..." aria-label="Search devices">
           </div>
         </div>
         <div class="device-table-wrapper">
@@ -259,7 +259,7 @@
               <h2 id="detail-name">Device Name</h2>
               <span id="detail-trust-badge" class="trust-badge trust-unknown">UNKNOWN</span>
             </div>
-            <button id="detail-close" class="btn-icon" aria-label="Close detail panel">
+            <button id="detail-close" class="btn-icon" aria-label="Close detail panel" title="Close detail panel">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -345,7 +345,7 @@
             </div>
           </div>
           <div class="form-group" style="margin-top: 12px;">
-            <input type="text" id="setting-api-endpoint" placeholder="http://192.168.1.100:7722">
+            <input type="text" id="setting-api-endpoint" placeholder="http://192.168.1.100:7722" aria-label="API Endpoint">
           </div>
           <div class="form-group">
             <label for="setting-api-key">API Key</label>

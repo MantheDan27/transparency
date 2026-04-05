@@ -145,6 +145,18 @@ static string ToNarrow(const wstring& w) {
     return s;
 }
 
+bool ScanEngine::IsSafeIP(const std::wstring& ip) {
+    std::string ipNarrow = ToNarrow(ip);
+
+    struct in_addr addr;
+    if (inet_pton(AF_INET, ipNarrow.c_str(), &addr) == 1) return true;
+
+    struct in6_addr addr6;
+    if (inet_pton(AF_INET6, ipNarrow.c_str(), &addr6) == 1) return true;
+
+    return false;
+}
+
 static wstring IpDwordToWstr(DWORD ip) {
     struct in_addr addr;
     addr.S_un.S_addr = ip;
