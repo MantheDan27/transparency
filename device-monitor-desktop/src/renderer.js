@@ -552,8 +552,12 @@ window.applyDeviceFilter = applyDeviceFilter;
 
 function getFilteredDevices() {
   const search = ($('deviceSearch').value || '').toLowerCase();
-  const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
-  const changedIpSet = new Set(allAnomalies.filter(a => a.type === 'Ports Changed' || a.type === 'New Device').map(a => a.device));
+  const anomalyIpSet = new Set();
+  const changedIpSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.severity === 'High') anomalyIpSet.add(a.device);
+    if (a.type === 'Ports Changed' || a.type === 'New Device') changedIpSet.add(a.device);
+  }
 
   return allDevices.filter(dev => {
     // Trust/filter match
@@ -578,8 +582,12 @@ function getFilteredDevices() {
 
 function updateFilterCounts() {
   const total   = allDevices.length;
-  const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
-  const changedSet   = new Set(allAnomalies.filter(a => a.type === 'Ports Changed' || a.type === 'New Device').map(a => a.device));
+  const anomalyIpSet = new Set();
+  const changedSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.severity === 'High') anomalyIpSet.add(a.device);
+    if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
+  }
 
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
@@ -655,7 +663,7 @@ function renderDeviceTable() {
 
     return `
       <tr class="device-row${selectedDevices.has(dev.ip) ? ' selected' : ''}" data-ip="${escHtml(dev.ip)}">
-        <td class="col-check"><input type="checkbox" data-ip="${escHtml(dev.ip)}" ${checked}></td>
+        <td class="col-check"><input type="checkbox" data-ip="${escHtml(dev.ip)}" ${checked} aria-label="Select device ${escHtml(name)}"></td>
         <td class="col-status"><span class="online-dot" title="Online"></span>${changeDot}</td>
         <td class="col-name">
           <div class="device-name-cell">
@@ -1047,7 +1055,7 @@ function openDetailPanel(dev, tab) {
         </div>`;
       }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
-  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" title="Remove tag ${escHtml(t)}" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
   const overviewContent = `
     <div class="detail-section">
@@ -1069,7 +1077,7 @@ function openDetailPanel(dev, tab) {
         </select>
       </div>
       <div class="detail-field"><span class="detail-label">Tags</span>
-        <div class="detail-val" id="detailTagsArea">${tagChips}<button class="btn btn-secondary btn-xs add-tag-btn" data-ip="${escHtml(dev.ip)}">+ Tag</button></div>
+        <div class="detail-val" id="detailTagsArea">${tagChips}<button class="btn btn-secondary btn-xs add-tag-btn" aria-label="Add tag" title="Add tag" data-ip="${escHtml(dev.ip)}">+ Tag</button></div>
       </div>
       ${fp.summary ? `<div class="explainability-panel">
         <div class="exp-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Why we think this is a ${escHtml(dev.deviceType||'device')}</div>
@@ -1420,6 +1428,18 @@ function renderMap() {
   // Precompute new device lookup to avoid O(N) array search inside the O(M) device render loop
   const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
+  // ⚡ Bolt: Pre-calculate new devices to avoid O(N*M) lookups during rendering
+  const newDeviceSet = new Set();
+  for (const a of allAnomalies) {
+    if (a.type === 'New Device') newDeviceSet.add(a.device);
+  }
+
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N*M) nested array search (allAnomalies.some inside tierDevices.forEach)
+  // with O(N+M) Set lookup. This significantly improves map rendering time for networks
+  // with many devices and frequent changes.
+  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
+
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
   const withoutLatency = devices.filter(d => latencyOf(d) === null);
@@ -1466,6 +1486,12 @@ function renderMap() {
   if (gateway) nodePositions.set(gateway.ip, { x: cx, y: routerY });
 
   const maxPerRow = Math.max(1, Math.floor(W / 120));
+
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute Set of IPs with 'New Device' anomalies outside the render loop
+  // to avoid O(N) array iteration per device inside the mapping loop.
+  const newDeviceIpsMap = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
@@ -2725,7 +2751,11 @@ const VULNERABLE_COMBOS = [
 function getIoTRiskProfile(dev) {
   if (!IOT_CATEGORIES.has(dev.deviceType)) return null;
   const ports = dev.ports || [];
-  const vulns = VULNERABLE_COMBOS.filter(c => ports.includes(c.port));
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup to replace O(N) array includes
+  // inside the filter loop.
+  const portSet = new Set(ports);
+  const vulns = VULNERABLE_COMBOS.filter(c => portSet.has(c.port));
   if (!vulns.length) return null;
 
   const maxRisk = vulns.reduce((max, v) => {
@@ -2775,11 +2805,22 @@ function renderConfidenceAlternatives(dev) {
   const mainType = dev.deviceType || 'Unknown Device';
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computing portSet changes O(N) includes() lookups into O(1) Set.has() checks below.
+  const portSet = new Set(ports);
 
   // ⚡ Bolt Performance Optimization:
   // Pre-compute O(1) Set lookups outside the loop to avoid O(N*M) nested
   // searches inside the candidates array map operation.
   const pSet = new Set(ports);
+
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute boolean condition checks outside the map loop to prevent O(N) array
+  // operations from executing repeatedly inside the O(M) device type rendering loop.
+  const hasRouterPorts = ports.some(p => p === 53 || p === 80 || p === 443);
+  const hasNasPorts = ports.some(p => p === 445 || p === 2049 || p === 548);
+  const hasPrinterPorts = ports.some(p => p === 631 || p === 9100);
+  const hasCameraPorts = ports.some(p => p === 554 || p === 8080);
 
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST

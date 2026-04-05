@@ -27,7 +27,7 @@
       </div>
 
       <div class="auth-card">
-        <div id="auth-error" class="auth-error hidden"></div>
+        <div id="auth-error" class="auth-error hidden" aria-live="assertive"></div>
 
         <!-- Login Form -->
         <form id="login-form">
@@ -259,7 +259,7 @@
               <h2 id="detail-name">Device Name</h2>
               <span id="detail-trust-badge" class="trust-badge trust-unknown">UNKNOWN</span>
             </div>
-            <button id="detail-close" class="btn-icon" aria-label="Close detail panel">
+            <button id="detail-close" class="btn-icon" aria-label="Close detail panel" title="Close detail panel">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -340,7 +340,7 @@
           <h3>Desktop App Connection</h3>
           <div class="setting-row">
             <div>
-              <div class="setting-label">API Endpoint</div>
+              <label class="setting-label" for="setting-api-endpoint">API Endpoint</label>
               <div class="setting-desc">Enter the REST API address of your Transparency desktop app (e.g., http://192.168.1.100:7722)</div>
             </div>
           </div>
