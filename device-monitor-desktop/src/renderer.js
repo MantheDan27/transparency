@@ -74,7 +74,7 @@ const $ = id => document.getElementById(id);
 
 function escHtml(str) {
   if (typeof str !== 'string') return String(str ?? '');
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function dateStamp() {
   return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
