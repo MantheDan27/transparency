@@ -20,6 +20,8 @@
 
 using std::wstring;
 
+
+
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
 
 static const wchar_t* FILTER_LABELS[] = {
