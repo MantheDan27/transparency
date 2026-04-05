@@ -2795,6 +2795,9 @@ function renderConfidenceAlternatives(dev) {
   const mainType = dev.deviceType || 'Unknown Device';
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computing portSet changes O(N) includes() lookups into O(1) Set.has() checks below.
+  const portSet = new Set(ports);
 
   // ⚡ Bolt Performance Optimization:
   // Pre-compute O(1) Set lookups outside the loop to avoid O(N*M) nested
