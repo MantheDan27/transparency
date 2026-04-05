@@ -2776,16 +2776,21 @@ function renderConfidenceAlternatives(dev) {
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Set lookups outside the loop to avoid O(N*M) nested
+  // searches inside the candidates array map operation.
+  const pSet = new Set(ports);
+
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST
     .filter(t => t !== mainType)
     .map(t => {
       let score = Math.max(5, mainConf - 20 - Math.floor(Math.random() * 25));
       // Adjust based on signals
-      if (t === 'Router/Gateway' && ports.some(p => [53,80,443].includes(p))) score += 10;
-      if (t === 'NAS' && ports.some(p => [445,2049,548].includes(p))) score += 10;
-      if (t === 'Printer' && ports.some(p => [631,9100].includes(p))) score += 10;
-      if (t === 'Camera / DVR' && ports.some(p => [554,8080].includes(p))) score += 10;
+      if (t === 'Router/Gateway' && (pSet.has(53) || pSet.has(80) || pSet.has(443))) score += 10;
+      if (t === 'NAS' && (pSet.has(445) || pSet.has(2049) || pSet.has(548))) score += 10;
+      if (t === 'Printer' && (pSet.has(631) || pSet.has(9100))) score += 10;
+      if (t === 'Camera / DVR' && (pSet.has(554) || pSet.has(8080))) score += 10;
       return { type: t, score: Math.min(score, mainConf - 5) };
     })
     .sort((a, b) => b.score - a.score)
