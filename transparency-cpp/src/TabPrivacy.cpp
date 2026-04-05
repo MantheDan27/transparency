@@ -78,6 +78,8 @@ LRESULT CALLBACK TabPrivacy::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_PAINT:      return self->OnPaint(hwnd);
     case WM_ERASEBKGND:{RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1;}
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
+    case WM_DRAWITEM:
+        return self->OnDrawItem(hwnd, reinterpret_cast<DRAWITEMSTRUCT*>(lp));
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
@@ -121,7 +123,7 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
         return hw;
     };
     auto mkBtn = [&](const wchar_t* t, int id, int x, int y, int w, int h = 26) -> HWND {
-        HWND hw = CreateWindowEx(0, L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        HWND hw = CreateWindowEx(0, L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             x, y, w, h, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         return hw;
@@ -413,7 +415,26 @@ LRESULT TabPrivacy::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
 }
 
 LRESULT TabPrivacy::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
-    return 0;
+    if (!dis || dis->CtlType != ODT_BUTTON) return 0;
+
+    HDC hdc = dis->hDC;
+    RECT rc = dis->rcItem;
+    bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+    bool focused = (dis->itemState & ODS_FOCUS) != 0;
+
+    // Destructive buttons get red glass, others neutral
+    int variant = (dis->CtlID == IDC_BTN_DELETE_ALL || dis->CtlID == ID_BTN_HOOK_DEL) ? 2 : 1;
+    Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant, focused);
+
+    wchar_t text[64] = {};
+    GetWindowText(dis->hwndItem, text, 64);
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, variant == 2 ? RGB(255, 180, 180) : Theme::TEXT_PRIMARY);
+    HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+    DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, old);
+
+    return TRUE;
 }
 
 void TabPrivacy::RefreshStats() {
