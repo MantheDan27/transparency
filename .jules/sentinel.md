@@ -32,7 +32,7 @@ Even if data originates from network scanning contexts (like an IP address varia
 
 **Prevention:**
 Always strictly validate data against an allowlist pattern before using it in a shell command string. For IP addresses, verify they contain only alphanumeric characters, dots, colons, and hyphens (as implemented via the `IsValidIP` helper). When possible, use `CreateProcess` or similar non-shell APIs with properly quoted arguments.
-## 2026-03-12 - Command Injection in TabDevices `IsValidIP`
-**Vulnerability:** In `transparency-cpp/src/TabDevices.cpp`, `IsValidIP` allowed hyphens and potentially other characters when verifying IP addresses for shell commands like `ping`, `tracert`, `ssh`, and `nslookup`. This could lead to argument injection vulnerabilities since the command strings were directly appended to and executed via `_wsystem`.
-**Learning:** Even if data originates from network scanning contexts (like an IP address variable), it should not be implicitly trusted or directly interpolated into system shell calls without strict validation or sanitation. `_wsystem` inherently invokes `cmd.exe`, which processes all shell meta-characters. `IsValidIP` was insufficient to prevent argument injection flags.
-**Prevention:** Use `ScanEngine::IsSafeIP` instead, which strictly relies on `InetPtonW` from `<ws2tcpip.h>` to definitively parse and validate legitimate IPv4 or IPv6 addresses.
+## 2024-05-18 - Prevent Command Injection via IP Parameters
+**Vulnerability:** Weak IP validation (`IsValidIP`) used before calling `_wsystem` and `ShellExecute` allowed potential command injection if malicious payloads were supplied (e.g., via malformed network traffic).
+**Learning:** Always use strict networking primitives like `InetPtonW` to validate IP addresses before passing them to the shell, rather than relying on weak regular expressions or simple character matching.
+**Prevention:** Use `ScanEngine::IsSafeIP` uniformly for all IP-based system shell executions.
