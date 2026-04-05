@@ -1,3 +1,5 @@
-## 2024-05-19 - ARIA Labels for Icon-Only Tag Buttons
-**Learning:** In string-interpolated vanilla JS templates, standard accessibility linters may fail to catch missing ARIA labels on dynamic elements like tag removal buttons. Icon-only buttons (like those with "×" or "+") generated dynamically must explicitly include both `aria-label` and `title` to ensure they are accessible and intuitive for screen readers and mouse users.
-**Action:** When working on vanilla JS apps generating HTML via `.map().join('')`, manually verify that all icon-only interactive elements in the template have explicit, descriptive `aria-label` and `title` attributes.
+## 2024-05-24 - Implicit Form Labels in Vanilla HTML/JS
+
+**Learning:** When dealing with standard HTML/JS implementations without React or framework JSX, raw `<label>` elements frequently lack the explicit `for` attribute and instead rely on visual proximity to their input fields. Screen readers and automated accessibility tools cannot properly associate the input without this `for` attribute referencing the target `id`.
+
+**Action:** Always manually audit and inject `for="targetId"` into `<label>` elements linked to inputs, avoiding linking labels to non-labelable elements like `<div>` buttons, to ensure strict compliance with Web Content Accessibility Guidelines (WCAG) and full screen reader operability.
