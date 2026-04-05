@@ -22,7 +22,17 @@ Always wrap dynamically provided executable paths in double quotes: `std::wstrin
 **Vulnerability:** The `ping-host` and `traceroute-host` IPC handlers in `main.js`, and `pingHost`/`getMac` in `scanner.js` pass user-controlled input (`host`/`ip` parameters) directly into a shell command using `exec` without validation. For example: `ping -c 4 ${host}`. A user could enter `127.0.0.1; rm -rf /` or similar to execute arbitrary commands.
 **Learning:** Even internal diagnostic tools must sanitize input. When `exec` or `execPromise` is used to invoke a system command, variables interpolated into the command string must be strictly validated to prevent shell injection, as these functions invoke a subshell which processes shell metacharacters.
 **Prevention:** Use a whitelist-based validation approach (e.g., `^[a-zA-Z0-9.:-]+$`) to ensure only valid hostnames or IP addresses are passed into the command. Alternatively, use `child_process.execFile` or `child_process.spawn` which do not run a subshell and pass arguments directly, making them immune to shell injection.
-## 2024-05-24 - Strict Allowlist Validation for `popen`/`system`
-**Vulnerability:** Command injection and option/flag injection when user input is passed into `popen` or `system` commands.
-**Learning:** Using simple character-stripping algorithms to "sanitize" inputs can silently mutate payloads or still allow arguments starting with `-` (e.g., `-O`, `-h`) to act as unintended command flags, leading to arbitrary logic execution.
-**Prevention:** Implement strict boolean validation using an allowlist of valid characters. Reject the payload entirely if it contains any invalid characters or starts with a hyphen, instead of attempting to strip characters and execute the result.
+## 2026-03-11 - Command Injection in IP Diagnostics Options
+
+**Vulnerability:**
+The `ShowDeviceContextMenu` command handlers in `transparency-cpp/src/TabDevices.cpp` for ping, traceroute, SSH, and reverse DNS directly append user-controlled data (`dev.ip`) into a command string passed to `_wsystem`. A spoofed IP address or manipulated state could contain shell characters (e.g., `&`, `|`, `"`), leading to arbitrary command execution on the host machine.
+
+**Learning:**
+Even if data originates from network scanning contexts (like an IP address variable), it should not be implicitly trusted or directly interpolated into system shell calls without strict validation or sanitation. `_wsystem` inherently invokes `cmd.exe`, which processes all shell meta-characters.
+
+**Prevention:**
+Always strictly validate data against an allowlist pattern before using it in a shell command string. For IP addresses, verify they contain only alphanumeric characters, dots, colons, and hyphens (as implemented via the `IsValidIP` helper). When possible, use `CreateProcess` or similar non-shell APIs with properly quoted arguments.
+## 2026-03-12 - Command Injection in TabDevices `IsValidIP`
+**Vulnerability:** In `transparency-cpp/src/TabDevices.cpp`, `IsValidIP` allowed hyphens and potentially other characters when verifying IP addresses for shell commands like `ping`, `tracert`, `ssh`, and `nslookup`. This could lead to argument injection vulnerabilities since the command strings were directly appended to and executed via `_wsystem`.
+**Learning:** Even if data originates from network scanning contexts (like an IP address variable), it should not be implicitly trusted or directly interpolated into system shell calls without strict validation or sanitation. `_wsystem` inherently invokes `cmd.exe`, which processes all shell meta-characters. `IsValidIP` was insufficient to prevent argument injection flags.
+**Prevention:** Use `ScanEngine::IsSafeIP` instead, which strictly relies on `InetPtonW` from `<ws2tcpip.h>` to definitively parse and validate legitimate IPv4 or IPv6 addresses.

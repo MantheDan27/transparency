@@ -60,6 +60,16 @@ let currentScanMode  = 'standard';
 let editingRuleId    = null;
 
 // ── DOM helper ────────────────────────────────────────────────────────────────
+
+// Performance Optimization: Debounce helper to prevent excessive UI blocking during rapid input
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
 const $ = id => document.getElementById(id);
 
 function escHtml(str) {
@@ -599,8 +609,17 @@ function renderDeviceTable() {
   // Build severity map
   const sevMap = {};
   const sevOrder = { High:3, Medium:2, Low:1 };
+
+  // ⚡ Bolt Performance Optimization:
+  // Replaced O(N*M) nested array searches (allAnomalies.some inside devs.map)
+  // with O(N+M) Set lookups. This improves table rendering time significantly
+  // when handling large networks with many devices and anomalies.
+  const newDeviceIps = new Set();
+  const changedDeviceIps = new Set();
   for (const a of allAnomalies) {
     if (!sevMap[a.device] || sevOrder[a.severity] > sevOrder[sevMap[a.device]]) sevMap[a.device] = a.severity;
+    if (a.type === 'New Device') newDeviceIps.add(a.device);
+    if (a.type === 'Ports Changed') changedDeviceIps.add(a.device);
   }
 
   tbody.innerHTML = devs.map(dev => {
@@ -612,8 +631,8 @@ function renderDeviceTable() {
     const checked = selectedDevices.has(dev.ip) ? 'checked' : '';
     const hist    = dev.history;
     const lastSeen = hist?.lastSeen ? relativeTime(hist.lastSeen) : 'Just now';
-    const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
-    const changed = allAnomalies.some(a => (a.type === 'Ports Changed') && a.device === dev.ip);
+    const isNew   = newDeviceIps.has(dev.ip);
+    const changed = changedDeviceIps.has(dev.ip);
 
     const portBadges = dev.ports?.length
       ? dev.ports.slice(0, 6).map(p => {
@@ -1028,7 +1047,7 @@ function openDetailPanel(dev, tab) {
         </div>`;
       }).join('')
     : '<div style="color:var(--success);font-size:0.85rem">No risks detected for this device.</div>';
-  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
+  const tagChips = tags.map(t => `<span class="tag-chip">${escHtml(t)} <button class="tag-rm" aria-label="Remove tag ${escHtml(t)}" data-tag="${escHtml(t)}" data-ip="${escHtml(dev.ip)}">×</button></span>`).join('');
 
   const overviewContent = `
     <div class="detail-section">
@@ -1159,7 +1178,7 @@ function openDetailPanel(dev, tab) {
       <div class="policy-hint">Controls scan depth for this device.</div>
     </div>
     <div class="policy-field">
-      <label>Expected Open Ports</label>
+      <label for="policyExpectedPorts">Expected Open Ports</label>
       <input type="text" class="policy-ports-input" id="policyExpectedPorts" placeholder="e.g. 80, 443, 22" value="${escHtml((policy.expectedPorts||[]).join(', '))}">
       <div class="policy-hint">Alert if ports differ from this profile.</div>
     </div>
@@ -1397,6 +1416,9 @@ function renderMap() {
   const gateway = allDevices.find(d => d.ports?.includes(53) || d.ports?.includes(80) || d.deviceType === 'Router/Gateway') || allDevices[0];
   const devices = allDevices.filter(d => d.ip !== gateway?.ip);
   const anomalyIpSet = new Set(allAnomalies.filter(a => a.severity === 'High').map(a => a.device));
+  // ⚡ Bolt Performance Optimization:
+  // Precompute new device lookup to avoid O(N) array search inside the O(M) device render loop
+  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
@@ -1546,6 +1568,14 @@ function renderMap() {
   });
 
   // Device nodes
+  // ⚡ Bolt Performance Optimization:
+  // Pre-computed O(1) Set lookup for new devices to avoid O(N*M) nested
+  // searches inside the map rendering loop (activeTiers.forEach -> tierDevices.forEach).
+  // This significantly reduces main-thread blocking during map render for large networks.
+  const newMapDeviceIps = new Set(
+    allAnomalies.filter(a => a.type === 'New Device').map(a => a.device)
+  );
+
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
@@ -1556,7 +1586,9 @@ function renderMap() {
       const pos = nodePositions.get(dev.ip);
       if (!pos) return;
       const isRisky = anomalyIpSet.has(dev.ip);
-      const isNew   = allAnomalies.some(a => a.type === 'New Device' && a.device === dev.ip);
+      // ⚡ Bolt Performance Optimization:
+      // O(1) Set lookup instead of O(N) array search inside mapping loop
+      const isNew   = newDeviceIpSet.has(dev.ip);
       const strokeColor = isRisky ? '#ff5c75' : isNew ? '#ffbe2e' : 'rgba(255,255,255,0.1)';
       const devName = (dev.meta?.customName || dev.hostname || dev.name).slice(0, 14);
 
@@ -2744,16 +2776,21 @@ function renderConfidenceAlternatives(dev) {
   const mainConf = dev.confidence || 50;
   const ports = dev.ports || [];
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Set lookups outside the loop to avoid O(N*M) nested
+  // searches inside the candidates array map operation.
+  const pSet = new Set(ports);
+
   // Build alternate candidates based on port signature similarities
   const candidates = DEVICE_TYPE_LIST
     .filter(t => t !== mainType)
     .map(t => {
       let score = Math.max(5, mainConf - 20 - Math.floor(Math.random() * 25));
       // Adjust based on signals
-      if (t === 'Router/Gateway' && ports.some(p => [53,80,443].includes(p))) score += 10;
-      if (t === 'NAS' && ports.some(p => [445,2049,548].includes(p))) score += 10;
-      if (t === 'Printer' && ports.some(p => [631,9100].includes(p))) score += 10;
-      if (t === 'Camera / DVR' && ports.some(p => [554,8080].includes(p))) score += 10;
+      if (t === 'Router/Gateway' && (pSet.has(53) || pSet.has(80) || pSet.has(443))) score += 10;
+      if (t === 'NAS' && (pSet.has(445) || pSet.has(2049) || pSet.has(548))) score += 10;
+      if (t === 'Printer' && (pSet.has(631) || pSet.has(9100))) score += 10;
+      if (t === 'Camera / DVR' && (pSet.has(554) || pSet.has(8080))) score += 10;
       return { type: t, score: Math.min(score, mainConf - 5) };
     })
     .sort((a, b) => b.score - a.score)

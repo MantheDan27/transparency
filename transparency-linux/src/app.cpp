@@ -10,6 +10,19 @@
 #include <unistd.h>
 #include <array>
 
+// ─── Input Validation ───────────────────────────────────────────────────────
+static bool isValidTarget(const std::string& target) {
+    if (target.empty() || target.length() > 255) return false;
+    // Prevent flag injection
+    if (target[0] == '-') return false;
+
+    // Alphanumeric, dots, hyphens and colons (for IPv6)
+    for (char c : target) {
+        if (!isalnum(c) && c != '.' && c != '-' && c != ':') return false;
+    }
+    return true;
+}
+
 // ─── Color constants ────────────────────────────────────────────────────────
 #define COL_BG       "#0b0e14"
 #define COL_SIDEBAR  "#111520"
@@ -1082,20 +1095,14 @@ void App::runTool(const std::string& tool, const std::string& target) {
 
     std::thread([targetCopy, toolCopy, outputWidget]() {
         std::string cmd;
-        // Strict allowlist validation: reject if contains invalid chars or starts with hyphen
-        bool valid = !targetCopy.empty() && targetCopy[0] != '-';
-        for (char c : targetCopy) {
-            if (!(isalnum(c) || c == '.' || c == ':' || c == '-')) {
-                valid = false;
-                break;
-            }
-        }
 
-        if (!valid) {
-            auto* data = new std::pair<GtkWidget*, std::string>(outputWidget, "Error: Invalid target format");
+        // Strictly validate target before execution
+        if (!isValidTarget(targetCopy)) {
+            auto* data = new std::pair<GtkWidget*, std::string>(outputWidget, "Error: Invalid target format\n");
             g_idle_add(cb_tool_output_idle, data);
             return;
         }
+        std::string safeTarget = targetCopy;
 
         std::string safeTarget = targetCopy;
 
