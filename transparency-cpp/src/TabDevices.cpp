@@ -20,13 +20,6 @@
 
 using std::wstring;
 
-bool IsValidIP(const std::wstring& ip) {
-    if (ip.empty()) return false;
-    for (wchar_t c : ip) {
-        if (!std::iswalnum(c) && c != L'.' && c != L':' && c != L'-') return false;
-    }
-    return true;
-}
 
 
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
