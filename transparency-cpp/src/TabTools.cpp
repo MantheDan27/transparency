@@ -81,7 +81,7 @@ LRESULT CALLBACK TabTools::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: { RECT rc; GetClientRect(hwnd,&rc); FillRect((HDC)wp,&rc,Theme::BrushSurface()); return 1; }
+    case WM_ERASEBKGND: return 1;  // Suppress — OnPaint handles all drawing via double buffer
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_TOOL_RESULT: return self->OnToolResult(hwnd, wp, lp);
     case WM_SCAN_COMPLETE: self->RefreshIpList(); return 0;
@@ -351,7 +351,7 @@ LRESULT TabTools::OnVScroll(HWND hwnd, WPARAM wp) {
 
     if (_scrollY != oldPos) {
         ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+            SW_SCROLLCHILDREN | SW_INVALIDATE);
         UpdateScrollBar(hwnd);
     }
     return 0;
@@ -368,7 +368,7 @@ LRESULT TabTools::OnMouseWheel(HWND hwnd, int delta) {
 
     if (_scrollY != oldPos) {
         ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+            SW_SCROLLCHILDREN | SW_INVALIDATE);
         UpdateScrollBar(hwnd);
     }
     return 0;
@@ -381,8 +381,16 @@ LRESULT TabTools::OnSize(HWND hwnd, int cx, int cy) {
 
 LRESULT TabTools::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
+    HDC hdcScreen = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
+    int cx = rc.right, cy = rc.bottom;
+    if (cx <= 0 || cy <= 0) { EndPaint(hwnd, &ps); return 0; }
+
+    // Double buffer — paint to offscreen bitmap, then blit
+    HDC hdc = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cx, cy);
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdc, hBmp);
+
     FillRect(hdc, &rc, Theme::BrushSurface());
 
     // Section separator
@@ -396,6 +404,13 @@ LRESULT TabTools::OnPaint(HWND hwnd) {
     RECT hdr = { 16, 34, 200, 46 };
     DrawText(hdc, L"DIAGNOSTICS", -1, &hdr, DT_LEFT | DT_SINGLELINE);
     SelectObject(hdc, old);
+
+    // Blit to screen
+    BitBlt(hdcScreen, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
+
+    SelectObject(hdc, hOldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(hdc);
 
     EndPaint(hwnd, &ps);
     return 0;

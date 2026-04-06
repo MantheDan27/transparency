@@ -386,12 +386,8 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SetBkColor(hdc, Theme::BG_SURFACE);
         return (LRESULT)Theme::BrushSurface();
     }
-    case WM_ERASEBKGND: {
-        HDC hdc = (HDC)wp;
-        RECT rc; GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, Theme::BrushSurface());
-        return 1;
-    }
+    case WM_ERASEBKGND:
+        return 1;  // Suppress — OnPaint handles all drawing via double buffer
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -411,8 +407,16 @@ LRESULT TabSmartHome::OnSize(HWND hwnd, int cx, int cy) {
 
 LRESULT TabSmartHome::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
+    HDC hdcScreen = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
+    int cx = rc.right, cy = rc.bottom;
+    if (cx <= 0 || cy <= 0) { EndPaint(hwnd, &ps); return 0; }
+
+    // Double buffer — paint to offscreen bitmap, then blit
+    HDC hdc = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cx, cy);
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdc, hBmp);
+
     FillRect(hdc, &rc, Theme::BrushSurface());
 
     int sOff = -_scrollY;
@@ -433,6 +437,13 @@ LRESULT TabSmartHome::OnPaint(HWND hwnd) {
 
     RECT sep2 = { Theme::SP4, 62 + sOff, rc.right - Theme::SP4, 63 + sOff };
     FillRect(hdc, &sep2, Theme::BrushBorderSubtle());
+
+    // Blit to screen
+    BitBlt(hdcScreen, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
+
+    SelectObject(hdc, hOldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(hdc);
 
     EndPaint(hwnd, &ps);
     return 0;
@@ -473,7 +484,7 @@ LRESULT TabSmartHome::OnVScroll(HWND hwnd, WPARAM wp) {
 
     if (_scrollY != oldPos) {
         ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+            SW_SCROLLCHILDREN | SW_INVALIDATE);
         UpdateScrollBar(hwnd);
     }
     return 0;
@@ -490,7 +501,7 @@ LRESULT TabSmartHome::OnMouseWheel(HWND hwnd, int delta) {
 
     if (_scrollY != oldPos) {
         ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+            SW_SCROLLCHILDREN | SW_INVALIDATE);
         UpdateScrollBar(hwnd);
     }
     return 0;

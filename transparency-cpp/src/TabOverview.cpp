@@ -89,11 +89,8 @@ LRESULT CALLBACK TabOverview::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_PAINT:
         return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: {
-        RECT rc; GetClientRect(hwnd, &rc);
-        FillRect((HDC)wp, &rc, Theme::BrushSurface());
-        return 1;
-    }
+    case WM_ERASEBKGND:
+        return 1;  // Suppress — OnPaint handles all drawing via double buffer
     case WM_COMMAND:
         return self->OnCommand(hwnd, wp, lp);
     case WM_DRAWITEM:
@@ -376,10 +373,9 @@ LRESULT TabOverview::OnVScroll(HWND hwnd, WPARAM wp) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        UpdateWindow(hwnd);
+        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
+            SW_SCROLLCHILDREN | SW_INVALIDATE);
+        UpdateScrollBar(hwnd);
     }
     return 0;
 }
@@ -394,10 +390,9 @@ LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        InvalidateRect(hwnd, nullptr, FALSE);
-        UpdateWindow(hwnd);
+        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
+            SW_SCROLLCHILDREN | SW_INVALIDATE);
+        UpdateScrollBar(hwnd);
     }
     return 0;
 }
@@ -808,10 +803,18 @@ cleanup:
 
 LRESULT TabOverview::OnPaint(HWND hwnd) {
     PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
+    HDC hdcScreen = BeginPaint(hwnd, &ps);
 
     RECT rc;
     GetClientRect(hwnd, &rc);
+    int cx = rc.right, cy = rc.bottom;
+    if (cx <= 0 || cy <= 0) { EndPaint(hwnd, &ps); return 0; }
+
+    // Double buffer — paint to offscreen bitmap, then blit
+    HDC hdc = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cx, cy);
+    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdc, hBmp);
+
     FillRect(hdc, &rc, Theme::BrushSurface());
 
     // Topology map (left portion of bottom area)
@@ -833,6 +836,13 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
                  DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SelectObject(hdc, old);
     }
+
+    // Blit to screen
+    BitBlt(hdcScreen, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
+
+    SelectObject(hdc, hOldBmp);
+    DeleteObject(hBmp);
+    DeleteDC(hdc);
 
     EndPaint(hwnd, &ps);
     return 0;
