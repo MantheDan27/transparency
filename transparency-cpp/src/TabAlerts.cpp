@@ -180,29 +180,27 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | WS_VISIBLE,
         16, explainY, cx - 32, explainH, hwnd, nullptr, hInst, nullptr);
 
-    auto mkExplainLbl = [&](const wchar_t* hdr, int y, int h) -> HWND {
-        // Section label inside panel
+    auto mkExplainLbl = [&](const wchar_t* hdr, int y) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", hdr, WS_CHILD | WS_VISIBLE | SS_LEFT,
-            4, y, 80, 16, _hExplainPanel, nullptr, hInst, nullptr);
+            6, y, cx - 48, 18, _hExplainPanel, nullptr, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
         return hw;
     };
     auto mkExplainEdit = [&](int id, int y, int h) -> HWND {
         HWND hw = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
             WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL,
-            4, y, cx - 40, h, _hExplainPanel, (HMENU)(INT_PTR)id, hInst, nullptr);
+            6, y, cx - 48, h, _hExplainPanel, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         Theme::ApplyDarkEdit(hw);
         return hw;
     };
-    int ey = 2;
-    int thirdH = (explainH - 6) / 3 - 6;
-    mkExplainLbl(L"What happened:", 0, 16);
-    _hExplainWhat = mkExplainEdit(9650, 16, thirdH);
-    ey = 16 + thirdH + 4;
-    mkExplainLbl(L"Why it matters:", ey, 16); ey += 16;
+    int thirdH = (explainH - 12) / 3 - 18;
+    int ey = 4;
+    _hLblWhat = mkExplainLbl(L"What happened:", ey); ey += 18;
+    _hExplainWhat = mkExplainEdit(9650, ey, thirdH); ey += thirdH + 4;
+    _hLblWhy = mkExplainLbl(L"Why it matters:", ey); ey += 18;
     _hExplainWhy = mkExplainEdit(9651, ey, thirdH); ey += thirdH + 4;
-    mkExplainLbl(L"What to do:", ey, 16); ey += 16;
+    _hLblDo = mkExplainLbl(L"What to do:", ey); ey += 18;
     _hExplainDo  = mkExplainEdit(9652, ey, thirdH);
 
     // Default text when no alert selected
@@ -260,24 +258,15 @@ void TabAlerts::LayoutControls(int cx, int cy) {
     if (_hExplainPanel) SetWindowPos(_hExplainPanel, nullptr, 16, explainY, cx - 32, explainH, SWP_NOZORDER);
 
     // Re-layout the three explanation sections inside the panel
-    int thirdH = (explainH - 6) / 3 - 6;
-    int ey = 0;
-    // What happened label + edit
-    if (_hExplainWhat) {
-        HWND lblWhat = GetWindow(_hExplainPanel, GW_CHILD);
-        if (lblWhat) SetWindowPos(lblWhat, nullptr, 4, 0, 80, 16, SWP_NOZORDER);
-        SetWindowPos(_hExplainWhat, nullptr, 4, 16, cx - 40, thirdH, SWP_NOZORDER);
-    }
-    ey = 16 + thirdH + 4;
-    // Why it matters label + edit
-    if (_hExplainWhy) {
-        SetWindowPos(_hExplainWhy, nullptr, 4, ey + 16, cx - 40, thirdH, SWP_NOZORDER);
-    }
-    ey += thirdH + 20;
-    // What to do label + edit
-    if (_hExplainDo) {
-        SetWindowPos(_hExplainDo, nullptr, 4, ey + 16, cx - 40, thirdH, SWP_NOZORDER);
-    }
+    int panelW = cx - 48;
+    int thirdH = (explainH - 12) / 3 - 18;
+    int ey = 4;
+    if (_hLblWhat)     SetWindowPos(_hLblWhat, nullptr, 6, ey, panelW, 18, SWP_NOZORDER); ey += 18;
+    if (_hExplainWhat) SetWindowPos(_hExplainWhat, nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER); ey += thirdH + 4;
+    if (_hLblWhy)      SetWindowPos(_hLblWhy, nullptr, 6, ey, panelW, 18, SWP_NOZORDER); ey += 18;
+    if (_hExplainWhy)  SetWindowPos(_hExplainWhy, nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER); ey += thirdH + 4;
+    if (_hLblDo)       SetWindowPos(_hLblDo, nullptr, 6, ey, panelW, 18, SWP_NOZORDER); ey += 18;
+    if (_hExplainDo)   SetWindowPos(_hExplainDo, nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER);
 
     int rulesY = explainY + explainH + 18;
     int ruleH = cy - rulesY - 16;

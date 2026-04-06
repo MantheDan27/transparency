@@ -45,6 +45,9 @@ private:
     HWND _hExplainWhat    = nullptr;   // "What happened"
     HWND _hExplainWhy     = nullptr;   // "Why it matters"
     HWND _hExplainDo      = nullptr;   // "What to do"
+    HWND _hLblWhat        = nullptr;   // label for "What happened"
+    HWND _hLblWhy         = nullptr;   // label for "Why it matters"
+    HWND _hLblDo          = nullptr;   // label for "What to do"
     HWND _hRuleList       = nullptr;
     HWND _hBtnAddRule     = nullptr;
     HWND _hBtnEditRule    = nullptr;

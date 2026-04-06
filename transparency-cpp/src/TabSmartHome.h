@@ -61,6 +61,18 @@ private:
                                          const std::wstring& ip, bool online);
     static std::string GenerateMessageId();
 
+    // Google Home OAuth & Home Graph API
+    void GoogleOpenAuth();
+    void GoogleExchangeToken();
+    void GoogleRefreshToken();
+    void AppendGoogleTokenLog(const std::wstring& text);
+    void GoogleHGRequestSync();
+    void GoogleHGQueryDevices();
+    void GoogleHGDisconnect();
+    void AppendGoogleHGLog(const std::wstring& text);
+    std::string BuildHomeGraphSyncPayload();
+    std::string BuildHomeGraphQueryPayload(const std::wstring& endpointId);
+
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
 
@@ -106,6 +118,27 @@ private:
     HWND _hBtnGoogleLink = nullptr;
     HWND _hBtnGoogleDiscover = nullptr;
     HWND _hGoogleOut = nullptr;
+
+    // Google Home OAuth & Home Graph API
+    HWND _hGoogleClientId = nullptr;
+    HWND _hGoogleClientSecret = nullptr;
+    HWND _hGoogleAuthCode = nullptr;
+    HWND _hGoogleRedirectUri = nullptr;
+    HWND _hBtnGoogleOpenAuth = nullptr;
+    HWND _hBtnGoogleGetToken = nullptr;
+    HWND _hBtnGoogleRefresh = nullptr;
+    HWND _hGoogleTokenOut = nullptr;
+
+    // Google Home Graph API controls
+    HWND _hGoogleProjectId = nullptr;
+    HWND _hBtnGoogleHGSync = nullptr;
+    HWND _hBtnGoogleHGQuery = nullptr;
+    HWND _hBtnGoogleHGDisconnect = nullptr;
+    HWND _hGoogleHGLog = nullptr;
+
+    // Stored Google tokens
+    std::wstring _googleAccessToken;
+    std::wstring _googleRefreshToken;
 
     // Automation / triggers
     HWND _hTriggerList = nullptr;

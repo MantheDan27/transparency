@@ -377,6 +377,95 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         }
         return 0;
     }
+    case WM_APP + 110: { // Google token exchange response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            self->AppendGoogleTokenLog(L"[RESPONSE] " + *resp);
+            // Parse access_token and refresh_token from JSON
+            string json = WideToUtf8(*resp);
+            string at = JsonExtract(json, "access_token");
+            string rt = JsonExtract(json, "refresh_token");
+            if (!at.empty()) {
+                self->_googleAccessToken = Utf8ToWide(at);
+                self->AppendGoogleTokenLog(L"[SUCCESS] Access token received (" +
+                    std::to_wstring(at.size()) + L" chars)");
+                if (self->_hGoogleStatus)
+                    SetWindowText(self->_hGoogleStatus, L"Status: Connected (token active)");
+            }
+            if (!rt.empty()) {
+                self->_googleRefreshToken = Utf8ToWide(rt);
+                self->AppendGoogleTokenLog(L"[INFO] Refresh token saved");
+            }
+            if (at.empty()) {
+                self->AppendGoogleTokenLog(L"[ERROR] No access_token in response");
+                if (self->_hGoogleStatus)
+                    SetWindowText(self->_hGoogleStatus, L"Status: Token exchange failed");
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    case WM_APP + 111: { // Google token refresh response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            self->AppendGoogleTokenLog(L"[RESPONSE] " + *resp);
+            string json = WideToUtf8(*resp);
+            string at = JsonExtract(json, "access_token");
+            if (!at.empty()) {
+                self->_googleAccessToken = Utf8ToWide(at);
+                self->AppendGoogleTokenLog(L"[SUCCESS] Access token refreshed");
+                if (self->_hGoogleStatus)
+                    SetWindowText(self->_hGoogleStatus, L"Status: Connected (token refreshed)");
+            } else {
+                self->AppendGoogleTokenLog(L"[ERROR] Refresh failed");
+                if (self->_hGoogleStatus)
+                    SetWindowText(self->_hGoogleStatus, L"Status: Refresh failed");
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    case WM_APP + 112: { // Home Graph Request Sync response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            if (resp->empty() || resp->find(L"{}") != wstring::npos ||
+                resp->find(L"HTTP 2") != wstring::npos) {
+                self->AppendGoogleHGLog(L"[SUCCESS] Request Sync accepted — Google will re-sync devices");
+            } else {
+                self->AppendGoogleHGLog(L"[RESPONSE] " + *resp);
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    case WM_APP + 113: { // Home Graph Report State response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            if (resp->empty() || resp->find(L"{}") != wstring::npos ||
+                resp->find(L"HTTP 2") != wstring::npos) {
+                self->AppendGoogleHGLog(L"[SUCCESS] Device state reported to Home Graph");
+            } else {
+                self->AppendGoogleHGLog(L"[RESPONSE] " + *resp);
+            }
+            delete resp;
+        }
+        return 0;
+    }
+    case WM_APP + 114: { // Home Graph Disconnect response
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (resp) {
+            if (resp->empty() || resp->find(L"{}") != wstring::npos ||
+                resp->find(L"HTTP 2") != wstring::npos) {
+                self->AppendGoogleHGLog(L"[SUCCESS] Agent user disconnected from Home Graph");
+                if (self->_hGoogleStatus)
+                    SetWindowText(self->_hGoogleStatus, L"Status: Disconnected");
+            } else {
+                self->AppendGoogleHGLog(L"[RESPONSE] " + *resp);
+            }
+            delete resp;
+        }
+        return 0;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORLISTBOX:
@@ -690,6 +779,92 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
         L"  \"Hey Google, ask Transparency to scan for new devices\"\r\n"
         L"  \"Hey Google, ask Transparency if my network is secure\"");
     y += 78;
+
+    // ── Google Home Access Token Retrieval ───────────────────────────────────
+    MakeSection(hwnd, L"Google Home Access Token Retrieval (OAuth 2.0)", y, cx, hInst);
+    y += 24;
+
+    mkLbl(L"CLIENT ID", 16, y, 80);
+    _hGoogleClientId = mkEdit(L"your-project.apps.googleusercontent.com", IDC_GOOGLE_CLIENT_ID,
+        100, y - 2, cx - 116, 24);
+    y += 28;
+
+    mkLbl(L"CLIENT SECRET", 16, y, 100);
+    _hGoogleClientSecret = mkEdit(L"Your client secret", IDC_GOOGLE_CLIENT_SECRET,
+        120, y - 2, cx - 136, 24);
+    SendMessage(_hGoogleClientSecret, EM_SETPASSWORDCHAR, (WPARAM)L'\x2022', 0);
+    y += 28;
+
+    mkLbl(L"REDIRECT URI", 16, y, 100);
+    _hGoogleRedirectUri = mkEdit(L"http://localhost/callback", IDC_GOOGLE_REDIRECT_URI,
+        120, y - 2, cx - 136, 24);
+    SetWindowText(_hGoogleRedirectUri, L"http://localhost/callback");
+    y += 28;
+
+    _hBtnGoogleOpenAuth = mkBtn(L"1. Open Authorization URL", IDC_BTN_GOOGLE_OPEN_AUTH,
+        16, y, 200, 28);
+    y += 36;
+
+    mkLbl(L"AUTH CODE", 16, y, 80);
+    _hGoogleAuthCode = mkEdit(L"Paste authorization code from redirect", IDC_GOOGLE_AUTH_CODE,
+        100, y - 2, cx - 116, 24);
+    y += 28;
+
+    _hBtnGoogleGetToken = mkBtn(L"2. Exchange for Token", IDC_BTN_GOOGLE_GET_TOKEN,
+        16, y, 180, 28);
+    _hBtnGoogleRefresh = mkBtn(L"3. Refresh Token", IDC_BTN_GOOGLE_REFRESH,
+        204, y, 150, 28);
+    y += 36;
+
+    mkLbl(L"TOKEN LOG", 16, y, 80);
+    y += 18;
+    _hGoogleTokenOut = mkEdit(nullptr, IDC_GOOGLE_TOKEN_OUT, 16, y, cx - 32, 100, true);
+    SetWindowText(_hGoogleTokenOut,
+        L"Google Home Access Token Retrieval\r\n"
+        L"─────────────────────────────────────\r\n"
+        L"1. Create a project at console.cloud.google.com\r\n"
+        L"2. Enable the HomeGraph API and create OAuth 2.0 credentials\r\n"
+        L"3. Set scopes: https://www.googleapis.com/auth/homegraph\r\n"
+        L"4. Enter Client ID & Secret, then click \"Open Authorization URL\"\r\n"
+        L"5. Paste the authorization code and click \"Exchange for Token\"\r\n"
+        L"\r\n"
+        L"Endpoint: https://oauth2.googleapis.com/token\r\n"
+        L"Scope: https://www.googleapis.com/auth/homegraph");
+    y += 108;
+
+    // ── Google Home Graph API ────────────────────────────────────────────────
+    MakeSection(hwnd, L"Google Home Graph API", y, cx, hInst);
+    y += 24;
+
+    mkLbl(L"PROJECT ID", 16, y, 80);
+    _hGoogleProjectId = mkEdit(L"your-google-cloud-project-id", IDC_GOOGLE_PROJECT_ID,
+        100, y - 2, cx - 116, 24);
+    y += 30;
+
+    _hBtnGoogleHGSync = mkBtn(L"Request Sync", IDC_BTN_GOOGLE_HG_SYNC, 16, y, 130, 28);
+    _hBtnGoogleHGQuery = mkBtn(L"Query Devices", IDC_BTN_GOOGLE_HG_QUERY, 154, y, 130, 28);
+    _hBtnGoogleHGDisconnect = mkBtn(L"Disconnect Agent", IDC_BTN_GOOGLE_HG_DISCONNECT, 292, y, 140, 28);
+    y += 36;
+
+    mkLbl(L"HOME GRAPH LOG", 16, y, 120);
+    y += 18;
+    _hGoogleHGLog = mkEdit(nullptr, IDC_GOOGLE_HG_LOG, 16, y, cx - 32, 140, true);
+    SetWindowText(_hGoogleHGLog,
+        L"Google Home Graph API\r\n"
+        L"──────────────────────────────\r\n"
+        L"Request Sync:      POST google.home.graph.v1.HomeGraphApiService/RequestSync\r\n"
+        L"                   Triggers Google to re-sync devices from your smart home action\r\n"
+        L"                   Call after device list changes (new/removed devices)\r\n"
+        L"\r\n"
+        L"Query Devices:     POST google.home.graph.v1.HomeGraphApiService/ReportStateAndNotification\r\n"
+        L"                   Reports device state (online/offline, connectivity) to Google\r\n"
+        L"                   Enables real-time status in Google Home app\r\n"
+        L"\r\n"
+        L"Disconnect Agent:  POST google.home.graph.v1.HomeGraphApiService/Disconnect\r\n"
+        L"                   Removes all devices registered by this agent user\r\n"
+        L"\r\n"
+        L"Requires a valid OAuth access token and Google Cloud project ID.");
+    y += 148;
 
     // ── Automation Triggers ──────────────────────────────────────────────────
     MakeSection(hwnd, L"Automation Triggers", y, cx, hInst);
@@ -1251,6 +1426,277 @@ void TabSmartHome::AlexaSHSendChangeReport() {
     }).detach();
 }
 
+// ── Google Home OAuth & Home Graph API ───────────────────────────────────────
+
+void TabSmartHome::AppendGoogleTokenLog(const std::wstring& text) {
+    if (!_hGoogleTokenOut) return;
+    int len = GetWindowTextLength(_hGoogleTokenOut);
+    SendMessage(_hGoogleTokenOut, EM_SETSEL, len, len);
+    SendMessage(_hGoogleTokenOut, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+void TabSmartHome::AppendGoogleHGLog(const std::wstring& text) {
+    if (!_hGoogleHGLog) return;
+    int len = GetWindowTextLength(_hGoogleHGLog);
+    SendMessage(_hGoogleHGLog, EM_SETSEL, len, len);
+    SendMessage(_hGoogleHGLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+void TabSmartHome::GoogleOpenAuth() {
+    wchar_t clientId[512] = {};
+    wchar_t redirectUri[512] = {};
+    GetWindowText(_hGoogleClientId, clientId, 512);
+    GetWindowText(_hGoogleRedirectUri, redirectUri, 512);
+
+    if (!clientId[0]) {
+        MessageBox(_hwnd,
+            L"Enter your Google OAuth Client ID in the \"Google Home Access Token Retrieval\" section, "
+            L"then click \"Open Authorization URL\".",
+            L"Google Home Setup", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    // Build Google OAuth 2.0 authorization URL
+    std::string cid = UrlEncode(WideToUtf8(clientId));
+    std::string ruri = UrlEncode(WideToUtf8(redirectUri));
+
+    std::string url = "https://accounts.google.com/o/oauth2/v2/auth?"
+        "client_id=" + cid +
+        "&redirect_uri=" + ruri +
+        "&response_type=code"
+        "&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fhomegraph"
+        "&access_type=offline"
+        "&prompt=consent";
+
+    wstring wurl = Utf8ToWide(url);
+    ShellExecute(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+
+    AppendGoogleTokenLog(L"[INFO] Google authorization URL opened in browser");
+    AppendGoogleTokenLog(L"[INFO] After consent, copy the 'code' parameter from the redirect URL");
+    if (_hGoogleStatus)
+        SetWindowText(_hGoogleStatus, L"Status: Waiting for authorization code...");
+}
+
+void TabSmartHome::GoogleExchangeToken() {
+    wchar_t clientId[512] = {}, clientSecret[512] = {};
+    wchar_t authCode[1024] = {}, redirectUri[512] = {};
+    GetWindowText(_hGoogleClientId, clientId, 512);
+    GetWindowText(_hGoogleClientSecret, clientSecret, 512);
+    GetWindowText(_hGoogleAuthCode, authCode, 1024);
+    GetWindowText(_hGoogleRedirectUri, redirectUri, 512);
+
+    if (!clientId[0] || !clientSecret[0] || !authCode[0]) {
+        AppendGoogleTokenLog(L"[ERROR] Client ID, Client Secret, and Auth Code are all required");
+        return;
+    }
+
+    AppendGoogleTokenLog(L"[INFO] Exchanging authorization code for tokens...");
+    if (_hGoogleStatus)
+        SetWindowText(_hGoogleStatus, L"Status: Exchanging token...");
+
+    std::string body =
+        "grant_type=authorization_code"
+        "&code=" + UrlEncode(WideToUtf8(authCode)) +
+        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
+        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret)) +
+        "&redirect_uri=" + UrlEncode(WideToUtf8(redirectUri));
+
+    HWND hwnd = _hwnd;
+    std::thread([this, body, hwnd]() {
+        std::string resp = HttpPost(L"oauth2.googleapis.com", L"/token", body);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 110, 0, (LPARAM)result);
+    }).detach();
+}
+
+void TabSmartHome::GoogleRefreshToken() {
+    if (_googleRefreshToken.empty()) {
+        AppendGoogleTokenLog(L"[ERROR] No refresh token available. Exchange an auth code first.");
+        return;
+    }
+
+    wchar_t clientId[512] = {}, clientSecret[512] = {};
+    GetWindowText(_hGoogleClientId, clientId, 512);
+    GetWindowText(_hGoogleClientSecret, clientSecret, 512);
+
+    if (!clientId[0] || !clientSecret[0]) {
+        AppendGoogleTokenLog(L"[ERROR] Client ID and Client Secret are required for refresh");
+        return;
+    }
+
+    AppendGoogleTokenLog(L"[INFO] Refreshing Google access token...");
+    if (_hGoogleStatus)
+        SetWindowText(_hGoogleStatus, L"Status: Refreshing token...");
+
+    std::string body =
+        "grant_type=refresh_token"
+        "&refresh_token=" + UrlEncode(WideToUtf8(_googleRefreshToken)) +
+        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
+        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret));
+
+    HWND hwnd = _hwnd;
+    std::thread([this, body, hwnd]() {
+        std::string resp = HttpPost(L"oauth2.googleapis.com", L"/token", body);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 111, 0, (LPARAM)result);
+    }).detach();
+}
+
+std::string TabSmartHome::BuildHomeGraphSyncPayload() {
+    wchar_t projectId[256] = {};
+    GetWindowText(_hGoogleProjectId, projectId, 256);
+    std::string agentUserId = WideToUtf8(projectId);
+    if (agentUserId.empty()) agentUserId = "transparency-user-1";
+
+    return "{\"agentUserId\":\"" + agentUserId + "\"}";
+}
+
+std::string TabSmartHome::BuildHomeGraphQueryPayload(const std::wstring& endpointId) {
+    // Build ReportStateAndNotification payload
+    if (!_mainWnd) return "{}";
+    ScanResult r = _mainWnd->GetLastResult();
+
+    wchar_t projectId[256] = {};
+    GetWindowText(_hGoogleProjectId, projectId, 256);
+    std::string agentUserId = WideToUtf8(projectId);
+    if (agentUserId.empty()) agentUserId = "transparency-user-1";
+
+    std::string requestId = GenerateMessageId();
+
+    // Build device states
+    std::string states;
+    int count = 0;
+    for (auto& d : r.devices) {
+        bool isSmart = false;
+        for (int p : d.openPorts) {
+            if (p == 8008 || p == 8009 || p == 8443 || p == 8123 ||
+                p == 1883 || p == 8883 || p == 49152 || p == 49153)
+                isSmart = true;
+        }
+        if (d.deviceType == L"IoT Device" || d.deviceType == L"Smart Speaker" ||
+            d.deviceType == L"Smart TV" || d.deviceType == L"Camera")
+            isSmart = true;
+        if (!d.vendor.empty() &&
+            (d.vendor.find(L"Google") != wstring::npos || d.vendor.find(L"Amazon") != wstring::npos ||
+             d.vendor.find(L"Philips") != wstring::npos || d.vendor.find(L"TP-Link") != wstring::npos))
+            isSmart = true;
+
+        if (!isSmart) continue;
+
+        std::string epId = WideToUtf8(d.mac.empty() ? d.ip : d.mac);
+        bool online = true; // device is in scan result, so it's online
+
+        if (count > 0) states += ",";
+        states += "\"" + epId + "\":{\"online\":true,\"status\":\"SUCCESS\"}";
+        count++;
+    }
+
+    return
+        "{"
+        "\"requestId\":\"" + requestId + "\","
+        "\"agentUserId\":\"" + agentUserId + "\","
+        "\"payload\":{"
+            "\"devices\":{"
+                "\"states\":{" + states + "}"
+            "}"
+        "}"
+        "}";
+}
+
+void TabSmartHome::GoogleHGRequestSync() {
+    if (_googleAccessToken.empty()) {
+        AppendGoogleHGLog(L"[ERROR] No access token. Complete Google OAuth flow first.");
+        return;
+    }
+
+    wchar_t projectId[256] = {};
+    GetWindowText(_hGoogleProjectId, projectId, 256);
+    if (!projectId[0]) {
+        AppendGoogleHGLog(L"[ERROR] Enter your Google Cloud Project ID.");
+        return;
+    }
+
+    AppendGoogleHGLog(L"[INFO] Sending Request Sync to Home Graph API...");
+    std::string payload = BuildHomeGraphSyncPayload();
+    wstring token = _googleAccessToken;
+
+    HWND hwnd = _hwnd;
+    std::thread([this, payload, token, hwnd]() {
+        std::string resp = HttpPostJson(
+            L"homegraph.googleapis.com",
+            L"/v1/devices:requestSync",
+            payload, token);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 112, 0, (LPARAM)result);
+    }).detach();
+}
+
+void TabSmartHome::GoogleHGQueryDevices() {
+    if (_googleAccessToken.empty()) {
+        AppendGoogleHGLog(L"[ERROR] No access token. Complete Google OAuth flow first.");
+        return;
+    }
+
+    wchar_t projectId[256] = {};
+    GetWindowText(_hGoogleProjectId, projectId, 256);
+    if (!projectId[0]) {
+        AppendGoogleHGLog(L"[ERROR] Enter your Google Cloud Project ID.");
+        return;
+    }
+
+    AppendGoogleHGLog(L"[INFO] Reporting device states to Home Graph API...");
+
+    // Report state for all smart devices
+    std::string payload = BuildHomeGraphQueryPayload(L"");
+    wstring token = _googleAccessToken;
+
+    HWND hwnd = _hwnd;
+    std::thread([this, payload, token, hwnd]() {
+        std::string resp = HttpPostJson(
+            L"homegraph.googleapis.com",
+            L"/v1/devices:reportStateAndNotification",
+            payload, token);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 113, 0, (LPARAM)result);
+    }).detach();
+}
+
+void TabSmartHome::GoogleHGDisconnect() {
+    if (_googleAccessToken.empty()) {
+        AppendGoogleHGLog(L"[ERROR] No access token. Complete Google OAuth flow first.");
+        return;
+    }
+
+    wchar_t projectId[256] = {};
+    GetWindowText(_hGoogleProjectId, projectId, 256);
+    if (!projectId[0]) {
+        AppendGoogleHGLog(L"[ERROR] Enter your Google Cloud Project ID.");
+        return;
+    }
+
+    int ret = MessageBox(_hwnd,
+        L"This will disconnect all devices registered by this agent user from Google Home. Continue?",
+        L"Disconnect Agent", MB_YESNO | MB_ICONWARNING);
+    if (ret != IDYES) return;
+
+    AppendGoogleHGLog(L"[INFO] Disconnecting agent user from Home Graph...");
+
+    std::string agentUserId = WideToUtf8(projectId);
+    if (agentUserId.empty()) agentUserId = "transparency-user-1";
+    std::string payload = "{\"agentUserId\":\"" + agentUserId + "\"}";
+    wstring token = _googleAccessToken;
+
+    HWND hwnd = _hwnd;
+    std::thread([this, payload, token, hwnd]() {
+        std::string resp = HttpPostJson(
+            L"homegraph.googleapis.com",
+            L"/v1/devices:disconnect",
+            payload, token);
+        wstring* result = new wstring(Utf8ToWide(resp));
+        PostMessage(hwnd, WM_APP + 114, 0, (LPARAM)result);
+    }).detach();
+}
+
 // ── Command handling ─────────────────────────────────────────────────────────
 
 LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
@@ -1288,14 +1734,34 @@ LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         break;
 
     case IDC_BTN_GOOGLE_LINK:
-        if (_hGoogleStatus)
-            SetWindowText(_hGoogleStatus, L"Status: Linking... (OAuth flow would open here)");
+    case IDC_BTN_GOOGLE_OPEN_AUTH:
+        GoogleOpenAuth();
+        break;
+
+    case IDC_BTN_GOOGLE_GET_TOKEN:
+        GoogleExchangeToken();
+        break;
+
+    case IDC_BTN_GOOGLE_REFRESH:
+        GoogleRefreshToken();
         break;
 
     case IDC_BTN_GOOGLE_DISCOVER:
         if (_hGoogleStatus)
             SetWindowText(_hGoogleStatus, L"Status: Syncing devices with Google Home...");
         PopulateSmartDevices();
+        break;
+
+    case IDC_BTN_GOOGLE_HG_SYNC:
+        GoogleHGRequestSync();
+        break;
+
+    case IDC_BTN_GOOGLE_HG_QUERY:
+        GoogleHGQueryDevices();
+        break;
+
+    case IDC_BTN_GOOGLE_HG_DISCONNECT:
+        GoogleHGDisconnect();
         break;
 
     case IDC_BTN_SMART_ADD_TRIGGER: {
