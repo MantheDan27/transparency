@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include "Models.h"
 #include "Scanner.h"
 
@@ -41,6 +42,8 @@ public:
 
 private:
     mutable std::mutex  _mutex;
+    std::condition_variable _cv;
+    bool                _configChanged{ false };
     std::atomic<bool>   _running{ false };
     std::atomic<bool>   _stopRequested{ false };
     std::thread         _workerThread;

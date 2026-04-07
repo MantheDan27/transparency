@@ -132,7 +132,7 @@ void testDeviceOffline() {
     std::cout << "testDeviceOffline passed" << std::endl;
 }
 
-int main() {
+int wmain() {
     testNewDevice();
     testRiskyPort();
     testPortChanged();

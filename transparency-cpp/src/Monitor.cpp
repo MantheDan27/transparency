@@ -70,6 +70,7 @@ void Monitor::Start(
 
 void Monitor::Stop() {
     _stopRequested = true;
+    _cv.notify_all();
     _scanner.Cancel();
     if (_workerThread.joinable()) _workerThread.join();
     _running = false;
@@ -80,6 +81,8 @@ void Monitor::Stop() {
 void Monitor::UpdateConfig(const MonitorConfig& config) {
     std::lock_guard<std::mutex> lk(_mutex);
     _config = config;
+    _configChanged = true;
+    _cv.notify_all();
 }
 
 // ─── Getters ─────────────────────────────────────────────────────────────────
@@ -105,30 +108,35 @@ void Monitor::WorkerLoop() {
     while (!_stopRequested) {
         MonitorConfig cfg;
         {
-            std::lock_guard<std::mutex> lk(_mutex);
+            std::unique_lock<std::mutex> lk(_mutex);
             cfg = _config;
+            _configChanged = false;
         }
 
         if (!cfg.enabled) {
-            // Sleep briefly and re-check
-            for (int i = 0; i < 20 && !_stopRequested; i++) Sleep(500);
+            std::unique_lock<std::mutex> lk(_mutex);
+            _cv.wait_for(lk, std::chrono::milliseconds(500), [this]() {
+                return _stopRequested.load() || _configChanged;
+            });
             continue;
         }
 
         if (IsInQuietHours(cfg)) {
-            for (int i = 0; i < 10 && !_stopRequested; i++) Sleep(1000);
+            std::unique_lock<std::mutex> lk(_mutex);
+            _cv.wait_for(lk, std::chrono::milliseconds(1000), [this]() {
+                return _stopRequested.load() || _configChanged;
+            });
             continue;
         }
 
         PerformChecks();
 
-        // Sleep for interval
+        // Wait for interval
         int sleepMs = cfg.intervalMinutes * 60 * 1000;
-        int elapsed = 0;
-        while (elapsed < sleepMs && !_stopRequested) {
-            Sleep(500);
-            elapsed += 500;
-        }
+        std::unique_lock<std::mutex> lk(_mutex);
+        _cv.wait_for(lk, std::chrono::milliseconds(sleepMs), [this]() {
+            return _stopRequested.load() || _configChanged;
+        });
     }
 }
 
