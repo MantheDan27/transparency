@@ -36,3 +36,14 @@ Always strictly validate data against an allowlist pattern before using it in a 
 **Vulnerability:** Weak IP validation (`IsValidIP`) used before calling `_wsystem` and `ShellExecute` allowed potential command injection if malicious payloads were supplied (e.g., via malformed network traffic).
 **Learning:** Always use strict networking primitives like `InetPtonW` to validate IP addresses before passing them to the shell, rather than relying on weak regular expressions or simple character matching.
 **Prevention:** Use `ScanEngine::IsSafeIP` uniformly for all IP-based system shell executions.
+
+## 2024-05-28 - Incomplete HTML Escaping via DOM textContent
+
+**Vulnerability:**
+The `escHtml` function in `transparency-web/public/js/dashboard.js` relied on assigning text to a detached DOM element (`div.textContent = str;`) and then reading `div.innerHTML`. This approach correctly escapes `<`, `>`, and `&`, but fails to escape single (`'`) and double (`"`) quotes. Because `escHtml` is used extensively to interpolate user-controlled data (like device names or MAC addresses) into HTML attributes, an attacker could supply a payload containing quotes to break out of the attribute and inject arbitrary scripts (XSS).
+
+**Learning:**
+DOM-based text insertion (`textContent`) is designed for rendering safe text nodes, not for securely escaping strings meant to be embedded within HTML attributes. It lacks the context of HTML attributes, so it does not escape quotes, risking Cross-Site Scripting (XSS).
+
+**Prevention:**
+When manually escaping HTML for use in vanilla JS template literals (e.g., `.map().join('')`), always explicitly escape `&`, `<`, `>`, `"`, and `'` using strict regex string replacements or robust allowlists, rather than relying on `textContent`.
