@@ -36,3 +36,8 @@ Always strictly validate data against an allowlist pattern before using it in a 
 **Vulnerability:** Weak IP validation (`IsValidIP`) used before calling `_wsystem` and `ShellExecute` allowed potential command injection if malicious payloads were supplied (e.g., via malformed network traffic).
 **Learning:** Always use strict networking primitives like `InetPtonW` to validate IP addresses before passing them to the shell, rather than relying on weak regular expressions or simple character matching.
 **Prevention:** Use `ScanEngine::IsSafeIP` uniformly for all IP-based system shell executions.
+
+## 2024-04-11 - DOM-based HTML Escaping Vulnerability
+**Vulnerability:** XSS vulnerability found in `transparency-web/public/js/dashboard.js`. The `escHtml` function used DOM-based escaping by assigning string values to `textContent` and retrieving the `innerHTML` of a detached DOM element.
+**Learning:** DOM-based `textContent` to `innerHTML` conversion fails to escape single and double quote characters (i.e., `"` and `'`). As a result, when strings processed by this `escHtml` function are interpolated into HTML attributes (like data attributes or classes), an attacker can break out of the attribute by injecting quotes, thus leading to Cross-Site Scripting (XSS).
+**Prevention:** Avoid relying on DOM properties for HTML escaping. Instead, use a strict regex-based implementation that explicitly replaces `&`, `<`, `>`, `"`, and `'` with their corresponding HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#39;`).
