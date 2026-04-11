@@ -19,3 +19,6 @@
 ## 2025-03-22 - [O(1) Anomaly Lookups in Map Render]
 **Learning:** Using an $O(N)$ operation like `Array.prototype.some()` inside a mapping or rendering loop over a large array (like `devices` and `anomalies`) creates a massive performance bottleneck ($O(N \times M)$ complexity).
 **Action:** When working on frontends with large rendering scopes, pre-compute lookup tables (`Map` or `Set`) before the rendering loop. Ensure lookups within the loop are $O(1)$ by using `Map.prototype.get()` or `Set.prototype.has()`.
+## 2025-04-11 - [Optimize N+1 IPC Calls for Disk Operations]
+**Learning:** Repeating IPC calls in a loop (like `setDeviceMeta`) where each call triggers a synchronous disk write (`saveJSON`) creates a massive I/O bottleneck ($O(N)$ IPC and disk writes).
+**Action:** When performing bulk updates, consolidate the data into a single object, pass it through a single new IPC handler (e.g., `bulk-set-device-meta`), and perform a single $O(1)$ disk write.
