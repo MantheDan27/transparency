@@ -116,6 +116,12 @@ void testIpChanged() {
     std::cout << "testIpChanged passed" << std::endl;
 }
 
+/**
+ * @brief Verifies that a device present in a previous scan and missing from the current scan is reported as offline.
+ *
+ * Constructs a previous scan containing a device with IP "192.168.1.100" and an empty current scan, runs anomaly analysis,
+ * and asserts that a `device_offline` anomaly is produced for that IP.
+ */
 void testDeviceOffline() {
     ScanResult current;
     ScanResult previous;
@@ -132,7 +138,15 @@ void testDeviceOffline() {
     std::cout << "testDeviceOffline passed" << std::endl;
 }
 
-int main() {
+/**
+ * @brief Program entry point that executes the ScanEngine anomaly test suite.
+ *
+ * Runs the test cases for new device detection, risky ports, port changes, IP changes,
+ * and device offline detection. On successful completion prints a confirmation message and exits.
+ *
+ * @return int 0 on success.
+ */
+int wmain() {
     testNewDevice();
     testRiskyPort();
     testPortChanged();
