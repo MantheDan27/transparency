@@ -1192,10 +1192,10 @@ function openDetailPanel(dev, tab) {
     </div>
     <div class="policy-field" style="display:flex;flex-direction:column;gap:0.5rem">
       <label>Alert If…</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyAlertNewPorts" ${policy.alertNewPorts?'checked':''}>New unexpected ports appear</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyAlertIpChange" ${policy.alertIpChange?'checked':''}>IP address changes</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyAlertHostChange" ${policy.alertHostChange?'checked':''}>Hostname changes</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyMuteAlerts" ${muteAlerts?'checked':''}>Mute all alerts for this device</label>
+      <label class="checkbox-label" for="policyAlertNewPorts"><input type="checkbox" id="policyAlertNewPorts" ${policy.alertNewPorts?'checked':''}>New unexpected ports appear</label>
+      <label class="checkbox-label" for="policyAlertIpChange"><input type="checkbox" id="policyAlertIpChange" ${policy.alertIpChange?'checked':''}>IP address changes</label>
+      <label class="checkbox-label" for="policyAlertHostChange"><input type="checkbox" id="policyAlertHostChange" ${policy.alertHostChange?'checked':''}>Hostname changes</label>
+      <label class="checkbox-label" for="policyMuteAlerts"><input type="checkbox" id="policyMuteAlerts" ${muteAlerts?'checked':''}>Mute all alerts for this device</label>
     </div>
     <button class="btn btn-primary btn-sm" id="savePolicyBtn" style="margin-top:0.75rem">Save Policy</button>
   </div>`;
