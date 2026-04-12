@@ -512,6 +512,15 @@ ipcMain.handle('set-device-meta', async (_e, key, updates) => {
   return { success: true };
 });
 
+ipcMain.handle('bulk-set-device-meta', async (_e, updatesByKey) => {
+  for (const [key, updates] of Object.entries(updatesByKey)) {
+    deviceMeta[key] = { ...getMeta(key), ...updates };
+  }
+  saveJSON('device-meta.json', deviceMeta);
+  return { success: true };
+});
+
+
 ipcMain.handle('get-all-device-meta', async () => {
   return deviceMeta;
 });

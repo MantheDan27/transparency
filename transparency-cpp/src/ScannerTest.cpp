@@ -159,7 +159,7 @@ void test_fingerprint() {
     std::cout << "All tests passed successfully!" << std::endl;
 }
 
-int main() {
+int wmain() {
     test_fingerprint();
     return 0;
 }
