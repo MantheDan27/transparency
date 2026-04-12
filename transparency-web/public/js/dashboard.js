@@ -719,12 +719,13 @@ function sanitizeSeverity(val) {
   return allowed.includes(s) ? s : "info";
 }
 
-// Reuse a single detached element for HTML escaping to avoid
-// creating hundreds of throwaway DOM nodes during table renders.
-const _escDiv = document.createElement("div");
 function escHtml(str) {
-  _escDiv.textContent = str;
-  return _escDiv.innerHTML;
+  str = String(str ?? '');
+  return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
 }
 
 function toDate(val) {

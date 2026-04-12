@@ -36,3 +36,13 @@ Always strictly validate data against an allowlist pattern before using it in a 
 **Vulnerability:** Weak IP validation (`IsValidIP`) used before calling `_wsystem` and `ShellExecute` allowed potential command injection if malicious payloads were supplied (e.g., via malformed network traffic).
 **Learning:** Always use strict networking primitives like `InetPtonW` to validate IP addresses before passing them to the shell, rather than relying on weak regular expressions or simple character matching.
 **Prevention:** Use `ScanEngine::IsSafeIP` uniformly for all IP-based system shell executions.
+## 2024-05-25 - XSS via DOM-based escaping and bypassable type checks
+
+**Vulnerability:**
+HTML escaping functions in `transparency-web/public/js/dashboard.js` used DOM manipulation (`div.textContent`) which does not safely escape quotes (`'` and `"`), allowing XSS attacks via attribute injection. In `device-monitor-desktop/src/renderer.js`, returning early for non-string types (`if (typeof str !== 'string') return String(str);`) allowed XSS payloads inside arrays (e.g., `["<script>alert(1)</script>"]`) to bypass escaping logic entirely, as the array elements are eventually cast to string without being escaped.
+
+**Learning:**
+DOM-based escaping is insufficient for rendering dynamic data inside HTML attributes. Input type validation that skips filtering logic on non-string inputs can be bypassed when frameworks or components automatically cast complex types (like arrays) to strings later in the process.
+
+**Prevention:**
+Always use explicit regex-based string replacements (or strict allowlists) escaping `&`, `<`, `>`, `"`, and `'`. Ensure inputs are always explicitly cast to string (e.g., `str = String(str ?? '')`) before applying regex replacements rather than bypassing logic for non-strings.
