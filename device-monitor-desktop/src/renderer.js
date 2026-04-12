@@ -73,7 +73,7 @@ function debounce(func, wait) {
 const $ = id => document.getElementById(id);
 
 function escHtml(str) {
-  if (typeof str !== 'string') return String(str ?? '');
+  str = String(str ?? '');
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function dateStamp() {
