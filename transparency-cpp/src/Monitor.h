@@ -11,6 +11,70 @@
 #include "Models.h"
 #include "Scanner.h"
 
+/**
+ * Start monitoring using the provided configuration and register callbacks.
+ * @param config Monitoring configuration to apply.
+ * @param onScanComplete Callback invoked with each scan's result.
+ * @param onInternetChange Optional callback invoked when internet connectivity changes.
+ * @param onGatewayMacChange Optional callback invoked with the previous and new gateway MAC values.
+ * @param onAlert Optional callback invoked with an alert type and message.
+ * @param onDnsChange Optional callback invoked when DNS server information changes.
+ */
+/**
+ * Stop monitoring and terminate the background worker thread.
+ */
+/**
+ * Update the active monitoring configuration; the worker thread will observe the change and adapt.
+ * @param config New monitoring configuration to apply.
+ */
+/**
+ * Retrieve the current monitoring configuration.
+ * @return The active MonitorConfig.
+ */
+/**
+ * Retrieve the most recently observed internet connectivity status.
+ * @return The last recorded InternetStatus.
+ */
+/**
+ * Store a previous scan result for use when comparing against future scans.
+ * @param sr ScanResult to record as the previous scan.
+ */
+/**
+ * Main loop executed by the worker thread; runs monitoring cycles until stop is requested.
+ */
+/**
+ * Execute a single cycle of monitoring checks and dispatch callbacks for detected changes.
+ */
+/**
+ * Check current internet connectivity and return the resulting status.
+ * @return Updated InternetStatus after performing the check.
+ */
+/**
+ * Determine the current gateway MAC address as observed by the system.
+ * @return Gateway MAC address as a wide string.
+ */
+/**
+ * Determine the current DNS server configuration as observed by the system.
+ * @return DNS server information as a wide string.
+ */
+/**
+ * Obtain the system's default gateway IP address.
+ * @return Default gateway IP as a wide string.
+ */
+/**
+ * Determine whether current time falls within configured quiet hours.
+ * @param config Configuration whose quiet-hours rules are evaluated.
+ * @return `true` if the current time is within quiet hours defined by `config`, `false` otherwise.
+ */
+/**
+ * Get the current local time formatted as an HHMM wide string (e.g., "0930").
+ * @return Current time in HHMM format.
+ */
+/**
+ * Send a payload to the specified webhook URL.
+ * @param url Destination webhook URL.
+ * @param payload Payload to POST to the webhook.
+ */
 class Monitor {
 public:
     Monitor();

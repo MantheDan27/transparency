@@ -66,7 +66,12 @@ void Monitor::Start(
     _workerThread = std::thread(&Monitor::WorkerLoop, this);
 }
 
-// ─── Stop ─────────────────────────────────────────────────────────────────────
+/**
+ * @brief Stops the monitor's background activity and waits for shutdown to complete.
+ *
+ * Signals the worker loop to stop, notifies the condition variable, cancels any active scan,
+ * joins the worker thread if it is running, and marks the monitor as not running.
+ */
 
 void Monitor::Stop() {
     _stopRequested = true;
@@ -76,7 +81,14 @@ void Monitor::Stop() {
     _running = false;
 }
 
-// ─── UpdateConfig ─────────────────────────────────────────────────────────────
+/**
+ * @brief Atomically replaces the monitor's configuration and notifies the background worker to reload it.
+ *
+ * Updates the stored configuration, marks that the configuration has changed, and signals the worker thread
+ * so it can pick up the new settings promptly.
+ *
+ * @param config New monitor configuration to apply.
+ */
 
 void Monitor::UpdateConfig(const MonitorConfig& config) {
     std::lock_guard<std::mutex> lk(_mutex);
@@ -102,7 +114,15 @@ void Monitor::SetPreviousScan(const ScanResult& sr) {
     _previousScan = sr;
 }
 
-// ─── WorkerLoop ──────────────────────────────────────────────────────────────
+/**
+ * @brief Runs the monitor's background loop that performs periodic checks.
+ *
+ * @details Executes on the worker thread until shutdown is requested. It
+ * observes the current configuration, skips active monitoring when the monitor
+ * is disabled or during configured quiet hours, invokes PerformChecks() when
+ * monitoring is active, and waits between iterations. The loop wakes early on
+ * stop requests or when the configuration is changed.
+ */
 
 void Monitor::WorkerLoop() {
     while (!_stopRequested) {
