@@ -1015,7 +1015,7 @@ function openDetailPanel(dev, tab) {
 
   // Quick action strip
   const sv = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="pointer-events:none">${d}</svg>`;
-  const qaBtn = (qa, icon, lbl) => `<button class="detail-qa-btn" data-qa="${qa}" title="${lbl}">${sv(icon)}<span style="pointer-events:none">${lbl}</span></button>`;
+  const qaBtn = (qa, icon, lbl) => `<button class="detail-qa-btn" data-qa="${qa}" title="${lbl}" aria-label="${lbl}">${sv(icon)}<span style="pointer-events:none">${lbl}</span></button>`;
   const qaHtml = `<div class="detail-quick-actions" id="detailQA">
     ${qaBtn('ping',  '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>', 'Ping')}
     ${qaBtn('trace', '<path d="M3 12h18M12 3l9 9-9 9"/>', 'Trace')}

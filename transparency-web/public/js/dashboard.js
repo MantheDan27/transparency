@@ -37,6 +37,8 @@ let unsubDevices = null;
 let unsubAlerts = null;
 let allDevicesCache = [];
 let allNetworksCache = [];
+let selectedRow = null;
+let searchDebounceTimer = null;
 
 // ========== DASHBOARD INIT ==========
 window.loadDashboard = async function (user) {
@@ -252,14 +254,17 @@ networkFilter.addEventListener("change", () => {
   }
 });
 
-// Device search
+// Device search (debounced for scroll/render performance)
 deviceSearch.addEventListener("input", () => {
-  const term = deviceSearch.value.toLowerCase();
-  const rows = deviceTableBody.querySelectorAll("tr.device-row");
-  rows.forEach((row) => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(term) ? "" : "none";
-  });
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    const term = deviceSearch.value.toLowerCase();
+    const rows = deviceTableBody.querySelectorAll("tr.device-row");
+    rows.forEach((row) => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = text.includes(term) ? "" : "none";
+    });
+  }, 150);
 });
 
 async function loadAllDevices(uid) {
@@ -303,35 +308,35 @@ function loadDevices(uid, networkId) {
 
 function renderDeviceTable(devices) {
   deviceCount.textContent = devices.length;
+  selectedRow = null;
 
   if (devices.length === 0) {
     deviceTableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No devices found. Upload a scan or connect your desktop app.</td></tr>';
     return;
   }
 
-  deviceTableBody.innerHTML = devices.map((d, i) => `
-    <tr class="device-row" data-index="${i}" data-trust="${sanitizeTrust(d.trust)}">
-      <td><span class="trust-dot trust-${sanitizeTrust(d.trust)}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
-      <td class="mono">${escHtml(d.mac || "")}</td>
-      <td class="mono">${escHtml(d.ip || "")}</td>
-      <td>${escHtml(d.vendor || "Unknown")}</td>
-      <td>${escHtml(d.deviceType || "Unknown")}</td>
-      <td><span class="trust-badge trust-${sanitizeTrust(d.trust)}">${escHtml(d.trust || "Unknown")}</span></td>
-      <td class="mono">${d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A"}</td>
-    </tr>
-  `).join("");
-
-  // Attach row click for detail panel
-  deviceTableBody.querySelectorAll(".device-row").forEach((row) => {
-    row.addEventListener("click", () => {
-      const idx = parseInt(row.dataset.index, 10);
-      openDeviceDetail(allDevicesCache[idx]);
-      // Highlight selected row
-      deviceTableBody.querySelectorAll(".device-row").forEach((r) => r.classList.remove("selected"));
-      row.classList.add("selected");
-    });
-  });
+  // Build HTML in a single string to minimize reflows
+  const htmlParts = new Array(devices.length);
+  for (let i = 0; i < devices.length; i++) {
+    const d = devices[i];
+    const trust = sanitizeTrust(d.trust);
+    htmlParts[i] = `<tr class="device-row" data-index="${i}" data-trust="${trust}"><td><span class="trust-dot trust-${trust}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td><td class="mono">${escHtml(d.mac || "")}</td><td class="mono">${escHtml(d.ip || "")}</td><td>${escHtml(d.vendor || "Unknown")}</td><td>${escHtml(d.deviceType || "Unknown")}</td><td><span class="trust-badge trust-${trust}">${escHtml(d.trust || "Unknown")}</span></td><td class="mono">${d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A"}</td></tr>`;
+  }
+  deviceTableBody.innerHTML = htmlParts.join("");
 }
+
+// Event delegation for device table row clicks (avoids per-row listeners)
+deviceTableBody.addEventListener("click", (e) => {
+  const row = e.target.closest("tr.device-row");
+  if (!row) return;
+  const idx = parseInt(row.dataset.index, 10);
+  if (isNaN(idx) || idx >= allDevicesCache.length) return;
+  openDeviceDetail(allDevicesCache[idx]);
+  // Highlight selected row — track directly instead of re-querying all rows
+  if (selectedRow) selectedRow.classList.remove("selected");
+  row.classList.add("selected");
+  selectedRow = row;
+});
 
 // ========== DEVICE DETAIL PANEL ==========
 function openDeviceDetail(device) {
@@ -385,7 +390,11 @@ function closeDetailPanel() {
   setTimeout(() => {
     detailPanel.classList.add("hidden");
   }, 300);
-  deviceTableBody.querySelectorAll(".device-row").forEach((r) => r.classList.remove("selected"));
+  // Clear selected row directly instead of re-querying all rows
+  if (selectedRow) {
+    selectedRow.classList.remove("selected");
+    selectedRow = null;
+  }
 }
 
 detailClose.addEventListener("click", closeDetailPanel);
@@ -636,7 +645,7 @@ function loadAlerts(uid) {
         return;
       }
 
-      alertFeed.innerHTML = "";
+      const alertHtmlParts = [];
       const alertItems = [];
       let alertCount = 0;
 
@@ -644,9 +653,12 @@ function loadAlerts(uid) {
         const a = d.data();
         alertCount++;
         const html = buildAlertHtml(a);
-        alertFeed.innerHTML += html;
+        alertHtmlParts.push(html);
         if (alertItems.length < 5) alertItems.push(html);
       });
+
+      // Set innerHTML once instead of appending in a loop
+      alertFeed.innerHTML = alertHtmlParts.join("");
 
       // Overview alerts (top 5)
       overviewAlerts.innerHTML = alertItems.join("");
@@ -707,13 +719,12 @@ function sanitizeSeverity(val) {
   return allowed.includes(s) ? s : "info";
 }
 
+// Reuse a single detached element for HTML escaping to avoid
+// creating hundreds of throwaway DOM nodes during table renders.
+const _escDiv = document.createElement("div");
 function escHtml(str) {
-  if (typeof str !== 'string') str = String(str ?? '');
-  return str.replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+  _escDiv.textContent = str;
+  return _escDiv.innerHTML;
 }
 
 function toDate(val) {
