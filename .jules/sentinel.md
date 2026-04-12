@@ -36,14 +36,13 @@ Always strictly validate data against an allowlist pattern before using it in a 
 **Vulnerability:** Weak IP validation (`IsValidIP`) used before calling `_wsystem` and `ShellExecute` allowed potential command injection if malicious payloads were supplied (e.g., via malformed network traffic).
 **Learning:** Always use strict networking primitives like `InetPtonW` to validate IP addresses before passing them to the shell, rather than relying on weak regular expressions or simple character matching.
 **Prevention:** Use `ScanEngine::IsSafeIP` uniformly for all IP-based system shell executions.
-
-## 2024-05-28 - Incomplete HTML Escaping via DOM textContent
+## 2025-04-07 - Cross-Site Scripting (XSS) via Attribute Injection in escHtml
 
 **Vulnerability:**
-The `escHtml` function in `transparency-web/public/js/dashboard.js` relied on assigning text to a detached DOM element (`div.textContent = str;`) and then reading `div.innerHTML`. This approach correctly escapes `<`, `>`, and `&`, but fails to escape single (`'`) and double (`"`) quotes. Because `escHtml` is used extensively to interpolate user-controlled data (like device names or MAC addresses) into HTML attributes, an attacker could supply a payload containing quotes to break out of the attribute and inject arbitrary scripts (XSS).
+The `escHtml` function in `transparency-web/public/js/dashboard.js` used `div.textContent` and `div.innerHTML` to escape HTML. While this escapes `<` and `>`, it does not reliably escape double quotes (`"`) or single quotes (`'`), leaving attributes vulnerable to injection if user-controlled input is interpolated into HTML attributes.
 
 **Learning:**
-DOM-based text insertion (`textContent`) is designed for rendering safe text nodes, not for securely escaping strings meant to be embedded within HTML attributes. It lacks the context of HTML attributes, so it does not escape quotes, risking Cross-Site Scripting (XSS).
+DOM-based text insertion (`textContent`) is designed to prevent HTML element injection but does not always safely escape quote characters for use within HTML attributes. When dynamically generating HTML via template literals, using robust regex-based escaping or strict allowlists is required to prevent attribute injection.
 
 **Prevention:**
-When manually escaping HTML for use in vanilla JS template literals (e.g., `.map().join('')`), always explicitly escape `&`, `<`, `>`, `"`, and `'` using strict regex string replacements or robust allowlists, rather than relying on `textContent`.
+Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.

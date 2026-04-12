@@ -1015,7 +1015,7 @@ function openDetailPanel(dev, tab) {
 
   // Quick action strip
   const sv = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="pointer-events:none">${d}</svg>`;
-  const qaBtn = (qa, icon, lbl) => `<button class="detail-qa-btn" data-qa="${qa}" title="${lbl}">${sv(icon)}<span style="pointer-events:none">${lbl}</span></button>`;
+  const qaBtn = (qa, icon, lbl) => `<button class="detail-qa-btn" data-qa="${qa}" title="${lbl}" aria-label="${lbl}">${sv(icon)}<span style="pointer-events:none">${lbl}</span></button>`;
   const qaHtml = `<div class="detail-quick-actions" id="detailQA">
     ${qaBtn('ping',  '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>', 'Ping')}
     ${qaBtn('trace', '<path d="M3 12h18M12 3l9 9-9 9"/>', 'Trace')}
@@ -1192,10 +1192,10 @@ function openDetailPanel(dev, tab) {
     </div>
     <div class="policy-field" style="display:flex;flex-direction:column;gap:0.5rem">
       <label>Alert If…</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyAlertNewPorts" ${policy.alertNewPorts?'checked':''}>New unexpected ports appear</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyAlertIpChange" ${policy.alertIpChange?'checked':''}>IP address changes</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyAlertHostChange" ${policy.alertHostChange?'checked':''}>Hostname changes</label>
-      <label class="checkbox-label"><input type="checkbox" id="policyMuteAlerts" ${muteAlerts?'checked':''}>Mute all alerts for this device</label>
+      <label class="checkbox-label" for="policyAlertNewPorts"><input type="checkbox" id="policyAlertNewPorts" ${policy.alertNewPorts?'checked':''}>New unexpected ports appear</label>
+      <label class="checkbox-label" for="policyAlertIpChange"><input type="checkbox" id="policyAlertIpChange" ${policy.alertIpChange?'checked':''}>IP address changes</label>
+      <label class="checkbox-label" for="policyAlertHostChange"><input type="checkbox" id="policyAlertHostChange" ${policy.alertHostChange?'checked':''}>Hostname changes</label>
+      <label class="checkbox-label" for="policyMuteAlerts"><input type="checkbox" id="policyMuteAlerts" ${muteAlerts?'checked':''}>Mute all alerts for this device</label>
     </div>
     <button class="btn btn-primary btn-sm" id="savePolicyBtn" style="margin-top:0.75rem">Save Policy</button>
   </div>`;

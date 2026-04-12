@@ -19,3 +19,6 @@
 ## 2025-03-22 - [O(1) Anomaly Lookups in Map Render]
 **Learning:** Using an $O(N)$ operation like `Array.prototype.some()` inside a mapping or rendering loop over a large array (like `devices` and `anomalies`) creates a massive performance bottleneck ($O(N \times M)$ complexity).
 **Action:** When working on frontends with large rendering scopes, pre-compute lookup tables (`Map` or `Set`) before the rendering loop. Ensure lookups within the loop are $O(1)$ by using `Map.prototype.get()` or `Set.prototype.has()`.
+## 2026-10-24 - C++ Wait Loop Performance Optimization
+**Learning:** Using busy-wait loops with `Sleep()` inside a background worker thread (`Monitor::WorkerLoop`) consumes unnecessary CPU cycles and causes lag in responsiveness to stop/update requests, as the thread wakes up continuously just to check flags.
+**Action:** Replace `Sleep()`-based busy-wait loops with `std::condition_variable::wait_for` alongside a `std::unique_lock`. This allows the thread to sleep optimally without consuming CPU, while remaining instantly responsive to `notify_all()` when configuration changes or the application shuts down.
