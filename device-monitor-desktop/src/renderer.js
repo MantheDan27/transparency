@@ -764,21 +764,31 @@ async function bulkAction(action) {
     return;
   }
   if (action === 'markKnown') {
+    const updates = {};
     for (const ip of ips) {
       const dev = allDevices.find(d => d.ip === ip);
-      if (dev) await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { trustState:'known' });
+      if (dev) updates[getDeviceKey(dev)] = { trustState: 'known' };
+    }
+    if (Object.keys(updates).length > 0) {
+      await window.electronAPI.bulkSetDeviceMeta(updates);
     }
     showToast(`Marked ${ips.length} device(s) as Known.`, 'success');
     clearSelection();
     renderDeviceTable();
   }
   if (action === 'watchlist') {
+    const updates = {};
+    const allMeta = await window.electronAPI.getAllDeviceMeta();
     for (const ip of ips) {
       const dev = allDevices.find(d => d.ip === ip);
       if (dev) {
-        const cur = await window.electronAPI.getDeviceMeta(getDeviceKey(dev));
-        await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { watchlist: !cur.watchlist, trustState: !cur.watchlist ? 'watchlist' : 'known' });
+        const key = getDeviceKey(dev);
+        const cur = allMeta[key] || {};
+        updates[key] = { watchlist: !cur.watchlist, trustState: !cur.watchlist ? 'watchlist' : 'known' };
       }
+    }
+    if (Object.keys(updates).length > 0) {
+      await window.electronAPI.bulkSetDeviceMeta(updates);
     }
     showToast(`Watchlist updated for ${ips.length} device(s).`, 'success');
     clearSelection();
@@ -968,14 +978,23 @@ async function applyBulkTags() {
   const tags = raw.split(',').map(t => t.trim()).filter(Boolean);
   if (tags.length === 0) return;
 
+  const updates = {};
+  const allMeta = await window.electronAPI.getAllDeviceMeta();
+
   for (const ip of selectedDevices) {
     const dev = allDevices.find(d => d.ip === ip);
     if (!dev) continue;
-    const cur = await window.electronAPI.getDeviceMeta(getDeviceKey(dev));
+    const key = getDeviceKey(dev);
+    const cur = allMeta[key] || {};
     const merged = [...new Set([...(cur.tags || []), ...tags])];
-    await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { tags: merged });
+    updates[key] = { tags: merged };
     if (dev.meta) dev.meta.tags = merged;
   }
+
+  if (Object.keys(updates).length > 0) {
+    await window.electronAPI.bulkSetDeviceMeta(updates);
+  }
+
   $('bulkTagModal').classList.add('hidden');
   showToast(`Tags added to ${selectedDevices.size} device(s).`, 'success');
   clearSelection();

@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Device metadata (trust state, tags, custom name, notes) ─────────────────
   getDeviceMeta:      (key)      => ipcRenderer.invoke('get-device-meta', key),
   setDeviceMeta:      (key, upd) => ipcRenderer.invoke('set-device-meta', key, upd),
+  bulkSetDeviceMeta:  (updatesByKey) => ipcRenderer.invoke('bulk-set-device-meta', updatesByKey),
   getAllDeviceMeta:    ()         => ipcRenderer.invoke('get-all-device-meta'),
 
   // ── Device history ───────────────────────────────────────────────────────────
