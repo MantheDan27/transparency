@@ -96,7 +96,7 @@ void test_MultipleRisks() {
     assert(risk.find(L"HIGH: FTP") != wstring::npos);
 }
 
-int main() {
+int wmain() {
     std::cout << "Running Scanner tests...\n";
 
     test_NoRiskPorts();
