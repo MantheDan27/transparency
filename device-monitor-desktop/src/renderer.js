@@ -764,9 +764,10 @@ async function bulkAction(action) {
     return;
   }
   if (action === 'markKnown') {
+    const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
     const updates = {};
     for (const ip of ips) {
-      const dev = allDevices.find(d => d.ip === ip);
+      const dev = devicesByIp.get(ip);
       if (dev) updates[getDeviceKey(dev)] = { trustState: 'known' };
     }
     if (Object.keys(updates).length > 0) {
@@ -777,10 +778,11 @@ async function bulkAction(action) {
     renderDeviceTable();
   }
   if (action === 'watchlist') {
+    const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
     const updates = {};
     const allMeta = await window.electronAPI.getAllDeviceMeta();
     for (const ip of ips) {
-      const dev = allDevices.find(d => d.ip === ip);
+      const dev = devicesByIp.get(ip);
       if (dev) {
         const key = getDeviceKey(dev);
         const cur = allMeta[key] || {};
@@ -795,7 +797,8 @@ async function bulkAction(action) {
     renderDeviceTable();
   }
   if (action === 'export') {
-    const data = ips.map(ip => allDevices.find(d => d.ip === ip)).filter(Boolean);
+    const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
+    const data = ips.map(ip => devicesByIp.get(ip)).filter(Boolean);
     downloadJSON(data, `transparency-devices-${dateStamp()}.json`);
     showToast('Device selection exported.', 'success');
   }
@@ -804,7 +807,7 @@ async function bulkAction(action) {
     for (const ip of ips) {
       await window.electronAPI.deleteLocalDevice(ip);
     }
-    allDevices = allDevices.filter(d => !ips.includes(d.ip));
+    allDevices = allDevices.filter(d => !selectedDevices.has(d.ip));
     clearSelection();
     renderDeviceTable();
     showToast(`${ips.length} device(s) removed from inventory.`, 'success');
@@ -980,9 +983,10 @@ async function applyBulkTags() {
 
   const updates = {};
   const allMeta = await window.electronAPI.getAllDeviceMeta();
+  const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
 
   for (const ip of selectedDevices) {
-    const dev = allDevices.find(d => d.ip === ip);
+    const dev = devicesByIp.get(ip);
     if (!dev) continue;
     const key = getDeviceKey(dev);
     const cur = allMeta[key] || {};
