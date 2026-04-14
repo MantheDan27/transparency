@@ -21,6 +21,9 @@ public:
 
     void RefreshList();
 
+    // Select a device by its raw devices[] index (from map click) and show detail panel
+    void SelectAndShowDevice(int rawDeviceIndex);
+
     // Called from static DetailPanelProc — must be public
     LRESULT OnDetailScroll(HWND hwnd, WPARAM wp);
     LRESULT OnDetailMouseWheel(HWND hwnd, WPARAM wp);

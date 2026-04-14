@@ -230,17 +230,10 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return self->OnDestroy(hwnd);
 
     case WM_MAP_DEVICE_CLICK: {
-        // Select the device in the Devices tab by index
+        // Select and show the device in the Devices tab
         int devIdx = (int)wp;
-        if (self->_tabDevices && self->_tabDevices->GetHwnd()) {
-            HWND devList = GetDlgItem(self->_tabDevices->GetHwnd(), IDC_LIST_DEVICES);
-            if (devList) {
-                ListView_SetItemState(devList, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
-                ListView_SetItemState(devList, devIdx, LVIS_SELECTED | LVIS_FOCUSED,
-                                      LVIS_SELECTED | LVIS_FOCUSED);
-                ListView_EnsureVisible(devList, devIdx, FALSE);
-            }
-        }
+        if (self->_tabDevices)
+            self->_tabDevices->SelectAndShowDevice(devIdx);
         return 0;
     }
 

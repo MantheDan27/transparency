@@ -965,6 +965,38 @@ void TabDevices::RefreshList() {
     ApplyFilter();
 }
 
+void TabDevices::SelectAndShowDevice(int rawDeviceIndex) {
+    if (!_hList) return;
+
+    // Find the list row that corresponds to this raw device index
+    int listRow = -1;
+    for (int i = 0; i < (int)_filteredIndices.size(); i++) {
+        if (_filteredIndices[i] == rawDeviceIndex) { listRow = i; break; }
+    }
+
+    // If not in current filtered view, reset filter to "All" and re-search
+    if (listRow < 0) {
+        _filterMode = 0;
+        if (_hSearch) SetWindowText(_hSearch, L"");
+        ApplyFilter();
+        for (int i = 0; i < (int)_filteredIndices.size(); i++) {
+            if (_filteredIndices[i] == rawDeviceIndex) { listRow = i; break; }
+        }
+    }
+
+    if (listRow < 0) return;
+
+    // Highlight the row in the list
+    ListView_SetItemState(_hList, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_SetItemState(_hList, listRow, LVIS_SELECTED | LVIS_FOCUSED,
+                          LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_EnsureVisible(_hList, listRow, FALSE);
+
+    // Open the detail panel
+    _selectedDevice = rawDeviceIndex;
+    ShowDetailPanel(rawDeviceIndex);
+}
+
 void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
     if (!_mainWnd) return;
     ScanResult r = _mainWnd->GetLastResult();
