@@ -28,24 +28,52 @@ static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
 };
 
-// Subclass proc for detail panel — forwards WM_COMMAND to parent
-static LRESULT CALLBACK DetailPanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
-    if (msg == WM_COMMAND) return SendMessage(GetParent(hwnd), msg, wp, lp);
+// Subclass proc for detail scroll panel
+static LRESULT CALLBACK DetailPanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR dwData) {
+    if (msg == WM_COMMAND)  return SendMessage(GetParent(hwnd), msg, wp, lp);
     if (msg == WM_DRAWITEM) return SendMessage(GetParent(hwnd), msg, wp, lp);
+    if (msg == WM_CTLCOLORSTATIC || msg == WM_CTLCOLOREDIT || msg == WM_CTLCOLORBTN) {
+        HDC hdc = (HDC)wp;
+        SetTextColor(hdc, Theme::TEXT_PRIMARY);
+        SetBkColor(hdc, Theme::BG_SURFACE);
+        return (LRESULT)Theme::BrushSurface();
+    }
+    auto* self = reinterpret_cast<TabDevices*>(dwData);
+    if (msg == WM_VSCROLL    && self) return self->OnDetailScroll(hwnd, wp);
+    if (msg == WM_MOUSEWHEEL && self) return self->OnDetailMouseWheel(hwnd, wp);
+    if (msg == WM_ERASEBKGND) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        FillRect((HDC)wp, &rc, Theme::BrushSurface());
+        return 1;
+    }
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
 bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
 
-    WNDCLASSEX wc = {};
-    wc.cbSize        = sizeof(wc);
-    wc.lpfnWndProc   = WndProc;
-    wc.hInstance     = GetModuleHandle(nullptr);
-    wc.hbrBackground = Theme::BrushSurface();
-    wc.lpszClassName = s_className;
-    wc.style         = CS_HREDRAW | CS_VREDRAW;
-    RegisterClassEx(&wc);
+    static bool s_classesRegistered = false;
+    if (!s_classesRegistered) {
+        WNDCLASSEX wc = {};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = WndProc;
+        wc.hInstance     = GetModuleHandle(nullptr);
+        wc.hbrBackground = Theme::BrushSurface();
+        wc.lpszClassName = s_className;
+        wc.style         = CS_HREDRAW | CS_VREDRAW;
+        RegisterClassEx(&wc);
+
+        // Custom class for the scrollable detail panel
+        WNDCLASSEX wc2 = {};
+        wc2.cbSize        = sizeof(wc2);
+        wc2.lpfnWndProc   = DefWindowProc;
+        wc2.hInstance     = GetModuleHandle(nullptr);
+        wc2.hbrBackground = Theme::BrushSurface();
+        wc2.lpszClassName = L"TranspDetailScroll";
+        RegisterClassEx(&wc2);
+
+        s_classesRegistered = true;
+    }
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
         WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
@@ -95,21 +123,34 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             SelectObject(hdc, old);
             return TRUE;
         }
-        // Save/Close buttons
-        if (dis && (dis->CtlID == IDC_BTN_DEVICE_SAVE || dis->CtlID == 9500)) {
+        // Save / Close / Pause buttons
+        if (dis && (dis->CtlID == IDC_BTN_DEVICE_SAVE || dis->CtlID == 9500 ||
+                    dis->CtlID == IDC_BTN_DEVICE_PAUSE)) {
             HDC hdc = dis->hDC;
             RECT rc = dis->rcItem;
             bool pressed = (dis->itemState & ODS_SELECTED) != 0;
             bool focused = (dis->itemState & ODS_FOCUS) != 0;
-            bool isSave = (dis->CtlID == IDC_BTN_DEVICE_SAVE);
 
-            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed,
-                                   isSave ? 0 : 1, focused);
+            int variant = 1;
+            COLORREF textColor = Theme::TEXT_PRIMARY;
 
-            wchar_t text[32] = {};
-            GetWindowText(dis->hwndItem, text, 32);
+            if (dis->CtlID == IDC_BTN_DEVICE_SAVE) {
+                variant = 0;
+                textColor = RGB(255, 255, 255);
+            } else if (dis->CtlID == IDC_BTN_DEVICE_PAUSE) {
+                wchar_t btnText[32] = {};
+                GetWindowText(dis->hwndItem, btnText, 32);
+                bool isPaused = (wcsncmp(btnText, L"Resume", 6) == 0);
+                variant = isPaused ? 2 : 1;
+                textColor = isPaused ? Theme::ACCENT_RED : Theme::ACCENT_AMBER;
+            }
+
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant, focused);
+
+            wchar_t text[64] = {};
+            GetWindowText(dis->hwndItem, text, 64);
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, isSave ? RGB(255,255,255) : Theme::TEXT_PRIMARY);
+            SetTextColor(hdc, textColor);
             HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
             DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(hdc, old);
@@ -126,6 +167,16 @@ LRESULT CALLBACK TabDevices::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return (LRESULT)Theme::BrushSurface();
     }
     case WM_SCAN_COMPLETE: return self->OnScanComplete(hwnd);
+    case WM_MOUSEWHEEL: {
+        // Forward wheel to detail panel when cursor is over it
+        if (self->_detailVisible && self->_hDetailPanel) {
+            POINT pt; GetCursorPos(&pt);
+            RECT panelRc; GetWindowRect(self->_hDetailPanel, &panelRc);
+            if (PtInRect(&panelRc, pt))
+                return SendMessage(self->_hDetailPanel, WM_MOUSEWHEEL, wp, lp);
+        }
+        return DefWindowProc(hwnd, msg, wp, lp);
+    }
     default: return DefWindowProc(hwnd, msg, wp, lp);
     }
 }
@@ -195,80 +246,114 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
         ListView_InsertColumn(_hList, i, &col);
     }
 
-    // Detail panel (hidden by default)
-    _hDetailPanel = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", nullptr,
-        WS_CHILD | SS_NOTIFY,
+    // Detail panel — scrollable custom class
+    _hDetailPanel = CreateWindowEx(WS_EX_STATICEDGE, L"TranspDetailScroll", nullptr,
+        WS_CHILD | WS_VSCROLL | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
         cx - DETAIL_WIDTH - 16, 48, DETAIL_WIDTH, cy - 64,
         hwnd, nullptr, hInst, nullptr);
 
-    // Fix: Subclass the STATIC detail panel so WM_COMMAND from child buttons reaches TabDevices
-    SetWindowSubclass(_hDetailPanel, DetailPanelProc, 0, 0);
+    SetWindowSubclass(_hDetailPanel, DetailPanelProc, 0, (DWORD_PTR)this);
 
-    // Detail controls inside panel
-    auto makeLbl = [&](const wchar_t* text, int y, int h = 18) -> HWND {
+    // Layout constants — sized for actual font metrics
+    // FontBody=16px → needs 20px, FontBodySm/Mono=14px → needs 18px
+    const int PAD = 10;
+    const int LW  = DETAIL_WIDTH - 2 * PAD;  // label width
+
+    // Helper lambdas to create labels inside the detail panel
+    auto makeBodyLbl = [&](const wchar_t* text, int y, int h) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", text,
-            WS_CHILD | WS_VISIBLE | SS_LEFT,
-            8, y, DETAIL_WIDTH - 16, h, _hDetailPanel, nullptr, hInst, nullptr);
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+            PAD, y, LW, h, _hDetailPanel, nullptr, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         return hw;
     };
-    auto makeMonoLbl = [&](const wchar_t* text, int y, int h = 16) -> HWND {
+    auto makeSmLbl = [&](const wchar_t* text, int y, int h) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", text,
-            WS_CHILD | WS_VISIBLE | SS_LEFT,
-            8, y, DETAIL_WIDTH - 16, h, _hDetailPanel, nullptr, hInst, nullptr);
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+            PAD, y, LW, h, _hDetailPanel, nullptr, hInst, nullptr);
+        SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
+        return hw;
+    };
+    auto makeMonoLbl = [&](const wchar_t* text, int y, int h) -> HWND {
+        HWND hw = CreateWindowEx(0, L"STATIC", text,
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+            PAD, y, LW, h, _hDetailPanel, nullptr, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontMono(), TRUE);
         return hw;
     };
+    auto makeCaptionLbl = [&](const wchar_t* text, int y) -> HWND {
+        HWND hw = CreateWindowEx(0, L"STATIC", text,
+            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+            PAD, y, LW, 16, _hDetailPanel, nullptr, hInst, nullptr);
+        SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontCaption(), TRUE);
+        return hw;
+    };
 
-    int dy = 8;
-    // Custom name edit
-    makeLbl(L"Custom Name:", dy, 14); dy += 14;
+    int dy = 10;
+
+    // ── Custom Name ──────────────────────────────────────────────────────────
+    makeCaptionLbl(L"CUSTOM NAME", dy); dy += 18;
     _hDetailCustomName = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-        8, dy, DETAIL_WIDTH - 16, 22, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NAME, hInst, nullptr);
+        PAD, dy, LW, 24, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NAME, hInst, nullptr);
     SendMessage(_hDetailCustomName, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     Theme::ApplyDarkEdit(_hDetailCustomName);
-    dy += 28;
+    dy += 30;
 
-    _hDetailName     = makeLbl(L"", dy, 18); dy += 20;
-    _hDetailType     = makeLbl(L"", dy, 16); dy += 18;
-    _hDetailEvidence = makeLbl(L"", dy, 28); dy += 30;  // classification evidence
-    _hDetailAlt      = makeLbl(L"", dy, 28); dy += 30;  // confidence alternatives
-    _hDetailVendor   = makeLbl(L"", dy, 16); dy += 18;
-    _hDetailMac      = makeMonoLbl(L"", dy, 16); dy += 18;
-    _hDetailSubnet   = makeLbl(L"", dy, 14); dy += 16;
-    _hDetailFirstSeen = makeLbl(L"", dy, 14); dy += 16;
-    _hDetailLastSeen = makeLbl(L"", dy, 14); dy += 16;
-    _hDetailSightings = makeLbl(L"", dy, 14); dy += 16;
-    _hDetailIpHistory = makeLbl(L"", dy, 14); dy += 16;
-    _hDetailPorts    = makeLbl(L"", dy, 36); dy += 38;
-    _hDetailMdns     = makeLbl(L"", dy, 28); dy += 30;
+    // ── Device Identity ──────────────────────────────────────────────────────
+    dy += 4;  // section gap
+    _hDetailName     = makeBodyLbl(L"", dy, 20); dy += 24;   // hostname — FontBody 16px
+    _hDetailType     = makeSmLbl  (L"", dy, 18); dy += 22;   // type + confidence
+    _hDetailEvidence = makeSmLbl  (L"", dy, 34); dy += 38;   // evidence (2 lines)
+    _hDetailAlt      = makeSmLbl  (L"", dy, 30); dy += 34;   // alternatives (2 lines)
 
-    // IoT risk box (hidden when not IoT)
+    // ── Network Info ─────────────────────────────────────────────────────────
+    dy += 4;
+    _hDetailVendor    = makeSmLbl  (L"", dy, 18); dy += 22;
+    _hDetailMac       = makeMonoLbl(L"", dy, 18); dy += 22;
+    _hDetailSubnet    = makeMonoLbl(L"", dy, 18); dy += 22;
+    _hDetailIpHistory = makeSmLbl  (L"", dy, 18); dy += 22;
+
+    // ── Timing ───────────────────────────────────────────────────────────────
+    dy += 4;
+    _hDetailFirstSeen  = makeSmLbl(L"", dy, 18); dy += 22;
+    _hDetailLastSeen   = makeSmLbl(L"", dy, 18); dy += 22;
+    _hDetailSightings  = makeSmLbl(L"", dy, 18); dy += 22;
+
+    // ── Ports & Services ─────────────────────────────────────────────────────
+    dy += 4;
+    _hDetailPorts = makeSmLbl(L"", dy, 36); dy += 40;   // up to 2 wrapped lines
+    _hDetailMdns  = makeSmLbl(L"", dy, 18); dy += 22;
+
+    // IoT risk box (hidden when not applicable)
     _hDetailIotRisk = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
         WS_CHILD | ES_MULTILINE | ES_READONLY | WS_VSCROLL,
-        8, dy, DETAIL_WIDTH - 16, 60, _hDetailPanel, nullptr, hInst, nullptr);
-    SendMessage(_hDetailIotRisk, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
+        PAD, dy, LW, 60, _hDetailPanel, nullptr, hInst, nullptr);
+    SendMessage(_hDetailIotRisk, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
     Theme::ApplyDarkEdit(_hDetailIotRisk);
-    dy += 68;
+    dy += 66;
 
-    _hDetailAnoms = makeLbl(L"", dy, 50); dy += 54;
+    // ── Alerts ───────────────────────────────────────────────────────────────
+    dy += 4;
+    _hDetailAnoms = makeSmLbl(L"", dy, 50); dy += 56;
 
-    // Notes edit
-    makeLbl(L"Notes:", dy, 14); dy += 14;
+    // ── Notes ────────────────────────────────────────────────────────────────
+    dy += 4;
+    makeCaptionLbl(L"NOTES", dy); dy += 18;
     _hDetailNotes = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
         WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL,
-        8, dy, DETAIL_WIDTH - 16, 54, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NOTES, hInst, nullptr);
-    SendMessage(_hDetailNotes, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        PAD, dy, LW, 56, _hDetailPanel, (HMENU)IDC_EDIT_DEVICE_NOTES, hInst, nullptr);
+    SendMessage(_hDetailNotes, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
     Theme::ApplyDarkEdit(_hDetailNotes);
-    dy += 60;
+    dy += 62;
 
-    // Trust dropdown
-    makeLbl(L"Trust:", dy, 14); dy += 14;
+    // ── Trust ────────────────────────────────────────────────────────────────
+    dy += 4;
+    makeCaptionLbl(L"TRUST", dy); dy += 18;
     _hDetailTrust = CreateWindowEx(0, L"COMBOBOX", nullptr,
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        8, dy, DETAIL_WIDTH - 16, 120, _hDetailPanel, (HMENU)IDC_COMBO_TRUST, hInst, nullptr);
-    SendMessage(_hDetailTrust, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+        PAD, dy, LW, 120, _hDetailPanel, (HMENU)IDC_COMBO_TRUST, hInst, nullptr);
+    SendMessage(_hDetailTrust, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"unknown");
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"owned");
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"watchlist");
@@ -276,14 +361,24 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hDetailTrust, CB_ADDSTRING, 0, (LPARAM)L"blocked");
     dy += 30;
 
-    // Save + Close buttons — owner-drawn
+    // ── Network Pause ────────────────────────────────────────────────────────
+    dy += 8;
+    _hDetailPause = CreateWindowEx(0, L"BUTTON", L"Pause Network",
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        PAD, dy, LW, 32, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_PAUSE, hInst, nullptr);
+    dy += 38;
+
+    // ── Save + Close ─────────────────────────────────────────────────────────
+    dy += 4;
     _hDetailSave = CreateWindowEx(0, L"BUTTON", L"Save",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        8, dy, 100, 36, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
+        PAD, dy, (LW / 2) - 4, 36, _hDetailPanel, (HMENU)IDC_BTN_DEVICE_SAVE, hInst, nullptr);
 
     _hDetailClose = CreateWindowEx(0, L"BUTTON", L"Close",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        DETAIL_WIDTH - 108, dy, 100, 36, _hDetailPanel, (HMENU)9500, hInst, nullptr);
+        PAD + (LW / 2) + 4, dy, (LW / 2) - 4, 36, _hDetailPanel, (HMENU)9500, hInst, nullptr);
+
+    _detailContentH = dy + 36 + 10;  // total scrollable content height
 }
 
 void TabDevices::LayoutControls(int cx, int cy) {
@@ -367,6 +462,29 @@ LRESULT TabDevices::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
             }
             ApplyFilter();
             HideDetailPanel();
+        }
+        return 0;
+    }
+
+    if (id == IDC_BTN_DEVICE_PAUSE) {
+        if (_mainWnd && !_detailDeviceIp.empty()) {
+            bool newPaused = false;
+            {
+                std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+                for (auto& d : _mainWnd->_lastResult.devices) {
+                    if (d.ip == _detailDeviceIp) {
+                        d.paused = !d.paused;
+                        newPaused = d.paused;
+                        break;
+                    }
+                }
+            }
+            PauseDevice(_detailDeviceIp, newPaused);
+            // Refresh the button state
+            ScanResult r = _mainWnd->GetLastResult();
+            for (const auto& d : r.devices) {
+                if (d.ip == _detailDeviceIp) { UpdateDetailPanel(d); break; }
+            }
         }
         return 0;
     }
@@ -602,13 +720,76 @@ void TabDevices::ShowDetailPanel(int idx) {
     ScanResult r = _mainWnd->GetLastResult();
     if (idx < 0 || idx >= (int)r.devices.size()) return;
 
+    // Reset scroll to top before populating (scroll children back up)
+    if (_detailScrollPos > 0 && _hDetailPanel)
+        ScrollWindowEx(_hDetailPanel, 0, _detailScrollPos, nullptr, nullptr, nullptr, nullptr, SW_SCROLLCHILDREN);
+    _detailScrollPos = 0;
+
     _detailVisible = true;
     UpdateDetailPanel(r.devices[idx]);
 
     RECT rc; GetClientRect(_hwnd, &rc);
     LayoutControls(rc.right, rc.bottom);
     ShowWindow(_hDetailPanel, SW_SHOW);
+
+    UpdateDetailScrollInfo();
     InvalidateRect(_hwnd, nullptr, FALSE);
+}
+
+void TabDevices::UpdateDetailScrollInfo() {
+    if (!_hDetailPanel) return;
+    RECT rc; GetClientRect(_hDetailPanel, &rc);
+    int pageH = rc.bottom - rc.top;
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = max(0, _detailContentH - 1);
+    si.nPage  = (UINT)pageH;
+    si.nPos   = _detailScrollPos;
+    SetScrollInfo(_hDetailPanel, SB_VERT, &si, TRUE);
+}
+
+LRESULT TabDevices::OnDetailScroll(HWND hwnd, WPARAM wp) {
+    RECT rc; GetClientRect(hwnd, &rc);
+    int pageH  = rc.bottom - rc.top;
+    int maxPos = max(0, _detailContentH - pageH);
+    int newPos = _detailScrollPos;
+
+    switch (LOWORD(wp)) {
+    case SB_LINEUP:        newPos = max(0,      newPos - 20);    break;
+    case SB_LINEDOWN:      newPos = min(maxPos, newPos + 20);    break;
+    case SB_PAGEUP:        newPos = max(0,      newPos - pageH); break;
+    case SB_PAGEDOWN:      newPos = min(maxPos, newPos + pageH); break;
+    case SB_THUMBTRACK:
+    case SB_THUMBPOSITION: newPos = (int)(short)HIWORD(wp);      break;
+    case SB_TOP:           newPos = 0;       break;
+    case SB_BOTTOM:        newPos = maxPos;  break;
+    }
+    newPos = max(0, min(maxPos, newPos));
+    if (newPos == _detailScrollPos) return 0;
+
+    int delta = _detailScrollPos - newPos;
+    _detailScrollPos = newPos;
+    ScrollWindowEx(hwnd, 0, delta, nullptr, nullptr, nullptr, nullptr,
+                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+    UpdateWindow(hwnd);
+
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_POS;
+    si.nPos   = _detailScrollPos;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+    return 0;
+}
+
+LRESULT TabDevices::OnDetailMouseWheel(HWND hwnd, WPARAM wp) {
+    int zDelta = GET_WHEEL_DELTA_WPARAM(wp);
+    int lines  = abs(zDelta) / WHEEL_DELTA * 3;
+    UINT sbCode = (zDelta > 0) ? SB_LINEUP : SB_LINEDOWN;
+    for (int i = 0; i < lines; i++)
+        OnDetailScroll(hwnd, MAKEWPARAM(sbCode, 0));
+    return 0;
 }
 
 void TabDevices::HideDetailPanel() {
@@ -742,6 +923,12 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
     // Notes
     if (_hDetailNotes) SetWindowText(_hDetailNotes, dev.notes.c_str());
 
+    // Pause button
+    if (_hDetailPause) {
+        SetWindowText(_hDetailPause, dev.paused ? L"Resume Network" : L"Pause Network");
+        InvalidateRect(_hDetailPause, nullptr, FALSE);
+    }
+
     // Trust
     if (_hDetailTrust) {
         static const wchar_t* trustOpts[] = { L"unknown", L"owned", L"watchlist", L"guest", L"blocked" };
@@ -754,6 +941,24 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
     }
 
     _detailDeviceIp = dev.ip;
+}
+
+void TabDevices::PauseDevice(const wstring& ip, bool pause) {
+    if (!ScanEngine::IsSafeIP(ip)) return;
+
+    wstring ruleName = L"Transparency_Block_" + ip;
+    wstring args;
+    if (pause) {
+        args = L"/c netsh advfirewall firewall add rule name=\"" + ruleName +
+               L"\" dir=in action=block remoteip=" + ip +
+               L" & netsh advfirewall firewall add rule name=\"" + ruleName +
+               L"\" dir=out action=block remoteip=" + ip;
+    } else {
+        args = L"/c netsh advfirewall firewall delete rule name=\"" + ruleName + L"\"";
+    }
+
+    // Run netsh elevated — user will see UAC prompt
+    ShellExecute(_hwnd, L"runas", L"cmd.exe", args.c_str(), nullptr, SW_HIDE);
 }
 
 void TabDevices::RefreshList() {
@@ -807,6 +1012,10 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
 
     // DNS lookup
     AppendMenu(hMenu, MF_STRING, 12031, L"Reverse DNS Lookup");
+
+    // Pause / resume
+    AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenu(hMenu, MF_STRING, 12050, dev.paused ? L"Resume Network Access" : L"Pause Network Access");
 
     // Detail panel
     AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -947,6 +1156,22 @@ void TabDevices::ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx) {
                 break;
             }
         }
+        break;
+    }
+    case 12050: { // Pause / Resume network access
+        bool newPaused = false;
+        {
+            std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+            for (auto& d : _mainWnd->_lastResult.devices) {
+                if (d.ip == dev.ip) {
+                    d.paused = !d.paused;
+                    newPaused = d.paused;
+                    break;
+                }
+            }
+        }
+        PauseDevice(dev.ip, newPaused);
+        ApplyFilter();
         break;
     }
     }

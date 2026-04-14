@@ -42,6 +42,7 @@ struct Device {
     wstring customName;
     wstring location;        // e.g. "Home Office", "Living Room"
     bool online = true;
+    bool paused = false;       // blocked via Windows Firewall rule
     wstring ipv6Address;
 
     // Confidence alternatives (top-2 competing types)
