@@ -21,6 +21,10 @@ public:
 
     void RefreshList();
 
+    // Called from static DetailPanelProc — must be public
+    LRESULT OnDetailScroll(HWND hwnd, WPARAM wp);
+    LRESULT OnDetailMouseWheel(HWND hwnd, WPARAM wp);
+
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT OnCreate(HWND hwnd, LPCREATESTRUCT cs);
@@ -40,8 +44,6 @@ private:
     void ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx);
     void PauseDevice(const wstring& ip, bool pause);
     void UpdateDetailScrollInfo();
-    LRESULT OnDetailScroll(HWND hwnd, WPARAM wp);
-    LRESULT OnDetailMouseWheel(HWND hwnd, WPARAM wp);
 
     wstring GetPortSummary(const Device& dev);
 

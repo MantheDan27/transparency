@@ -744,7 +744,7 @@ void TabDevices::UpdateDetailScrollInfo() {
     si.cbSize = sizeof(si);
     si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
     si.nMin   = 0;
-    si.nMax   = max(0, _detailContentH - 1);
+    si.nMax   = std::max(0, _detailContentH - 1);
     si.nPage  = (UINT)pageH;
     si.nPos   = _detailScrollPos;
     SetScrollInfo(_hDetailPanel, SB_VERT, &si, TRUE);
@@ -753,20 +753,20 @@ void TabDevices::UpdateDetailScrollInfo() {
 LRESULT TabDevices::OnDetailScroll(HWND hwnd, WPARAM wp) {
     RECT rc; GetClientRect(hwnd, &rc);
     int pageH  = rc.bottom - rc.top;
-    int maxPos = max(0, _detailContentH - pageH);
+    int maxPos = std::max(0, _detailContentH - pageH);
     int newPos = _detailScrollPos;
 
     switch (LOWORD(wp)) {
-    case SB_LINEUP:        newPos = max(0,      newPos - 20);    break;
-    case SB_LINEDOWN:      newPos = min(maxPos, newPos + 20);    break;
-    case SB_PAGEUP:        newPos = max(0,      newPos - pageH); break;
-    case SB_PAGEDOWN:      newPos = min(maxPos, newPos + pageH); break;
+    case SB_LINEUP:        newPos = std::max(0,      newPos - 20);    break;
+    case SB_LINEDOWN:      newPos = std::min(maxPos, newPos + 20);    break;
+    case SB_PAGEUP:        newPos = std::max(0,      newPos - pageH); break;
+    case SB_PAGEDOWN:      newPos = std::min(maxPos, newPos + pageH); break;
     case SB_THUMBTRACK:
-    case SB_THUMBPOSITION: newPos = (int)(short)HIWORD(wp);      break;
+    case SB_THUMBPOSITION: newPos = (int)(short)HIWORD(wp);           break;
     case SB_TOP:           newPos = 0;       break;
     case SB_BOTTOM:        newPos = maxPos;  break;
     }
-    newPos = max(0, min(maxPos, newPos));
+    newPos = std::max(0, std::min(maxPos, newPos));
     if (newPos == _detailScrollPos) return 0;
 
     int delta = _detailScrollPos - newPos;
