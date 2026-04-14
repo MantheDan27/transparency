@@ -606,20 +606,61 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
         int mapRight  = rc.right  - 16;
         int mapBottom = rc.bottom - 16;
 
-        // Node sizing — larger for better readability and click targets
-        const int NODE_R = 10;   // device node radius (was 5-6)
-        const int GW_R   = 18;   // gateway node radius (was 12-14)
+        int totalDevices = (int)r.devices.size();
+
+        // Scale node radius down as device count grows so all nodes fit visually
+        const int NODE_R = (totalDevices > 60) ? 4
+                         : (totalDevices > 30) ? 6
+                         : (totalDevices > 15) ? 8 : 10;
+        const int GW_R = 18;
+        // Only draw per-node labels when there's enough spacing to avoid clutter
+        const bool showLabels = (totalDevices <= 24);
+
+        // Helper: draw one device node (glow + fill + highlight)
+        auto drawNode = [&](int nx, int ny, COLORREF col) {
+            Gdiplus::Graphics g(hdc);
+            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            Gdiplus::SolidBrush glow(Theme::GdipColor(col, 40));
+            g.FillEllipse(&glow, nx - NODE_R - 3, ny - NODE_R - 3,
+                          (NODE_R + 3) * 2, (NODE_R + 3) * 2);
+            Gdiplus::SolidBrush fill(Theme::GdipColor(col, 220));
+            g.FillEllipse(&fill, nx - NODE_R, ny - NODE_R, NODE_R * 2, NODE_R * 2);
+            Gdiplus::SolidBrush hi(Gdiplus::Color(50, 255, 255, 255));
+            g.FillEllipse(&hi, nx - NODE_R + 2, ny - NODE_R + 1, NODE_R, NODE_R / 2 + 2);
+        };
+
+        // Helper: draw gateway node
+        auto drawGateway = [&](int gx, int gy) {
+            Gdiplus::Graphics g(hdc);
+            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GLOW, 50));
+            g.FillEllipse(&glow, gx - GW_R - 5, gy - GW_R - 5,
+                          (GW_R + 5) * 2, (GW_R + 5) * 2);
+            Gdiplus::SolidBrush fill(Theme::GdipColor(Theme::ACCENT_GLOW));
+            g.FillEllipse(&fill, gx - GW_R, gy - GW_R, GW_R * 2, GW_R * 2);
+            Gdiplus::SolidBrush hi(Gdiplus::Color(60, 255, 255, 255));
+            g.FillEllipse(&hi, gx - GW_R + 3, gy - GW_R + 2, GW_R, GW_R / 2 + 3);
+            SetTextColor(hdc, Theme::BG_APP);
+            SelectObject(hdc, Theme::FontNavActive());
+            RECT gwRc = { gx - GW_R, gy - 8, gx + GW_R, gy + 8 };
+            DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        };
 
         if (subnetGroups.size() <= 1) {
-            // Single subnet — classic radial layout
-            int cx = (mapLeft + mapRight)  / 2;
+            // Single subnet — radial layout, ALL devices
+            int cx = (mapLeft + mapRight) / 2;
             int cy = (mapTop  + mapBottom) / 2;
-            int radius = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - 30;
-            if (radius < 40) radius = 40;
 
-            int n = std::min((int)r.devices.size(), 32);
+            // Radius: large enough to space nodes, but capped to available area
+            int available = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - NODE_R - 20;
+            int minForSpacing = (totalDevices > 1)
+                ? (int)(totalDevices * (NODE_R * 2 + 4) / (2.0 * 3.14159265)) + 10
+                : 40;
+            int radius = std::max(40, std::min(available, minForSpacing));
 
-            // Draw connection lines first
+            int n = totalDevices;  // all devices — no cap
+
+            // Connection lines
             HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
             SelectObject(hdc, linePen);
             for (int i = 0; i < n; i++) {
@@ -631,94 +672,46 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
             }
             DeleteObject(linePen);
 
-            // Draw device nodes
+            // Device nodes
             for (int i = 0; i < n; i++) {
-                auto& d = r.devices[i];
+                const Device& d = r.devices[i];
                 double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
                 int nx = cx + (int)(radius * cos(angle));
                 int ny = cy + (int)(radius * sin(angle));
 
-                COLORREF col = DeviceNodeColor(d);
-
-                // Outer glow ring
-                {
-                    Gdiplus::Graphics g(hdc);
-                    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                    Gdiplus::SolidBrush glow(Theme::GdipColor(col, 40));
-                    g.FillEllipse(&glow, nx - NODE_R - 3, ny - NODE_R - 3,
-                                  (NODE_R + 3) * 2, (NODE_R + 3) * 2);
-                    Gdiplus::SolidBrush fill(Theme::GdipColor(col, 220));
-                    g.FillEllipse(&fill, nx - NODE_R, ny - NODE_R, NODE_R * 2, NODE_R * 2);
-                    // Inner highlight
-                    Gdiplus::SolidBrush hi(Gdiplus::Color(50, 255, 255, 255));
-                    g.FillEllipse(&hi, nx - NODE_R + 2, ny - NODE_R + 1, NODE_R, NODE_R / 2 + 2);
-                }
-
+                drawNode(nx, ny, DeviceNodeColor(d));
                 _mapNodes.push_back({ nx, ny, NODE_R, i });
 
-                wstring lbl = d.customName.empty()
-                    ? (d.hostname.empty() ? d.ip : d.hostname)
-                    : d.customName;
-                if ((int)lbl.size() > 12) lbl = lbl.substr(0, 12);
-
-                SetTextColor(hdc, Theme::TEXT_SECONDARY);
-                SelectObject(hdc, Theme::FontSmall());
-                RECT lblRc = { nx - 48, ny + NODE_R + 3, nx + 48, ny + NODE_R + 16 };
-                DrawText(hdc, lbl.c_str(), -1, &lblRc,
-                         DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+                if (showLabels) {
+                    wstring lbl = d.customName.empty()
+                        ? (d.hostname.empty() ? d.ip : d.hostname)
+                        : d.customName;
+                    if ((int)lbl.size() > 12) lbl = lbl.substr(0, 12);
+                    SetTextColor(hdc, Theme::TEXT_SECONDARY);
+                    SelectObject(hdc, Theme::FontSmall());
+                    RECT lblRc = { nx - 48, ny + NODE_R + 3, nx + 48, ny + NODE_R + 16 };
+                    DrawText(hdc, lbl.c_str(), -1, &lblRc,
+                             DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+                }
             }
 
-            // Gateway center node — larger with glow
-            {
-                Gdiplus::Graphics g(hdc);
-                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                // Outer glow
-                Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GLOW, 50));
-                g.FillEllipse(&glow, cx - GW_R - 5, cy - GW_R - 5,
-                              (GW_R + 5) * 2, (GW_R + 5) * 2);
-                Gdiplus::SolidBrush fill(Theme::GdipColor(Theme::ACCENT_GLOW));
-                g.FillEllipse(&fill, cx - GW_R, cy - GW_R, GW_R * 2, GW_R * 2);
-                // Inner highlight
-                Gdiplus::SolidBrush hi(Gdiplus::Color(60, 255, 255, 255));
-                g.FillEllipse(&hi, cx - GW_R + 3, cy - GW_R + 2, GW_R, GW_R / 2 + 3);
-            }
+            // Gateway center node
+            drawGateway(cx, cy);
 
-            SetTextColor(hdc, Theme::BG_APP);
-            SelectObject(hdc, Theme::FontNavActive());
-            RECT gwRc = { cx - GW_R, cy - 8, cx + GW_R, cy + 8 };
-            DrawText(hdc, L"GW", -1, &gwRc,
-                     DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
-            // Multi-subnet layout — horizontal bands
+            // Multi-subnet — horizontal bands, ALL subnets and ALL devices
             int gwCx = (mapLeft + mapRight) / 2;
             int gwCy = mapTop + 20;
 
-            // Gateway node with glow
-            {
-                Gdiplus::Graphics g(hdc);
-                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GLOW, 50));
-                g.FillEllipse(&glow, gwCx - GW_R - 4, gwCy - GW_R - 4,
-                              (GW_R + 4) * 2, (GW_R + 4) * 2);
-                Gdiplus::SolidBrush fill(Theme::GdipColor(Theme::ACCENT_GLOW));
-                g.FillEllipse(&fill, gwCx - GW_R, gwCy - GW_R, GW_R * 2, GW_R * 2);
-                Gdiplus::SolidBrush hi(Gdiplus::Color(60, 255, 255, 255));
-                g.FillEllipse(&hi, gwCx - GW_R + 3, gwCy - GW_R + 2, GW_R, GW_R / 2 + 3);
-            }
+            drawGateway(gwCx, gwCy);
 
-            SetTextColor(hdc, Theme::BG_APP);
-            SelectObject(hdc, Theme::FontNavActive());
-            RECT gwRc = { gwCx - GW_R, gwCy - 8, gwCx + GW_R, gwCy + 8 };
-            DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-            int bandTop = gwCy + GW_R + 12;
-            int totalH = mapBottom - bandTop;
-            int numSubnets = std::min((int)subnetGroups.size(), 4);
-            int bandH = totalH / std::max(numSubnets, 1);
+            int bandTop    = gwCy + GW_R + 12;
+            int totalH     = mapBottom - bandTop;
+            int numSubnets = (int)subnetGroups.size();  // no cap
+            int bandH      = totalH / std::max(numSubnets, 1);
 
             int subIdx = 0;
             for (auto& [subName, devIndices] : subnetGroups) {
-                if (subIdx >= 4) break;
                 int bTop = bandTop + subIdx * bandH;
                 int bBot = bTop + bandH - 8;
 
@@ -735,57 +728,47 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
                 LineTo(hdc, mapRight, bTop + 18);
                 DeleteObject(sepPen);
 
-                // Line from gateway down
                 int subCx = (mapLeft + mapRight) / 2;
                 int subCy = (bTop + 20 + bBot) / 2;
+
+                // Line from gateway to subnet center
                 HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
                 SelectObject(hdc, linePen);
                 MoveToEx(hdc, gwCx, gwCy + GW_R, nullptr);
                 LineTo(hdc, subCx, bTop + 20);
                 DeleteObject(linePen);
 
-                // Devices in this subnet — horizontal spread with more room
-                int n = std::min((int)devIndices.size(), 16);
+                // All devices in this subnet — horizontal spread, no cap
+                int n     = (int)devIndices.size();
                 int nodeW = (mapRight - mapLeft) / std::max(n, 1);
+                bool subShowLabels = showLabels && (nodeW >= NODE_R * 2 + 8);
+
                 for (int i = 0; i < n; i++) {
                     const Device& d = r.devices[devIndices[i]];
                     int nx = mapLeft + nodeW / 2 + i * nodeW;
                     int ny = subCy;
 
-                    // Line from subnet center
+                    // Line from subnet anchor
                     HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
                     SelectObject(hdc, lp2);
                     MoveToEx(hdc, subCx, bTop + 20, nullptr);
                     LineTo(hdc, nx, ny);
                     DeleteObject(lp2);
 
-                    COLORREF col = DeviceNodeColor(d);
-
-                    // Glow + filled node
-                    {
-                        Gdiplus::Graphics g(hdc);
-                        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                        Gdiplus::SolidBrush glow(Theme::GdipColor(col, 40));
-                        g.FillEllipse(&glow, nx - NODE_R - 3, ny - NODE_R - 3,
-                                      (NODE_R + 3) * 2, (NODE_R + 3) * 2);
-                        Gdiplus::SolidBrush fill(Theme::GdipColor(col, 220));
-                        g.FillEllipse(&fill, nx - NODE_R, ny - NODE_R, NODE_R * 2, NODE_R * 2);
-                        Gdiplus::SolidBrush hi(Gdiplus::Color(50, 255, 255, 255));
-                        g.FillEllipse(&hi, nx - NODE_R + 2, ny - NODE_R + 1, NODE_R, NODE_R / 2 + 2);
-                    }
-
+                    drawNode(nx, ny, DeviceNodeColor(d));
                     _mapNodes.push_back({ nx, ny, NODE_R, devIndices[i] });
 
-                    wstring lbl = d.customName.empty()
-                        ? (d.hostname.empty() ? d.ip : d.hostname)
-                        : d.customName;
-                    if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
-
-                    SetTextColor(hdc, Theme::TEXT_SECONDARY);
-                    SelectObject(hdc, Theme::FontSmall());
-                    RECT lblRc = { nx - 40, ny + NODE_R + 3, nx + 40, ny + NODE_R + 16 };
-                    DrawText(hdc, lbl.c_str(), -1, &lblRc,
-                             DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+                    if (subShowLabels) {
+                        wstring lbl = d.customName.empty()
+                            ? (d.hostname.empty() ? d.ip : d.hostname)
+                            : d.customName;
+                        if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
+                        SetTextColor(hdc, Theme::TEXT_SECONDARY);
+                        SelectObject(hdc, Theme::FontSmall());
+                        RECT lblRc = { nx - 40, ny + NODE_R + 3, nx + 40, ny + NODE_R + 16 };
+                        DrawText(hdc, lbl.c_str(), -1, &lblRc,
+                                 DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
+                    }
                 }
 
                 subIdx++;
