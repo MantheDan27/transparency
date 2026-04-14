@@ -22,7 +22,6 @@
 ## 2026-10-24 - C++ Wait Loop Performance Optimization
 **Learning:** Using busy-wait loops with `Sleep()` inside a background worker thread (`Monitor::WorkerLoop`) consumes unnecessary CPU cycles and causes lag in responsiveness to stop/update requests, as the thread wakes up continuously just to check flags.
 **Action:** Replace `Sleep()`-based busy-wait loops with `std::condition_variable::wait_for` alongside a `std::unique_lock`. This allows the thread to sleep optimally without consuming CPU, while remaining instantly responsive to `notify_all()` when configuration changes or the application shuts down.
-
-## 2024-05-18 - Replacing nested find lookups with O(1) Map pre-computation
-**Learning:** Found an $O(N \times M)$ anti-pattern in `bulkAction` and `applyBulkTags` where `allDevices.find()` was executed in a loop iterating through selected IPs to locate a device object. When handling a large network and checking multiple items, this blocked the main thread.
-**Action:** Always pre-compute a lookup `Map` mapping IPs to objects before performing a large batch of lookups, converting array search loops from $O(N \times M)$ to $O(N + M)$ performance.
+## 2026-10-25 - [O(1) Anomaly Lookups in UI Bulk Operations]
+**Learning:** Using an $O(N)$ operation like `Array.prototype.find()` or `Array.prototype.includes()` inside a loop over selected devices creates a significant performance bottleneck ($O(N \times M)$ complexity) when applying bulk actions on large device lists. This can cause the UI to freeze or become unresponsive.
+**Action:** When implementing bulk operations on large data sets (like devices or tables), pre-compute a lookup table (e.g. `Map` or `Set`) before the loop. Replace $O(N)$ lookups with $O(1)$ operations (`Map.prototype.get()` or `Set.prototype.has()`) to reduce the complexity to $O(N + M)$ and maintain a smooth user experience.

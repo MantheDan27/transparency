@@ -21,6 +21,10 @@ public:
 
     void RefreshList();
 
+    // Called from static DetailPanelProc — must be public
+    LRESULT OnDetailScroll(HWND hwnd, WPARAM wp);
+    LRESULT OnDetailMouseWheel(HWND hwnd, WPARAM wp);
+
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT OnCreate(HWND hwnd, LPCREATESTRUCT cs);
@@ -38,6 +42,8 @@ private:
     void UpdateDetailPanel(const Device& dev);
     void ApplyFilter();
     void ShowDeviceContextMenu(HWND hwnd, int x, int y, int deviceIdx);
+    void PauseDevice(const wstring& ip, bool pause);
+    void UpdateDetailScrollInfo();
 
     wstring GetPortSummary(const Device& dev);
 
@@ -71,10 +77,13 @@ private:
     HWND _hDetailFirstSeen  = nullptr;  // first seen timestamp
     HWND _hDetailSightings  = nullptr;  // sighting count
     HWND _hDetailIpHistory  = nullptr;  // IP history
+    HWND _hDetailPause      = nullptr;
     HWND _hDetailSave       = nullptr;
     HWND _hDetailClose      = nullptr;
 
     wstring _detailDeviceIp;            // IP of currently-displayed device
+    int  _detailScrollPos   = 0;        // current scroll offset in detail panel
+    int  _detailContentH    = 0;        // total height of detail panel content
 
     // Sort state
     int _sortCol = 0;
