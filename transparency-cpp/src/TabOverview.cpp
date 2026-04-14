@@ -373,9 +373,10 @@ LRESULT TabOverview::OnVScroll(HWND hwnd, WPARAM wp) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE);
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
         UpdateScrollBar(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
     }
     return 0;
 }
@@ -390,9 +391,10 @@ LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
     if (_scrollY > maxScroll) _scrollY = maxScroll;
 
     if (_scrollY != oldPos) {
-        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE);
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
         UpdateScrollBar(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
     }
     return 0;
 }
@@ -547,6 +549,58 @@ void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
 
 // ── Topology Map ──────────────────────────────────────────────────────────────
 
+// Draw a device node using plain GDI (no per-call GDI+ context creation)
+static void DrawMapNode(HDC hdc, int nx, int ny, int r, COLORREF col) {
+    // Glow ring (dark tinted version)
+    COLORREF glow = RGB(GetRValue(col) / 4, GetGValue(col) / 4, GetBValue(col) / 4);
+    HBRUSH glowBr = CreateSolidBrush(glow);
+    HPEN   glowPn = CreatePen(PS_SOLID, 1, RGB(GetRValue(col)/2, GetGValue(col)/2, GetBValue(col)/2));
+    HBRUSH ob = (HBRUSH)SelectObject(hdc, glowBr);
+    HPEN   op = (HPEN)SelectObject(hdc, glowPn);
+    Ellipse(hdc, nx-r-3, ny-r-3, nx+r+3, ny+r+3);
+    // Fill circle
+    HBRUSH fillBr = CreateSolidBrush(col);
+    HPEN   fillPn = CreatePen(PS_SOLID, 1, col);
+    SelectObject(hdc, fillBr);
+    SelectObject(hdc, fillPn);
+    DeleteObject(glowBr);
+    DeleteObject(glowPn);
+    Ellipse(hdc, nx-r, ny-r, nx+r, ny+r);
+    SelectObject(hdc, ob);
+    SelectObject(hdc, op);
+    DeleteObject(fillBr);
+    DeleteObject(fillPn);
+}
+
+static void DrawGatewayNode(HDC hdc, int gx, int gy, int r) {
+    COLORREF col = Theme::ACCENT_GLOW;
+    // Glow ring
+    COLORREF glow = RGB(GetRValue(col)/5, GetGValue(col)/5, GetBValue(col)/5);
+    HBRUSH glowBr = CreateSolidBrush(glow);
+    HPEN   glowPn = CreatePen(PS_SOLID, 2, col);
+    HBRUSH ob = (HBRUSH)SelectObject(hdc, glowBr);
+    HPEN   op = (HPEN)SelectObject(hdc, glowPn);
+    Ellipse(hdc, gx-r-5, gy-r-5, gx+r+5, gy+r+5);
+    // Fill
+    HBRUSH fillBr = CreateSolidBrush(col);
+    HPEN   fillPn = CreatePen(PS_SOLID, 1, col);
+    SelectObject(hdc, fillBr);
+    SelectObject(hdc, fillPn);
+    DeleteObject(glowBr);
+    DeleteObject(glowPn);
+    Ellipse(hdc, gx-r, gy-r, gx+r, gy+r);
+    SelectObject(hdc, ob);
+    SelectObject(hdc, op);
+    DeleteObject(fillBr);
+    DeleteObject(fillPn);
+    // Label
+    SetTextColor(hdc, Theme::BG_APP);
+    SelectObject(hdc, Theme::FontNavActive());
+    RECT gwRc = { gx-r, gy-8, gx+r, gy+8 };
+    SetBkMode(hdc, TRANSPARENT);
+    DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+}
+
 static COLORREF DeviceNodeColor(const Device& d) {
     if (!d.online)                          return Theme::TEXT_TERTIARY;
     if (d.iotRisk)                          return Theme::ACCENT_AMBER;
@@ -616,35 +670,9 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
         // Only draw per-node labels when there's enough spacing to avoid clutter
         const bool showLabels = (totalDevices <= 24);
 
-        // Helper: draw one device node (glow + fill + highlight)
-        auto drawNode = [&](int nx, int ny, COLORREF col) {
-            Gdiplus::Graphics g(hdc);
-            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-            Gdiplus::SolidBrush glow(Theme::GdipColor(col, 40));
-            g.FillEllipse(&glow, nx - NODE_R - 3, ny - NODE_R - 3,
-                          (NODE_R + 3) * 2, (NODE_R + 3) * 2);
-            Gdiplus::SolidBrush fill(Theme::GdipColor(col, 220));
-            g.FillEllipse(&fill, nx - NODE_R, ny - NODE_R, NODE_R * 2, NODE_R * 2);
-            Gdiplus::SolidBrush hi(Gdiplus::Color(50, 255, 255, 255));
-            g.FillEllipse(&hi, nx - NODE_R + 2, ny - NODE_R + 1, NODE_R, NODE_R / 2 + 2);
-        };
-
-        // Helper: draw gateway node
-        auto drawGateway = [&](int gx, int gy) {
-            Gdiplus::Graphics g(hdc);
-            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-            Gdiplus::SolidBrush glow(Theme::GdipColor(Theme::ACCENT_GLOW, 50));
-            g.FillEllipse(&glow, gx - GW_R - 5, gy - GW_R - 5,
-                          (GW_R + 5) * 2, (GW_R + 5) * 2);
-            Gdiplus::SolidBrush fill(Theme::GdipColor(Theme::ACCENT_GLOW));
-            g.FillEllipse(&fill, gx - GW_R, gy - GW_R, GW_R * 2, GW_R * 2);
-            Gdiplus::SolidBrush hi(Gdiplus::Color(60, 255, 255, 255));
-            g.FillEllipse(&hi, gx - GW_R + 3, gy - GW_R + 2, GW_R, GW_R / 2 + 3);
-            SetTextColor(hdc, Theme::BG_APP);
-            SelectObject(hdc, Theme::FontNavActive());
-            RECT gwRc = { gx - GW_R, gy - 8, gx + GW_R, gy + 8 };
-            DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        };
+        // drawNode / drawGateway now use static GDI helpers (no per-node GDI+ context)
+        auto drawNode    = [&](int nx, int ny, COLORREF col) { DrawMapNode(hdc, nx, ny, NODE_R, col); };
+        auto drawGateway = [&](int gx, int gy)              { DrawGatewayNode(hdc, gx, gy, GW_R);   };
 
         if (subnetGroups.size() <= 1) {
             // Single subnet — radial layout, ALL devices
