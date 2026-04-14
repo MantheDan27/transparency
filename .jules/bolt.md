@@ -22,3 +22,7 @@
 ## 2026-10-24 - C++ Wait Loop Performance Optimization
 **Learning:** Using busy-wait loops with `Sleep()` inside a background worker thread (`Monitor::WorkerLoop`) consumes unnecessary CPU cycles and causes lag in responsiveness to stop/update requests, as the thread wakes up continuously just to check flags.
 **Action:** Replace `Sleep()`-based busy-wait loops with `std::condition_variable::wait_for` alongside a `std::unique_lock`. This allows the thread to sleep optimally without consuming CPU, while remaining instantly responsive to `notify_all()` when configuration changes or the application shuts down.
+
+## 2024-05-18 - Replacing nested find lookups with O(1) Map pre-computation
+**Learning:** Found an $O(N \times M)$ anti-pattern in `bulkAction` and `applyBulkTags` where `allDevices.find()` was executed in a loop iterating through selected IPs to locate a device object. When handling a large network and checking multiple items, this blocked the main thread.
+**Action:** Always pre-compute a lookup `Map` mapping IPs to objects before performing a large batch of lookups, converting array search loops from $O(N \times M)$ to $O(N + M)$ performance.

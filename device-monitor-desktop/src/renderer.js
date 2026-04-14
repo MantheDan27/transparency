@@ -757,6 +757,11 @@ async function bulkAction(action) {
   if (selectedDevices.size === 0) return;
   const ips = [...selectedDevices];
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Map lookup to replace O(N) array search inside loops
+  const deviceMap = new Map();
+  for (const d of allDevices) deviceMap.set(d.ip, d);
+
   if (action === 'tag') {
     $('bulkTagModal').classList.remove('hidden');
     $('bulkTagInput').value = '';
@@ -766,7 +771,7 @@ async function bulkAction(action) {
   if (action === 'markKnown') {
     const updates = {};
     for (const ip of ips) {
-      const dev = allDevices.find(d => d.ip === ip);
+      const dev = deviceMap.get(ip);
       if (dev) updates[getDeviceKey(dev)] = { trustState: 'known' };
     }
     if (Object.keys(updates).length > 0) {
@@ -780,7 +785,7 @@ async function bulkAction(action) {
     const updates = {};
     const allMeta = await window.electronAPI.getAllDeviceMeta();
     for (const ip of ips) {
-      const dev = allDevices.find(d => d.ip === ip);
+      const dev = deviceMap.get(ip);
       if (dev) {
         const key = getDeviceKey(dev);
         const cur = allMeta[key] || {};
@@ -795,7 +800,7 @@ async function bulkAction(action) {
     renderDeviceTable();
   }
   if (action === 'export') {
-    const data = ips.map(ip => allDevices.find(d => d.ip === ip)).filter(Boolean);
+    const data = ips.map(ip => deviceMap.get(ip)).filter(Boolean);
     downloadJSON(data, `transparency-devices-${dateStamp()}.json`);
     showToast('Device selection exported.', 'success');
   }
@@ -981,8 +986,13 @@ async function applyBulkTags() {
   const updates = {};
   const allMeta = await window.electronAPI.getAllDeviceMeta();
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Map lookup to replace O(N) array search inside loop
+  const deviceMap = new Map();
+  for (const d of allDevices) deviceMap.set(d.ip, d);
+
   for (const ip of selectedDevices) {
-    const dev = allDevices.find(d => d.ip === ip);
+    const dev = deviceMap.get(ip);
     if (!dev) continue;
     const key = getDeviceKey(dev);
     const cur = allMeta[key] || {};
