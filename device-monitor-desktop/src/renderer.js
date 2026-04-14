@@ -757,6 +757,11 @@ async function bulkAction(action) {
   if (selectedDevices.size === 0) return;
   const ips = [...selectedDevices];
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Map lookup to replace O(N) array search inside loops
+  const deviceMap = new Map();
+  for (const d of allDevices) deviceMap.set(d.ip, d);
+
   if (action === 'tag') {
     $('bulkTagModal').classList.remove('hidden');
     $('bulkTagInput').value = '';
@@ -984,6 +989,11 @@ async function applyBulkTags() {
   const updates = {};
   const allMeta = await window.electronAPI.getAllDeviceMeta();
   const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
+
+  // ⚡ Bolt Performance Optimization:
+  // Pre-compute O(1) Map lookup to replace O(N) array search inside loop
+  const deviceMap = new Map();
+  for (const d of allDevices) deviceMap.set(d.ip, d);
 
   for (const ip of selectedDevices) {
     const dev = devicesByIp.get(ip);
