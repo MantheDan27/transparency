@@ -399,23 +399,33 @@ LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
     return 0;
 }
 
-int TabOverview::HitTestMapNode(int mx, int my) const {
-    for (int i = 0; i < (int)_mapNodes.size(); i++) {
-        int dx = mx - _mapNodes[i].cx;
-        int dy = my - _mapNodes[i].cy;
-        int r  = _mapNodes[i].radius + 4; // small hit margin
+wstring TabOverview::HitTestMapNode(int mx, int my) const {
+    for (auto& node : _mapNodes) {
+        int dx = mx - node.cx;
+        int dy = my - node.cy;
+        int r  = node.radius + 4; // small hit margin
         if (dx * dx + dy * dy <= r * r)
-            return _mapNodes[i].deviceIndex;
+            return node.stableId;
     }
-    return -1;
+    return L"";
 }
 
 LRESULT TabOverview::OnLButtonDown(HWND hwnd, int mx, int my) {
-    int devIdx = HitTestMapNode(mx, my);
-    if (devIdx >= 0 && _mainWnd) {
-        // Switch to Devices tab and post the device index for selection
-        _mainWnd->SwitchTab(Tab::Devices);
-        PostMessage(_mainWnd->GetHwnd(), WM_MAP_DEVICE_CLICK, (WPARAM)devIdx, 0);
+    wstring sid = HitTestMapNode(mx, my);
+    if (sid.empty() || !_mainWnd) return 0;
+
+    // Resolve stable ID (MAC or IP) → current array index in _lastResult.
+    // This is done at click time so stale paint-time indices never reach the
+    // Devices tab, even if a scan completed between the last paint and this click.
+    ScanResult r = _mainWnd->GetLastResult();
+    for (int i = 0; i < (int)r.devices.size(); i++) {
+        const Device& d = r.devices[i];
+        wstring id = d.mac.empty() ? d.ip : d.mac;
+        if (id == sid) {
+            _mainWnd->SwitchTab(Tab::Devices);
+            PostMessage(_mainWnd->GetHwnd(), WM_MAP_DEVICE_CLICK, (WPARAM)i, 0);
+            break;
+        }
     }
     return 0;
 }
@@ -637,7 +647,8 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
 
     if (!_mainWnd) goto cleanup;
     {
-        ScanResult r = _mainWnd->GetLastResult();
+        // Use cached result — set at scan-complete time, never locked inside OnPaint.
+        const ScanResult& r = _mapCache;
         if (r.devices.empty()) {
             SetTextColor(hdc, Theme::TEXT_TERTIARY);
             SelectObject(hdc, Theme::FontBody());
@@ -708,7 +719,7 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
                 int ny = cy + (int)(radius * sin(angle));
 
                 drawNode(nx, ny, DeviceNodeColor(d));
-                _mapNodes.push_back({ nx, ny, NODE_R, i });
+                _mapNodes.push_back({ nx, ny, NODE_R, d.mac.empty() ? d.ip : d.mac });
 
                 if (showLabels) {
                     wstring lbl = d.customName.empty()
@@ -784,7 +795,7 @@ void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
                     DeleteObject(lp2);
 
                     drawNode(nx, ny, DeviceNodeColor(d));
-                    _mapNodes.push_back({ nx, ny, NODE_R, devIndices[i] });
+                    _mapNodes.push_back({ nx, ny, NODE_R, d.mac.empty() ? d.ip : d.mac });
 
                     if (subShowLabels) {
                         wstring lbl = d.customName.empty()
@@ -971,6 +982,9 @@ LRESULT TabOverview::OnScanProgress(HWND hwnd, WPARAM pct, LPARAM msgPtr) {
 }
 
 LRESULT TabOverview::OnScanComplete(HWND hwnd) {
+    // Refresh the map cache before invalidating so DrawTopologyMap sees the new data.
+    if (_mainWnd) _mapCache = _mainWnd->GetLastResult();
+
     RefreshKPIs();
     if (_hStatusText)  SetWindowText(_hStatusText, L"Scan complete.");
     if (_hProgressBar) SendMessage(_hProgressBar, PBM_SETPOS, 100, 0);
@@ -1112,6 +1126,7 @@ void TabOverview::RefreshNetworkInfo() {
 }
 
 void TabOverview::UpdateFromResult(const ScanResult& result) {
+    _mapCache = result;  // keep map cache in sync for DrawTopologyMap
     RefreshKPIs();
 }
 

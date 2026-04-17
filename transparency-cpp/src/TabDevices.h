@@ -98,6 +98,10 @@ private:
     // Filtered device indices
     std::vector<int> _filteredIndices;
 
+    // Cached snapshot used by the paint/custom-draw path.
+    // Updated once in PopulateList() — avoids repeated mutex-lock + full copy per row during scroll.
+    ScanResult _paintCache;
+
     bool _detailVisible = false;
     int _selectedDevice = -1;
 

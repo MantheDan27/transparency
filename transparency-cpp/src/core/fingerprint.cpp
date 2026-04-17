@@ -180,9 +180,13 @@ wstring fingerprint_device_type(const Device& d) {
     if (vendorContains(L"apple") && (hasMdns(L"_workstation") || hasPort(548)))
         return L"Mac";
 
-    // Mobile/Phone
+    // Mobile/Phone — vendor OUI match or mDNS device-info (iPhone/iPad)
     if (vendorContains(L"apple") || vendorContains(L"samsung") ||
-        vendorContains(L"xiaomi") || vendorContains(L"huawei"))
+        vendorContains(L"xiaomi") || vendorContains(L"huawei") ||
+        vendorContains(L"motorola") || vendorContains(L"oneplus") ||
+        vendorContains(L"sony mobile") || vendorContains(L"lg elec") ||
+        (vendorContains(L"google") && !hasPort(8008)) ||
+        hasMdns(L"_device-info"))
         return L"Mobile Device";
 
     // Generic computer
@@ -378,7 +382,10 @@ void fill_confidence_alternatives(Device& d) {
     add(L"Windows PC",         (hasPort(3389)||hasPort(445)||(hasPort(139)&&hasPort(135))) ? 80 : 5);
     add(L"Linux Server",       (hasPort(22)&&(hasPort(80)||hasPort(443)||hasPort(8080))) ? 75 : 5);
     add(L"Mac",                (vendorHas(L"apple")&&(hasMdns(L"_workstation")||hasPort(548))) ? 80 : 5);
-    add(L"Mobile Device",      (vendorHas(L"apple")||vendorHas(L"samsung")||vendorHas(L"xiaomi")) ? 50 : 5);
+    add(L"Mobile Device",      (vendorHas(L"apple")||vendorHas(L"samsung")||vendorHas(L"xiaomi")||
+                                vendorHas(L"motorola")||vendorHas(L"oneplus")||vendorHas(L"sony mobile")||
+                                vendorHas(L"lg elec")||(vendorHas(L"google")&&!hasPort(8008))||
+                                hasMdns(L"_device-info")) ? 50 : 5);
     add(L"Computer",           (vendorHas(L"dell")||vendorHas(L"hp")||vendorHas(L"lenovo")||vendorHas(L"intel")) ? 60 : 5);
     add(L"Unknown Device",     15);
 

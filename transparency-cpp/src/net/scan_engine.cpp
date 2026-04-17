@@ -1126,6 +1126,13 @@ std::future<ScanResult> ScanEngine::QuickScan(
         }
 
         auto arp = GetArpTable();
+
+        // Merge ARP-only IPs: devices that block ICMP but are in the OS ARP cache (phones/tablets)
+        for (auto& kv : arp) {
+            if (seenIPs.insert(kv.first).second)
+                liveIPs.push_back(kv.first);
+        }
+
         return BuildResult(liveIPs, arp, mdns, ssdp, "quick", {}, false, false, progressCb);
     });
 }
@@ -1153,13 +1160,17 @@ std::future<ScanResult> ScanEngine::StandardScan(
         auto mdns = fMdns.get();
         auto ssdp = fSsdp.get();
 
-        // Merge
+        // Merge mDNS, SSDP, and ARP-only IPs (devices that block ICMP — phones/tablets)
         std::unordered_set<std::wstring> seenIPs(liveIPs.begin(), liveIPs.end());
         for (auto& kv : mdns) {
             if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
+            if (seenIPs.insert(kv.first).second)
+                liveIPs.push_back(kv.first);
+        }
+        for (auto& kv : arp) {
             if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }
@@ -1198,6 +1209,11 @@ std::future<ScanResult> ScanEngine::DeepScan(
                 liveIPs.push_back(kv.first);
         }
         for (auto& kv : ssdp) {
+            if (seenIPs.insert(kv.first).second)
+                liveIPs.push_back(kv.first);
+        }
+        // ARP-only IPs: devices that block ICMP but are in the OS ARP cache (phones/tablets)
+        for (auto& kv : arp) {
             if (seenIPs.insert(kv.first).second)
                 liveIPs.push_back(kv.first);
         }

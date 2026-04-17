@@ -44,7 +44,7 @@ private:
     void DrawTopologyMap(HDC hdc, const RECT& rc);
     void DrawSparkline(HDC hdc, const RECT& rc,
                        const std::vector<int>& vals, COLORREF col);
-    int  HitTestMapNode(int mx, int my) const;
+    std::wstring HitTestMapNode(int mx, int my) const; // returns stableId or empty
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
@@ -101,10 +101,16 @@ private:
     int _contentHeight = 0; // total content height
     int _viewHeight = 0;    // visible viewport height
 
-    // Interactive map — node hit targets (screen coords, scroll-adjusted in HitTest)
-    struct MapNode { int cx, cy, radius; int deviceIndex; };
+    // Interactive map — node hit targets (screen coords, scroll-adjusted in HitTest).
+    // stableId = MAC address if known, else IP — never a raw array index, so it
+    // remains valid across rescans and async result updates.
+    struct MapNode { int cx, cy, radius; std::wstring stableId; };
     std::vector<MapNode> _mapNodes;
     int _hoveredNode = -1;
+
+    // Cached scan result used by DrawTopologyMap — updated at scan-complete time
+    // so OnPaint never needs to acquire _dataMutex.
+    ScanResult _mapCache;
 
     static const wchar_t* s_className;
 };

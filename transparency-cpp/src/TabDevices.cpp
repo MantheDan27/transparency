@@ -551,11 +551,10 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
                 if (cd->iSubItem == 0) {
                     int row = (int)cd->nmcd.dwItemSpec;
                     bool online = true;
-                    if (row < (int)_filteredIndices.size() && _mainWnd) {
-                        ScanResult r = _mainWnd->GetLastResult();
+                    if (row < (int)_filteredIndices.size()) {
                         int idx = _filteredIndices[row];
-                        if (idx < (int)r.devices.size())
-                            online = r.devices[idx].online;
+                        if (idx < (int)_paintCache.devices.size())
+                            online = _paintCache.devices[idx].online;
                     }
                     cd->clrText = online ? Theme::SUCCESS : Theme::TEXT_MUTED;
                     return CDRF_NEWFONT;
@@ -567,13 +566,12 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
                     return CDRF_NEWFONT;
                 }
                 // Trust column color-coded (col 6)
-                if (cd->iSubItem == 6 && _mainWnd) {
+                if (cd->iSubItem == 6) {
                     int row = (int)cd->nmcd.dwItemSpec;
                     if (row < (int)_filteredIndices.size()) {
-                        ScanResult r = _mainWnd->GetLastResult();
                         int idx = _filteredIndices[row];
-                        if (idx < (int)r.devices.size()) {
-                            auto& trust = r.devices[idx].trustState;
+                        if (idx < (int)_paintCache.devices.size()) {
+                            auto& trust = _paintCache.devices[idx].trustState;
                             if (trust == L"owned")          cd->clrText = Theme::ACCENT_GREEN;
                             else if (trust == L"known")     cd->clrText = Theme::ACCENT_BLUE;
                             else if (trust == L"guest")     cd->clrText = Theme::ACCENT_AMBER;
@@ -604,7 +602,9 @@ LRESULT TabDevices::OnScanComplete(HWND hwnd) {
 void TabDevices::ApplyFilter() {
     if (!_mainWnd || !_hList) return;
 
-    ScanResult r = _mainWnd->GetLastResult();
+    // Single lock + copy for the entire filter+populate cycle
+    _paintCache = _mainWnd->GetLastResult();
+    const ScanResult& r = _paintCache;
 
     // Get search text
     wchar_t searchBuf[256] = {};
@@ -649,7 +649,8 @@ void TabDevices::ApplyFilter() {
 void TabDevices::PopulateList() {
     if (!_hList || !_mainWnd) return;
 
-    ScanResult r = _mainWnd->GetLastResult();
+    // _paintCache was set by ApplyFilter() before this call — no extra lock needed.
+    const ScanResult& r = _paintCache;
 
     ListView_DeleteAllItems(_hList);
 
@@ -785,10 +786,27 @@ LRESULT TabDevices::OnDetailScroll(HWND hwnd, WPARAM wp) {
 
 LRESULT TabDevices::OnDetailMouseWheel(HWND hwnd, WPARAM wp) {
     int zDelta = GET_WHEEL_DELTA_WPARAM(wp);
-    int lines  = abs(zDelta) / WHEEL_DELTA * 3;
-    UINT sbCode = (zDelta > 0) ? SB_LINEUP : SB_LINEDOWN;
-    for (int i = 0; i < lines; i++)
-        OnDetailScroll(hwnd, MAKEWPARAM(sbCode, 0));
+    // Compute total pixel delta (3 lines per notch, 20px per line) and scroll once.
+    int pixelDelta = (zDelta * 3 * 20) / WHEEL_DELTA;
+
+    RECT rc; GetClientRect(hwnd, &rc);
+    int pageH  = rc.bottom - rc.top;
+    int maxPos = std::max(0, _detailContentH - pageH);
+    int newPos = std::max(0, std::min(maxPos, _detailScrollPos - pixelDelta));
+
+    if (newPos == _detailScrollPos) return 0;
+
+    int delta = _detailScrollPos - newPos;
+    _detailScrollPos = newPos;
+    ScrollWindowEx(hwnd, 0, delta, nullptr, nullptr, nullptr, nullptr,
+                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+    UpdateWindow(hwnd);
+
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_POS;
+    si.nPos   = _detailScrollPos;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
     return 0;
 }
 
