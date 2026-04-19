@@ -9,6 +9,7 @@
 #include <sstream>
 #include <vector>
 #include <thread>
+#include <algorithm>
 
 #pragma comment(lib, "winhttp.lib")
 
@@ -22,213 +23,286 @@ using std::string;
 
 const wchar_t* TabSmartHome::s_className = L"TabSmartHomeWnd";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// WM_APP async response IDs
+static const UINT WM_HA_CONNECT  = WM_APP + 120;
+static const UINT WM_HA_SYNC     = WM_APP + 121;
+static const UINT WM_HUE_DISC    = WM_APP + 122;
+static const UINT WM_HUE_PAIR    = WM_APP + 123;
+static const UINT WM_HUE_SYNC    = WM_APP + 124;
 
-static HWND MakeSection(HWND parent, const wchar_t* text, int& y, int cx, HINSTANCE hInst) {
-    HWND hw = CreateWindowEx(0, L"STATIC", text,
-        WS_CHILD | WS_VISIBLE | SS_LEFT,
-        16, y, cx - 32, 20, parent, nullptr, hInst, nullptr);
-    SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
-    return hw;
-}
+// ── String helpers ────────────────────────────────────────────────────────────
 
-std::string TabSmartHome::WideToUtf8(const std::wstring& w) {
+string TabSmartHome::WideToUtf8(const wstring& w) {
     if (w.empty()) return "";
     int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
     if (n <= 0) return "";
-    std::string s(n - 1, 0);
+    string s(n - 1, 0);
     WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], n, nullptr, nullptr);
     return s;
 }
 
-std::wstring TabSmartHome::Utf8ToWide(const std::string& s) {
+wstring TabSmartHome::Utf8ToWide(const string& s) {
     if (s.empty()) return L"";
     int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
     if (n <= 0) return L"";
-    std::wstring w(n - 1, 0);
+    wstring w(n - 1, 0);
     MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], n);
     return w;
 }
 
-// URL-encode a UTF-8 string
-static std::string UrlEncode(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() * 2);
-    for (unsigned char c : s) {
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
-            out += (char)c;
-        } else {
-            char hex[4];
-            sprintf_s(hex, "%%%02X", c);
-            out += hex;
-        }
-    }
-    return out;
-}
-
-// Simple JSON value extractor (no dependency needed for flat responses)
-static std::string JsonExtract(const std::string& json, const std::string& key) {
-    std::string search = "\"" + key + "\"";
+string TabSmartHome::JsonExtract(const string& json, const string& key) {
+    string search = "\"" + key + "\"";
     auto pos = json.find(search);
-    if (pos == std::string::npos) return "";
+    if (pos == string::npos) return "";
     pos = json.find(':', pos + search.size());
-    if (pos == std::string::npos) return "";
+    if (pos == string::npos) return "";
     pos++;
-    // skip whitespace
     while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
     if (pos >= json.size()) return "";
-
     if (json[pos] == '"') {
-        // string value
         pos++;
         auto end = json.find('"', pos);
-        if (end == std::string::npos) return "";
-        return json.substr(pos, end - pos);
-    } else {
-        // numeric value
-        auto end = json.find_first_of(",} \t\r\n", pos);
-        if (end == std::string::npos) end = json.size();
+        if (end == string::npos) return "";
         return json.substr(pos, end - pos);
     }
+    auto end = json.find_first_of(",} \t\r\n", pos);
+    if (end == string::npos) end = json.size();
+    return json.substr(pos, end - pos);
 }
 
-// ── WinHTTP POST ─────────────────────────────────────────────────────────────
+// ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-std::string TabSmartHome::HttpPost(const std::wstring& host, const std::wstring& path,
-                                   const std::string& body) {
-    std::string result;
+// Simple URL parser — returns {secure, host, port, path}
+struct ParsedUrl { bool secure; wstring host; INTERNET_PORT port; wstring path; bool valid; };
 
-    HINTERNET hSession = WinHttpOpen(L"Transparency/1.0",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) return "Error: WinHttpOpen failed";
-
-    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(),
-        INTERNET_DEFAULT_HTTPS_PORT, 0);
-    if (!hConnect) { WinHttpCloseHandle(hSession); return "Error: WinHttpConnect failed"; }
-
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
-        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
-        WINHTTP_FLAG_SECURE);
-    if (!hRequest) {
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        return "Error: WinHttpOpenRequest failed";
-    }
-
-    const wchar_t* hdrs = L"Content-Type: application/x-www-form-urlencoded";
-    BOOL sent = WinHttpSendRequest(hRequest, hdrs, (DWORD)-1,
-        (LPVOID)body.c_str(), (DWORD)body.size(), (DWORD)body.size(), 0);
-
-    if (sent) {
-        WinHttpReceiveResponse(hRequest, nullptr);
-
-        DWORD statusCode = 0;
-        DWORD statusSize = sizeof(statusCode);
-        WinHttpQueryHeaders(hRequest,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize,
-            WINHTTP_NO_HEADER_INDEX);
-
-        // Read response body
-        DWORD bytesAvail = 0;
-        do {
-            WinHttpQueryDataAvailable(hRequest, &bytesAvail);
-            if (bytesAvail > 0) {
-                std::vector<char> buf(bytesAvail + 1, 0);
-                DWORD bytesRead = 0;
-                WinHttpReadData(hRequest, buf.data(), bytesAvail, &bytesRead);
-                result.append(buf.data(), bytesRead);
-            }
-        } while (bytesAvail > 0);
-
-        if (statusCode != 200) {
-            result = "HTTP " + std::to_string(statusCode) + ": " + result;
-        }
+static ParsedUrl ParseUrl(const wstring& url) {
+    ParsedUrl r = {};
+    wstring u = url;
+    if (u.size() >= 8 && u.substr(0, 8) == L"https://") {
+        r.secure = true; r.port = INTERNET_DEFAULT_HTTPS_PORT; u = u.substr(8);
+    } else if (u.size() >= 7 && u.substr(0, 7) == L"http://") {
+        r.secure = false; r.port = INTERNET_DEFAULT_HTTP_PORT; u = u.substr(7);
+    } else { return r; }
+    auto slash = u.find(L'/');
+    wstring hostPort = (slash != wstring::npos) ? u.substr(0, slash) : u;
+    r.path = (slash != wstring::npos) ? u.substr(slash) : L"/";
+    auto colon = hostPort.rfind(L':');
+    if (colon != wstring::npos) {
+        r.host = hostPort.substr(0, colon);
+        try { r.port = (INTERNET_PORT)std::stoi(hostPort.substr(colon + 1)); } catch (...) {}
     } else {
-        result = "Error: WinHttpSendRequest failed (" + std::to_string(GetLastError()) + ")";
+        r.host = hostPort;
     }
+    r.valid = !r.host.empty();
+    return r;
+}
 
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
+string TabSmartHome::HttpGetJson(const wstring& fullUrl, const wstring& bearerToken) {
+    ParsedUrl u = ParseUrl(fullUrl);
+    if (!u.valid) return "Error: invalid URL";
+
+    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSess) return "Error: WinHttpOpen failed";
+
+    HINTERNET hConn = WinHttpConnect(hSess, u.host.c_str(), u.port, 0);
+    if (!hConn) { WinHttpCloseHandle(hSess); return "Error: connect failed"; }
+
+    HINTERNET hReq = WinHttpOpenRequest(hConn, L"GET", u.path.c_str(),
+        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+        u.secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!hReq) { WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess); return "Error: open request failed"; }
+
+    wstring hdrs = L"Content-Type: application/json\r\n";
+    if (!bearerToken.empty()) hdrs += L"Authorization: Bearer " + bearerToken;
+
+    string result;
+    if (WinHttpSendRequest(hReq, hdrs.c_str(), (DWORD)-1, nullptr, 0, 0, 0) &&
+        WinHttpReceiveResponse(hReq, nullptr)) {
+        DWORD status = 0, sz = sizeof(status);
+        WinHttpQueryHeaders(hReq, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &status, &sz, WINHTTP_NO_HEADER_INDEX);
+        DWORD avail = 0;
+        do {
+            WinHttpQueryDataAvailable(hReq, &avail);
+            if (avail > 0) {
+                std::vector<char> buf(avail + 1, 0);
+                DWORD read = 0;
+                WinHttpReadData(hReq, buf.data(), avail, &read);
+                result.append(buf.data(), read);
+            }
+        } while (avail > 0);
+        if (status != 200 && status != 201)
+            result = "HTTP " + std::to_string(status) + ": " + result;
+    } else {
+        result = "Error: request failed (" + std::to_string(GetLastError()) + ")";
+    }
+    WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
     return result;
 }
 
-// ── WinHTTP POST (JSON + Bearer auth) ────────────────────────────────────────
+string TabSmartHome::HttpPostLocal(const wstring& host, INTERNET_PORT port,
+                                    const wstring& path, const string& json) {
+    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSess) return "Error: WinHttpOpen failed";
 
-std::string TabSmartHome::HttpPostJson(const std::wstring& host, const std::wstring& path,
-                                       const std::string& json, const std::wstring& bearerToken) {
-    std::string result;
+    HINTERNET hConn = WinHttpConnect(hSess, host.c_str(), port, 0);
+    if (!hConn) { WinHttpCloseHandle(hSess); return "Error: connect failed"; }
 
-    HINTERNET hSession = WinHttpOpen(L"Transparency/1.0",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) return "Error: WinHttpOpen failed";
+    HINTERNET hReq = WinHttpOpenRequest(hConn, L"POST", path.c_str(),
+        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
+    if (!hReq) { WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess); return "Error: open request failed"; }
 
-    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(),
-        INTERNET_DEFAULT_HTTPS_PORT, 0);
-    if (!hConnect) { WinHttpCloseHandle(hSession); return "Error: WinHttpConnect failed"; }
-
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
-        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
-        WINHTTP_FLAG_SECURE);
-    if (!hRequest) {
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
-        return "Error: WinHttpOpenRequest failed";
-    }
-
-    // Build headers: Content-Type + Authorization
-    wstring hdrs = L"Content-Type: application/json\r\n"
-                   L"Authorization: Bearer " + bearerToken;
-
-    BOOL sent = WinHttpSendRequest(hRequest, hdrs.c_str(), (DWORD)-1,
-        (LPVOID)json.c_str(), (DWORD)json.size(), (DWORD)json.size(), 0);
-
-    if (sent) {
-        WinHttpReceiveResponse(hRequest, nullptr);
-
-        DWORD statusCode = 0;
-        DWORD statusSize = sizeof(statusCode);
-        WinHttpQueryHeaders(hRequest,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize,
-            WINHTTP_NO_HEADER_INDEX);
-
-        DWORD bytesAvail = 0;
+    const wchar_t* hdrs = L"Content-Type: application/json";
+    string result;
+    if (WinHttpSendRequest(hReq, hdrs, (DWORD)-1,
+        (LPVOID)json.c_str(), (DWORD)json.size(), (DWORD)json.size(), 0) &&
+        WinHttpReceiveResponse(hReq, nullptr)) {
+        DWORD avail = 0;
         do {
-            WinHttpQueryDataAvailable(hRequest, &bytesAvail);
-            if (bytesAvail > 0) {
-                std::vector<char> buf(bytesAvail + 1, 0);
-                DWORD bytesRead = 0;
-                WinHttpReadData(hRequest, buf.data(), bytesAvail, &bytesRead);
-                result.append(buf.data(), bytesRead);
+            WinHttpQueryDataAvailable(hReq, &avail);
+            if (avail > 0) {
+                std::vector<char> buf(avail + 1, 0);
+                DWORD read = 0;
+                WinHttpReadData(hReq, buf.data(), avail, &read);
+                result.append(buf.data(), read);
             }
-        } while (bytesAvail > 0);
-
-        // For event gateway, 202 Accepted is success (no body)
-        if (statusCode == 200 || statusCode == 202) {
-            if (result.empty()) result = "OK (HTTP " + std::to_string(statusCode) + ")";
-        } else {
-            result = "HTTP " + std::to_string(statusCode) + ": " + result;
-        }
+        } while (avail > 0);
     } else {
-        result = "Error: WinHttpSendRequest failed (" + std::to_string(GetLastError()) + ")";
+        result = "Error: request failed (" + std::to_string(GetLastError()) + ")";
     }
-
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
+    WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
     return result;
 }
 
-// ── Window setup ─────────────────────────────────────────────────────────────
+string TabSmartHome::HttpPostJson(const wstring& host, const wstring& path,
+                                   const string& json, const wstring& bearerToken) {
+    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSess) return "Error: WinHttpOpen failed";
+    HINTERNET hConn = WinHttpConnect(hSess, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConn) { WinHttpCloseHandle(hSess); return "Error: connect failed"; }
+    HINTERNET hReq = WinHttpOpenRequest(hConn, L"POST", path.c_str(),
+        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    if (!hReq) { WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess); return "Error: open request failed"; }
+    wstring hdrs = L"Content-Type: application/json\r\nAuthorization: Bearer " + bearerToken;
+    string result;
+    if (WinHttpSendRequest(hReq, hdrs.c_str(), (DWORD)-1,
+        (LPVOID)json.c_str(), (DWORD)json.size(), (DWORD)json.size(), 0) &&
+        WinHttpReceiveResponse(hReq, nullptr)) {
+        DWORD status = 0, sz = sizeof(status);
+        WinHttpQueryHeaders(hReq, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &status, &sz, WINHTTP_NO_HEADER_INDEX);
+        DWORD avail = 0;
+        do {
+            WinHttpQueryDataAvailable(hReq, &avail);
+            if (avail > 0) {
+                std::vector<char> buf(avail + 1, 0);
+                DWORD read = 0;
+                WinHttpReadData(hReq, buf.data(), avail, &read);
+                result.append(buf.data(), read);
+            }
+        } while (avail > 0);
+        if (status == 200 || status == 202) { if (result.empty()) result = "OK"; }
+        else result = "HTTP " + std::to_string(status) + ": " + result;
+    } else {
+        result = "Error: request failed (" + std::to_string(GetLastError()) + ")";
+    }
+    WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
+    return result;
+}
+
+// ── Smart device classification helpers ──────────────────────────────────────
+
+wstring TabSmartHome::SmartPlatform(const Device& d) {
+    for (auto& svc : d.mdnsServices) {
+        if (svc.find(L"_googlecast") != wstring::npos) return L"Chromecast";
+        if (svc.find(L"_hue")        != wstring::npos) return L"Philips Hue";
+        if (svc.find(L"_airplay")    != wstring::npos) return L"Apple";
+        if (svc.find(L"_spotify")    != wstring::npos) return L"Sonos/Spotify";
+        if (svc.find(L"_amzn")       != wstring::npos) return L"Amazon Echo";
+        if (svc.find(L"_ewelink")    != wstring::npos) return L"Sonoff/eWeLink";
+        if (svc.find(L"_tuya")       != wstring::npos) return L"Tuya";
+    }
+    for (int p : d.openPorts) {
+        if (p == 8123)                return L"Home Assistant";
+        if (p == 8009 || p == 8008)   return L"Google/Cast";
+        if (p == 1883 || p == 8883)   return L"MQTT Broker";
+        if (p == 1400)                return L"Sonos";
+        if (p == 4070)                return L"Spotify Connect";
+        if (p == 55443)               return L"Mi/Xiaomi";
+    }
+    wstring v = d.vendor;
+    if (v.find(L"Amazon")   != wstring::npos) return L"Amazon Echo";
+    if (v.find(L"Google")   != wstring::npos) return L"Google/Nest";
+    if (v.find(L"Philips")  != wstring::npos) return L"Philips Hue";
+    if (v.find(L"Sonos")    != wstring::npos) return L"Sonos";
+    if (v.find(L"Ring")     != wstring::npos) return L"Ring";
+    if (v.find(L"Nest")     != wstring::npos) return L"Nest";
+    if (v.find(L"TP-Link")  != wstring::npos || v.find(L"Kasa") != wstring::npos) return L"TP-Link Kasa";
+    if (v.find(L"Tuya")     != wstring::npos) return L"Tuya";
+    if (v.find(L"Shelly")   != wstring::npos) return L"Shelly";
+    if (v.find(L"Belkin")   != wstring::npos) return L"Wemo";
+    if (v.find(L"Wemo")     != wstring::npos) return L"Wemo";
+    if (v.find(L"Ecobee")   != wstring::npos) return L"Ecobee";
+    if (v.find(L"Lutron")   != wstring::npos) return L"Lutron";
+    if (!d.ssdpInfo.empty()) {
+        if (d.ssdpInfo.find(L"Amazon") != wstring::npos) return L"Amazon Echo";
+        if (d.ssdpInfo.find(L"Google") != wstring::npos) return L"Google";
+    }
+    return L"IoT Device";
+}
+
+wstring TabSmartHome::SecurityNote(const Device& d) {
+    bool hasTelnet = false, hasHttp = false, hasHttps = false, hasFtp = false, hasRtsp = false;
+    for (int p : d.openPorts) {
+        if (p == 23)                hasTelnet = true;
+        if (p == 80 || p == 8080)  hasHttp   = true;
+        if (p == 443 || p == 8443) hasHttps  = true;
+        if (p == 21)               hasFtp    = true;
+        if (p == 554)              hasRtsp   = true;
+    }
+    if (hasTelnet)            return L"\u26A0 Telnet exposed";
+    if (hasFtp)               return L"\u26A0 FTP exposed";
+    if (hasHttp && !hasHttps) return L"\u26A0 HTTP only";
+    if (hasRtsp)              return L"\u26A0 Camera stream";
+    return L"";
+}
+
+bool TabSmartHome::IsSmartDevice(const Device& d) {
+    for (auto& svc : d.mdnsServices) {
+        if (svc.find(L"_googlecast") != wstring::npos ||
+            svc.find(L"_hue")        != wstring::npos ||
+            svc.find(L"_airplay")    != wstring::npos ||
+            svc.find(L"_spotify")    != wstring::npos ||
+            svc.find(L"_amzn")       != wstring::npos ||
+            svc.find(L"_tuya")       != wstring::npos)
+            return true;
+    }
+    for (int p : d.openPorts) {
+        if (p == 8008 || p == 8009 || p == 8123 || p == 1883 ||
+            p == 8883 || p == 1400 || p == 4070 || p == 55443)
+            return true;
+    }
+    wstring v = d.vendor;
+    const wchar_t* vendors[] = {
+        L"Amazon", L"Google", L"Philips", L"Sonos", L"Ring", L"Nest",
+        L"TP-Link", L"Kasa", L"Tuya", L"Shelly", L"Belkin", L"Wemo",
+        L"Ecobee", L"Lutron", L"iRobot", L"Wyze", nullptr
+    };
+    for (int i = 0; vendors[i]; i++)
+        if (v.find(vendors[i]) != wstring::npos) return true;
+    wstring type = d.deviceType;
+    if (type == L"IoT Device" || type == L"Smart Speaker" ||
+        type == L"Smart TV"   || type == L"Camera") return true;
+    return false;
+}
+
+// ── Window setup ──────────────────────────────────────────────────────────────
 
 bool TabSmartHome::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
-
     WNDCLASSEX wc = {};
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
@@ -237,17 +311,14 @@ bool TabSmartHome::Create(HWND parent, int x, int y, int w, int h, MainWindow* m
     wc.lpszClassName = s_className;
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&wc);
-
     _hwnd = CreateWindowEx(0, s_className, nullptr,
         WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
-
     return _hwnd != nullptr;
 }
 
 LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     TabSmartHome* self = nullptr;
-
     if (msg == WM_NCCREATE) {
         auto* cs = reinterpret_cast<CREATESTRUCT*>(lp);
         self = reinterpret_cast<TabSmartHome*>(cs->lpCreateParams);
@@ -256,229 +327,171 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
     } else {
         self = reinterpret_cast<TabSmartHome*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
     }
-
     if (!self) return DefWindowProc(hwnd, msg, wp, lp);
 
     switch (msg) {
-    case WM_CREATE:
-        return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
-    case WM_SIZE:
-        self->OnSize(hwnd, LOWORD(lp), HIWORD(lp));
-        return 0;
-    case WM_PAINT:
-        return self->OnPaint(hwnd);
-    case WM_COMMAND:
-        return self->OnCommand(hwnd, wp, lp);
-    case WM_NOTIFY:
-        return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
-    case WM_SCAN_COMPLETE:
-        self->RefreshDevices();
-        return 0;
-    case WM_VSCROLL:
-        return self->OnVScroll(hwnd, wp);
-    case WM_MOUSEWHEEL:
-        return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
-    // Async token exchange result
-    case WM_APP + 100: {
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            std::string narrow = WideToUtf8(*resp);
-            std::string token = JsonExtract(narrow, "access_token");
-            std::string refresh = JsonExtract(narrow, "refresh_token");
-            std::string expires = JsonExtract(narrow, "expires_in");
-            std::string error = JsonExtract(narrow, "error");
+    case WM_CREATE:      return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
+    case WM_SIZE:        self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
+    case WM_PAINT:       return self->OnPaint(hwnd);
+    case WM_COMMAND:     return self->OnCommand(hwnd, wp, lp);
+    case WM_NOTIFY:      return self->OnNotify(hwnd, reinterpret_cast<NMHDR*>(lp));
+    case WM_SCAN_COMPLETE: self->RefreshDevices(); return 0;
+    case WM_VSCROLL:     return self->OnVScroll(hwnd, wp);
+    case WM_MOUSEWHEEL:  return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
+    case WM_ERASEBKGND:  return 1;
 
-            if (!token.empty()) {
-                self->_alexaAccessToken = Utf8ToWide(token);
-                self->_alexaRefreshToken = Utf8ToWide(refresh);
-                self->AppendTokenLog(L"\r\n[SUCCESS] Access token retrieved!");
-                self->AppendTokenLog(L"[TOKEN] " + Utf8ToWide(token.substr(0, 20)) + L"...");
-                self->AppendTokenLog(L"[REFRESH] " + Utf8ToWide(refresh.substr(0, 20)) + L"...");
-                self->AppendTokenLog(L"[EXPIRES] " + Utf8ToWide(expires) + L" seconds");
-                if (self->_hAlexaStatus)
-                    SetWindowText(self->_hAlexaStatus, L"Status: Connected (token acquired)");
-            } else {
-                self->AppendTokenLog(L"\r\n[ERROR] Token exchange failed");
-                if (!error.empty())
-                    self->AppendTokenLog(L"[DETAIL] " + Utf8ToWide(error));
-                self->AppendTokenLog(L"[RESPONSE] " + *resp);
-                if (self->_hAlexaStatus)
-                    SetWindowText(self->_hAlexaStatus, L"Status: Token exchange failed");
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    // Async token refresh result
-    case WM_APP + 101: {
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            std::string narrow = WideToUtf8(*resp);
-            std::string token = JsonExtract(narrow, "access_token");
-            std::string refresh = JsonExtract(narrow, "refresh_token");
-            std::string expires = JsonExtract(narrow, "expires_in");
-            std::string error = JsonExtract(narrow, "error");
-
-            if (!token.empty()) {
-                self->_alexaAccessToken = Utf8ToWide(token);
-                if (!refresh.empty())
-                    self->_alexaRefreshToken = Utf8ToWide(refresh);
-                self->AppendTokenLog(L"\r\n[SUCCESS] Token refreshed!");
-                self->AppendTokenLog(L"[TOKEN] " + Utf8ToWide(token.substr(0, 20)) + L"...");
-                self->AppendTokenLog(L"[EXPIRES] " + Utf8ToWide(expires) + L" seconds");
-                if (self->_hAlexaStatus)
-                    SetWindowText(self->_hAlexaStatus, L"Status: Connected (token refreshed)");
-            } else {
-                self->AppendTokenLog(L"\r\n[ERROR] Token refresh failed");
-                if (!error.empty())
-                    self->AppendTokenLog(L"[DETAIL] " + Utf8ToWide(error));
-                if (self->_hAlexaStatus)
-                    SetWindowText(self->_hAlexaStatus, L"Status: Refresh failed");
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    // Async Smart Home Skill API responses
-    case WM_APP + 102: { // Discovery response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            if (resp->find(L"OK") == 0 || resp->find(L"HTTP 2") != wstring::npos) {
-                self->AppendSHLog(L"[SUCCESS] Discovery AddOrUpdateReport accepted by Alexa");
-                self->AppendSHLog(L"[RESPONSE] " + *resp);
-            } else {
-                self->AppendSHLog(L"[ERROR] Discovery failed: " + *resp);
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 103: { // State report response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            if (resp->find(L"OK") == 0 || resp->find(L"HTTP 2") != wstring::npos) {
-                self->AppendSHLog(L"[SUCCESS] StateReport accepted");
-            } else {
-                self->AppendSHLog(L"[ERROR] StateReport failed: " + *resp);
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 104: { // Change report response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            if (resp->find(L"OK") == 0 || resp->find(L"HTTP 2") != wstring::npos) {
-                self->AppendSHLog(L"[SUCCESS] ChangeReport (proactive) accepted by Event Gateway");
-            } else {
-                self->AppendSHLog(L"[ERROR] ChangeReport failed: " + *resp);
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 110: { // Google token exchange response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            self->AppendGoogleTokenLog(L"[RESPONSE] " + *resp);
-            // Parse access_token and refresh_token from JSON
-            string json = WideToUtf8(*resp);
-            string at = JsonExtract(json, "access_token");
-            string rt = JsonExtract(json, "refresh_token");
-            if (!at.empty()) {
-                self->_googleAccessToken = Utf8ToWide(at);
-                self->AppendGoogleTokenLog(L"[SUCCESS] Access token received (" +
-                    std::to_wstring(at.size()) + L" chars)");
-                if (self->_hGoogleStatus)
-                    SetWindowText(self->_hGoogleStatus, L"Status: Connected (token active)");
-            }
-            if (!rt.empty()) {
-                self->_googleRefreshToken = Utf8ToWide(rt);
-                self->AppendGoogleTokenLog(L"[INFO] Refresh token saved");
-            }
-            if (at.empty()) {
-                self->AppendGoogleTokenLog(L"[ERROR] No access_token in response");
-                if (self->_hGoogleStatus)
-                    SetWindowText(self->_hGoogleStatus, L"Status: Token exchange failed");
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 111: { // Google token refresh response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            self->AppendGoogleTokenLog(L"[RESPONSE] " + *resp);
-            string json = WideToUtf8(*resp);
-            string at = JsonExtract(json, "access_token");
-            if (!at.empty()) {
-                self->_googleAccessToken = Utf8ToWide(at);
-                self->AppendGoogleTokenLog(L"[SUCCESS] Access token refreshed");
-                if (self->_hGoogleStatus)
-                    SetWindowText(self->_hGoogleStatus, L"Status: Connected (token refreshed)");
-            } else {
-                self->AppendGoogleTokenLog(L"[ERROR] Refresh failed");
-                if (self->_hGoogleStatus)
-                    SetWindowText(self->_hGoogleStatus, L"Status: Refresh failed");
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 112: { // Home Graph Request Sync response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            if (resp->empty() || resp->find(L"{}") != wstring::npos ||
-                resp->find(L"HTTP 2") != wstring::npos) {
-                self->AppendGoogleHGLog(L"[SUCCESS] Request Sync accepted — Google will re-sync devices");
-            } else {
-                self->AppendGoogleHGLog(L"[RESPONSE] " + *resp);
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 113: { // Home Graph Report State response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            if (resp->empty() || resp->find(L"{}") != wstring::npos ||
-                resp->find(L"HTTP 2") != wstring::npos) {
-                self->AppendGoogleHGLog(L"[SUCCESS] Device state reported to Home Graph");
-            } else {
-                self->AppendGoogleHGLog(L"[RESPONSE] " + *resp);
-            }
-            delete resp;
-        }
-        return 0;
-    }
-    case WM_APP + 114: { // Home Graph Disconnect response
-        wstring* resp = reinterpret_cast<wstring*>(lp);
-        if (resp) {
-            if (resp->empty() || resp->find(L"{}") != wstring::npos ||
-                resp->find(L"HTTP 2") != wstring::npos) {
-                self->AppendGoogleHGLog(L"[SUCCESS] Agent user disconnected from Home Graph");
-                if (self->_hGoogleStatus)
-                    SetWindowText(self->_hGoogleStatus, L"Status: Disconnected");
-            } else {
-                self->AppendGoogleHGLog(L"[RESPONSE] " + *resp);
-            }
-            delete resp;
-        }
-        return 0;
-    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLORBTN: {
-        HDC hdc = (HDC)wp;
-        SetTextColor(hdc, Theme::TEXT_PRIMARY);
-        SetBkColor(hdc, Theme::BG_SURFACE);
+        SetTextColor((HDC)wp, Theme::TEXT_PRIMARY);
+        SetBkColor((HDC)wp, Theme::BG_SURFACE);
         return (LRESULT)Theme::BrushSurface();
     }
-    case WM_ERASEBKGND:
-        return 1;  // Suppress — OnPaint handles all drawing via double buffer
-    default:
-        return DefWindowProc(hwnd, msg, wp, lp);
+
+    // ── Async HTTP responses ──────────────────────────────────────────────────
+    case WM_APP + 120: { // HA connect
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (!resp) return 0;
+        string narrow = WideToUtf8(*resp);
+        if (resp->find(L"HTTP 4") == wstring::npos && resp->find(L"Error") == wstring::npos) {
+            string ver = JsonExtract(narrow, "version");
+            wstring msg2 = L"[OK] Connected to Home Assistant";
+            if (!ver.empty()) msg2 += L"  \u2014  version " + Utf8ToWide(ver);
+            self->HaAppendLog(msg2);
+            if (self->_hHaStatus)
+                SetWindowText(self->_hHaStatus, (L"Status: Connected  (HA " + Utf8ToWide(ver) + L")").c_str());
+        } else {
+            self->HaAppendLog(L"[ERROR] Could not connect: " + *resp);
+            if (self->_hHaStatus) SetWindowText(self->_hHaStatus, L"Status: Connection failed");
+        }
+        delete resp; return 0;
+    }
+    case WM_APP + 121: { // HA sync
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (!resp) return 0;
+        if (resp->find(L"Error") != wstring::npos || resp->find(L"HTTP 4") != wstring::npos) {
+            self->HaAppendLog(L"[ERROR] Sync failed: " + *resp);
+            delete resp; return 0;
+        }
+        // Parse entity list and add to device list
+        string json = WideToUtf8(*resp);
+        ListView_DeleteAllItems(self->_hDeviceList);
+        self->PopulateSmartDevices(); // keep LAN devices
+        int row = ListView_GetItemCount(self->_hDeviceList);
+        size_t pos = 0;
+        int count = 0;
+        while (pos < json.size()) {
+            auto eid = json.find("\"entity_id\"", pos);
+            if (eid == string::npos) break;
+            string entityId = JsonExtract(json.substr(eid), "entity_id");
+            // Only care about actionable domains
+            bool relevant = entityId.find("light.") == 0 || entityId.find("switch.") == 0 ||
+                            entityId.find("sensor.") == 0 || entityId.find("binary_sensor.") == 0 ||
+                            entityId.find("media_player.") == 0 || entityId.find("climate.") == 0 ||
+                            entityId.find("cover.") == 0 || entityId.find("lock.") == 0;
+            if (relevant) {
+                auto statePos = json.find("\"state\"", eid);
+                string state = (statePos != string::npos && statePos < eid + 2000)
+                                ? JsonExtract(json.substr(statePos), "state") : "";
+                auto fnPos = json.find("\"friendly_name\"", eid);
+                string fname = (fnPos != string::npos && fnPos < eid + 2000)
+                                ? JsonExtract(json.substr(fnPos), "friendly_name") : entityId;
+                // domain = part before '.'
+                string domain = entityId.substr(0, entityId.find('.'));
+
+                LVITEM lvi = {};
+                lvi.mask = LVIF_TEXT; lvi.iItem = row;
+                lvi.pszText = (LPWSTR)L"";
+                ListView_InsertItem(self->_hDeviceList, &lvi);
+                ListView_SetItemText(self->_hDeviceList, row, 1, (LPWSTR)Utf8ToWide(fname).c_str());
+                ListView_SetItemText(self->_hDeviceList, row, 2, (LPWSTR)Utf8ToWide(domain).c_str());
+                ListView_SetItemText(self->_hDeviceList, row, 3, (LPWSTR)L"Home Assistant");
+                ListView_SetItemText(self->_hDeviceList, row, 4, (LPWSTR)L"");
+                ListView_SetItemText(self->_hDeviceList, row, 5, (LPWSTR)Utf8ToWide(state).c_str());
+                row++; count++;
+            }
+            pos = eid + entityId.size() + 1;
+        }
+        self->HaAppendLog(L"[OK] Synced " + std::to_wstring(count) + L" entities from Home Assistant");
+        delete resp; return 0;
+    }
+    case WM_APP + 122: { // Hue discover — find bridge IP from SSDP description
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (!resp) return 0;
+        // resp holds either "found:<ip>" or an error string
+        if (resp->substr(0, 6) == L"found:") {
+            wstring ip = resp->substr(6);
+            self->_hueBridgeIp = ip;
+            if (self->_hHueBridgeIp) SetWindowText(self->_hHueBridgeIp, ip.c_str());
+            if (self->_hHueStatus) SetWindowText(self->_hHueStatus, (L"Bridge found: " + ip).c_str());
+            self->HueAppendLog(L"[OK] Bridge at " + ip + L" \u2014 press button on bridge, then click Pair");
+        } else {
+            self->HueAppendLog(L"[INFO] No bridge auto-detected. Enter the bridge IP manually and click Pair.");
+            if (self->_hHueStatus) SetWindowText(self->_hHueStatus, L"Status: Not found \u2014 enter IP manually");
+        }
+        delete resp; return 0;
+    }
+    case WM_APP + 123: { // Hue pair
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (!resp) return 0;
+        string json = WideToUtf8(*resp);
+        // Hue returns [{"success":{"username":"abc..."}}] or [{"error":...}]
+        string username = JsonExtract(json, "username");
+        if (!username.empty()) {
+            self->_hueUsername = Utf8ToWide(username);
+            self->HueAppendLog(L"[OK] Paired! Username: " + Utf8ToWide(username));
+            if (self->_hHueStatus)
+                SetWindowText(self->_hHueStatus, (L"Paired with " + self->_hueBridgeIp).c_str());
+            self->HueAppendLog(L"[INFO] Click Sync Lights to load your bulbs.");
+        } else {
+            string errDesc = JsonExtract(json, "description");
+            if (errDesc.find("link button") != string::npos)
+                self->HueAppendLog(L"[ERROR] Press the button on your Hue bridge first, then click Pair.");
+            else
+                self->HueAppendLog(L"[ERROR] Pairing failed: " + Utf8ToWide(errDesc.empty() ? json : errDesc));
+        }
+        delete resp; return 0;
+    }
+    case WM_APP + 124: { // Hue sync lights
+        wstring* resp = reinterpret_cast<wstring*>(lp);
+        if (!resp) return 0;
+        if (resp->find(L"Error") != wstring::npos || resp->find(L"HTTP 4") != wstring::npos) {
+            self->HueAppendLog(L"[ERROR] Sync failed: " + *resp);
+            delete resp; return 0;
+        }
+        string json = WideToUtf8(*resp);
+        // Hue /lights returns {"1":{"name":"...","state":{"on":true,...}},...}
+        int count = 0;
+        int row = ListView_GetItemCount(self->_hDeviceList);
+        size_t pos = 0;
+        while (pos < json.size()) {
+            auto namePos = json.find("\"name\"", pos);
+            if (namePos == string::npos) break;
+            string name = JsonExtract(json.substr(namePos), "name");
+            auto onPos = json.find("\"on\"", namePos);
+            string onState = (onPos != string::npos && onPos < namePos + 400)
+                              ? JsonExtract(json.substr(onPos), "on") : "false";
+            if (!name.empty()) {
+                LVITEM lvi = {};
+                lvi.mask = LVIF_TEXT; lvi.iItem = row;
+                lvi.pszText = (LPWSTR)self->_hueBridgeIp.c_str();
+                ListView_InsertItem(self->_hDeviceList, &lvi);
+                ListView_SetItemText(self->_hDeviceList, row, 1, (LPWSTR)Utf8ToWide(name).c_str());
+                ListView_SetItemText(self->_hDeviceList, row, 2, (LPWSTR)L"Light");
+                ListView_SetItemText(self->_hDeviceList, row, 3, (LPWSTR)L"Philips Hue");
+                ListView_SetItemText(self->_hDeviceList, row, 4, (LPWSTR)L"");
+                ListView_SetItemText(self->_hDeviceList, row, 5,
+                    (LPWSTR)(onState == "true" ? L"On" : L"Off"));
+                row++; count++;
+            }
+            pos = namePos + name.size() + 1;
+        }
+        self->HueAppendLog(L"[OK] Synced " + std::to_wstring(count) + L" lights from Hue bridge");
+        delete resp; return 0;
+    }
+
+    default: return DefWindowProc(hwnd, msg, wp, lp);
     }
 }
 
@@ -501,119 +514,101 @@ LRESULT TabSmartHome::OnPaint(HWND hwnd) {
     int cx = rc.right, cy = rc.bottom;
     if (cx <= 0 || cy <= 0) { EndPaint(hwnd, &ps); return 0; }
 
-    // Double buffer — paint to offscreen bitmap, then blit
     HDC hdc = CreateCompatibleDC(hdcScreen);
     HBITMAP hBmp = CreateCompatibleBitmap(hdcScreen, cx, cy);
-    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdc, hBmp);
+    HBITMAP hOld = (HBITMAP)SelectObject(hdc, hBmp);
 
     FillRect(hdc, &rc, Theme::BrushSurface());
-
     int sOff = -_scrollY;
 
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_PRIMARY);
     HFONT old = (HFONT)SelectObject(hdc, Theme::FontH2());
-    RECT titleRc = { Theme::SP4, Theme::SP3 + sOff, rc.right - Theme::SP4, 42 + sOff };
-    DrawText(hdc, L"Smart Home", -1, &titleRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    RECT title = { 16, 12 + sOff, cx - 16, 40 + sOff };
+    DrawText(hdc, L"Smart Home", -1, &title, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old);
 
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
     old = (HFONT)SelectObject(hdc, Theme::FontBodySm());
-    RECT subRc = { Theme::SP4, 42 + sOff, rc.right - Theme::SP4, 58 + sOff };
-    DrawText(hdc, L"Control smart devices, set up automations, and manage integrations", -1, &subRc,
+    RECT sub = { 16, 40 + sOff, cx - 16, 56 + sOff };
+    DrawText(hdc, L"Local-first smart home \u2014 no cloud accounts needed", -1, &sub,
              DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     SelectObject(hdc, old);
 
-    RECT sep2 = { Theme::SP4, 62 + sOff, rc.right - Theme::SP4, 63 + sOff };
-    FillRect(hdc, &sep2, Theme::BrushBorderSubtle());
+    RECT sep = { 16, 60 + sOff, cx - 16, 61 + sOff };
+    FillRect(hdc, &sep, Theme::BrushBorderSubtle());
 
-    // Blit to screen
     BitBlt(hdcScreen, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
-
-    SelectObject(hdc, hOldBmp);
+    SelectObject(hdc, hOld);
     DeleteObject(hBmp);
     DeleteDC(hdc);
-
     EndPaint(hwnd, &ps);
     return 0;
 }
 
-// ── Scroll support ───────────────────────────────────────────────────────────
+// ── Scroll ────────────────────────────────────────────────────────────────────
 
 void TabSmartHome::UpdateScrollBar(HWND hwnd) {
     SCROLLINFO si = {};
-    si.cbSize = sizeof(si);
-    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
-    si.nMin   = 0;
-    si.nMax   = _contentHeight;
-    si.nPage  = _viewHeight;
-    si.nPos   = _scrollY;
+    si.cbSize = sizeof(si); si.fMask = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin = 0; si.nMax = _contentHeight; si.nPage = _viewHeight; si.nPos = _scrollY;
     SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
 }
 
 LRESULT TabSmartHome::OnVScroll(HWND hwnd, WPARAM wp) {
-    SCROLLINFO si = {};
-    si.cbSize = sizeof(si);
-    si.fMask  = SIF_ALL;
+    SCROLLINFO si = {}; si.cbSize = sizeof(si); si.fMask = SIF_ALL;
     GetScrollInfo(hwnd, SB_VERT, &si);
-
-    int oldPos = _scrollY;
+    int old = _scrollY;
     switch (LOWORD(wp)) {
     case SB_LINEUP:     _scrollY -= 30; break;
     case SB_LINEDOWN:   _scrollY += 30; break;
-    case SB_PAGEUP:     _scrollY -= si.nPage; break;
-    case SB_PAGEDOWN:   _scrollY += si.nPage; break;
+    case SB_PAGEUP:     _scrollY -= (int)si.nPage; break;
+    case SB_PAGEDOWN:   _scrollY += (int)si.nPage; break;
     case SB_THUMBTRACK: _scrollY = si.nTrackPos; break;
     }
-
-    int maxScroll = _contentHeight - _viewHeight;
-    if (maxScroll < 0) maxScroll = 0;
-    if (_scrollY < 0) _scrollY = 0;
-    if (_scrollY > maxScroll) _scrollY = maxScroll;
-
-    if (_scrollY != oldPos) {
-        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE);
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    _scrollY = std::max(0, std::min(maxScroll, _scrollY));
+    if (_scrollY != old) {
+        ScrollWindowEx(hwnd, 0, old - _scrollY, nullptr, nullptr, nullptr, nullptr,
+                       SW_SCROLLCHILDREN | SW_INVALIDATE);
         UpdateScrollBar(hwnd);
     }
     return 0;
 }
 
 LRESULT TabSmartHome::OnMouseWheel(HWND hwnd, int delta) {
-    int oldPos = _scrollY;
+    int old = _scrollY;
     _scrollY -= delta / 2;
-
-    int maxScroll = _contentHeight - _viewHeight;
-    if (maxScroll < 0) maxScroll = 0;
-    if (_scrollY < 0) _scrollY = 0;
-    if (_scrollY > maxScroll) _scrollY = maxScroll;
-
-    if (_scrollY != oldPos) {
-        ScrollWindowEx(hwnd, 0, oldPos - _scrollY, nullptr, nullptr, nullptr, nullptr,
-            SW_SCROLLCHILDREN | SW_INVALIDATE);
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    _scrollY = std::max(0, std::min(maxScroll, _scrollY));
+    if (_scrollY != old) {
+        ScrollWindowEx(hwnd, 0, old - _scrollY, nullptr, nullptr, nullptr, nullptr,
+                       SW_SCROLLCHILDREN | SW_INVALIDATE);
         UpdateScrollBar(hwnd);
     }
     return 0;
 }
 
-// ── Controls ─────────────────────────────────────────────────────────────────
+// ── Controls ──────────────────────────────────────────────────────────────────
 
 void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
 
-    auto mkBtn = [&](const wchar_t* text, int id, int x, int y, int w, int h) -> HWND {
-        HWND hw = CreateWindowEx(0, L"BUTTON", text,
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    auto mkBtn = [&](const wchar_t* txt, int id, int x, int y, int w, int h) -> HWND {
+        HWND hw = CreateWindowEx(0, L"BUTTON", txt, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
             x, y, w, h, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         return hw;
     };
-    auto mkEdit = [&](const wchar_t* hint, int id, int x, int y, int w, int h, bool multi = false) -> HWND {
-        HWND hw = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
-            WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | (multi ? ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL : 0),
+    auto mkEdit = [&](const wchar_t* hint, int id, int x, int y, int w, int h,
+                      bool multi = false, bool pwd = false) -> HWND {
+        DWORD style = WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL |
+                      (multi ? ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL : 0);
+        HWND hw = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", nullptr, style,
             x, y, w, h, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)(multi ? Theme::FontMono() : Theme::FontBody()), TRUE);
         if (hint && !multi) SendMessage(hw, EM_SETCUEBANNER, FALSE, (LPARAM)hint);
+        if (pwd) SendMessage(hw, EM_SETPASSWORDCHAR, (WPARAM)L'\x2022', 0);
         Theme::ApplyDarkEdit(hw);
         return hw;
     };
@@ -623,280 +618,127 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
         return hw;
     };
+    auto mkSection = [&](const wchar_t* t, int y) -> HWND {
+        HWND hw = CreateWindowEx(0, L"STATIC", t, WS_CHILD | WS_VISIBLE | SS_LEFT,
+            16, y, cx - 32, 20, hwnd, nullptr, hInst, nullptr);
+        SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
+        return hw;
+    };
 
     int y = 68;
 
-    // ── Smart Devices Discovered ─────────────────────────────────────────────
-    MakeSection(hwnd, L"Smart Devices on Network", y, cx, hInst);
-    y += 24;
+    // ── SMART DEVICES ON NETWORK ─────────────────────────────────────────────
+    mkSection(L"Smart Devices on Network", y); y += 24;
 
     _hDeviceList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
-        16, y, cx - 32, 140, hwnd, (HMENU)(INT_PTR)IDC_SMART_DEVICE_LIST, hInst, nullptr);
+        16, y, cx - 32, 150, hwnd, (HMENU)(INT_PTR)IDC_SMART_DEVICE_LIST, hInst, nullptr);
     SendMessage(_hDeviceList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    ListView_SetExtendedListViewStyle(_hDeviceList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+    ListView_SetExtendedListViewStyle(_hDeviceList,
+        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
     Theme::ApplyDarkScrollbar(_hDeviceList);
 
-    LVCOLUMN col = {};
-    col.mask = LVCF_TEXT | LVCF_WIDTH;
-    col.pszText = (LPWSTR)L"IP Address";  col.cx = 130; ListView_InsertColumn(_hDeviceList, 0, &col);
-    col.pszText = (LPWSTR)L"Name";        col.cx = 160; ListView_InsertColumn(_hDeviceList, 1, &col);
-    col.pszText = (LPWSTR)L"Type";        col.cx = 120; ListView_InsertColumn(_hDeviceList, 2, &col);
-    col.pszText = (LPWSTR)L"Platform";    col.cx = 100; ListView_InsertColumn(_hDeviceList, 3, &col);
-    col.pszText = (LPWSTR)L"Status";      col.cx = 80;  ListView_InsertColumn(_hDeviceList, 4, &col);
+    LVCOLUMN col = {}; col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col.fmt = LVCFMT_LEFT;
+    struct ColDef { const wchar_t* name; int w; };
+    static const ColDef COLS[] = {
+        {L"IP / ID", 120}, {L"Name", 160}, {L"Type", 110},
+        {L"Platform", 120}, {L"Security", 120}, {L"Status", 70}
+    };
+    for (int i = 0; i < 6; i++) {
+        col.cx = COLS[i].w; col.pszText = (LPWSTR)COLS[i].name;
+        ListView_InsertColumn(_hDeviceList, i, &col);
+    }
+    y += 160;
 
-    y += 150;
+    // ── HOME ASSISTANT ───────────────────────────────────────────────────────
+    y += 8;
+    mkSection(L"Home Assistant  (local \u2014 no cloud account needed)", y); y += 24;
 
-    // ── Amazon Alexa Integration ─────────────────────────────────────────────
-    MakeSection(hwnd, L"Amazon Alexa Integration", y, cx, hInst);
-    y += 24;
+    _hHaStatus = mkLbl(L"Status: Not connected", 16, y, 400); y += 22;
 
-    _hAlexaStatus = mkLbl(L"Status: Not connected", 16, y, 300);
-    _hBtnAlexaLink = mkBtn(L"Link Alexa Account", IDC_BTN_ALEXA_LINK, 16, y + 22, 160, 28);
-    _hBtnAlexaDiscover = mkBtn(L"Discover Devices", IDC_BTN_ALEXA_DISCOVER, 184, y + 22, 150, 28);
-    y += 54;
-
-    mkLbl(L"ALEXA VOICE COMMANDS", 16, y, 200);
-    y += 18;
-    _hAlexaOut = mkEdit(nullptr, IDC_SMART_ALEXA_OUT, 16, y, cx - 32, 70, true);
-    SetWindowText(_hAlexaOut,
-        L"Available commands when linked:\r\n"
-        L"  \"Alexa, ask Transparency how many devices are online\"\r\n"
-        L"  \"Alexa, ask Transparency to scan my network\"\r\n"
-        L"  \"Alexa, ask Transparency for security status\"");
-    y += 78;
-
-    // ── Alexa Access Token Retrieval ─────────────────────────────────────────
-    MakeSection(hwnd, L"Alexa Access Token Retrieval (OAuth 2.0)", y, cx, hInst);
-    y += 24;
-
-    mkLbl(L"CLIENT ID", 16, y, 80);
-    _hAlexaClientId = mkEdit(L"amzn1.application-oa2-client.xxxxx", IDC_ALEXA_CLIENT_ID,
-        100, y - 2, cx - 116, 24);
-    y += 28;
-
-    mkLbl(L"CLIENT SECRET", 16, y, 100);
-    _hAlexaClientSecret = mkEdit(L"Your client secret", IDC_ALEXA_CLIENT_SECRET,
-        120, y - 2, cx - 136, 24);
-    // Mask the secret input
-    SendMessage(_hAlexaClientSecret, EM_SETPASSWORDCHAR, (WPARAM)L'\x2022', 0);
-    y += 28;
-
-    mkLbl(L"REDIRECT URI", 16, y, 100);
-    _hAlexaRedirectUri = mkEdit(L"https://localhost/callback", IDC_ALEXA_REDIRECT_URI,
-        120, y - 2, cx - 136, 24);
-    SetWindowText(_hAlexaRedirectUri, L"https://localhost/callback");
-    y += 28;
-
-    _hBtnAlexaOpenAuth = mkBtn(L"1. Open Authorization URL", IDC_BTN_ALEXA_OPEN_AUTH,
-        16, y, 200, 28);
-    y += 36;
-
-    mkLbl(L"AUTH CODE", 16, y, 80);
-    _hAlexaAuthCode = mkEdit(L"Paste authorization code from redirect", IDC_ALEXA_AUTH_CODE,
-        100, y - 2, cx - 116, 24);
-    y += 28;
-
-    _hBtnAlexaGetToken = mkBtn(L"2. Exchange for Token", IDC_BTN_ALEXA_GET_TOKEN,
-        16, y, 180, 28);
-    _hBtnAlexaRefresh = mkBtn(L"3. Refresh Token", IDC_BTN_ALEXA_REFRESH,
-        204, y, 150, 28);
-    y += 36;
-
-    mkLbl(L"TOKEN LOG", 16, y, 80);
-    y += 18;
-    _hAlexaTokenOut = mkEdit(nullptr, IDC_ALEXA_TOKEN_OUT, 16, y, cx - 32, 100, true);
-    SetWindowText(_hAlexaTokenOut,
-        L"Alexa Access Token Retrieval API\r\n"
-        L"─────────────────────────────────\r\n"
-        L"1. Enter your Client ID & Secret from the Alexa Developer Console\r\n"
-        L"2. Click \"Open Authorization URL\" to authenticate in your browser\r\n"
-        L"3. Paste the authorization code from the redirect URL\r\n"
-        L"4. Click \"Exchange for Token\" to retrieve access & refresh tokens\r\n"
-        L"5. Use \"Refresh Token\" when the access token expires (1 hour)\r\n"
-        L"\r\n"
-        L"Endpoint: https://api.amazon.com/auth/o2/token\r\n"
-        L"Scope: alexa::all");
-    y += 108;
-
-    // ── Alexa Smart Home Skill API ──────────────────────────────────────────
-    MakeSection(hwnd, L"Alexa Smart Home Skill API (Event Gateway)", y, cx, hInst);
-    y += 24;
-
-    mkLbl(L"REGION", 16, y, 60);
-    _hAlexaSHRegion = CreateWindowEx(0, L"COMBOBOX", nullptr,
-        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        80, y - 2, 240, 120, hwnd, (HMENU)(INT_PTR)IDC_ALEXA_SH_REGION, hInst, nullptr);
-    SendMessage(_hAlexaSHRegion, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    SendMessage(_hAlexaSHRegion, CB_ADDSTRING, 0, (LPARAM)L"North America (api.amazonalexa.com)");
-    SendMessage(_hAlexaSHRegion, CB_ADDSTRING, 0, (LPARAM)L"Europe (api.eu.amazonalexa.com)");
-    SendMessage(_hAlexaSHRegion, CB_ADDSTRING, 0, (LPARAM)L"Far East (api.fe.amazonalexa.com)");
-    SendMessage(_hAlexaSHRegion, CB_SETCURSEL, 0, 0);
+    mkLbl(L"URL", 16, y, 36);
+    _hHaUrl = mkEdit(L"http://192.168.1.x:8123", IDC_EDIT_HA_URL, 56, y - 2, cx - 280, 24);
+    _hBtnHaConnect = mkBtn(L"Connect", IDC_BTN_HA_CONNECT, cx - 218, y - 2, 96, 26);
+    _hBtnHaSync    = mkBtn(L"Sync Devices", IDC_BTN_HA_SYNC, cx - 116, y - 2, 100, 26);
     y += 30;
 
-    _hBtnAlexaSHDiscover = mkBtn(L"Send Discovery", IDC_BTN_ALEXA_SH_DISCOVER, 16, y, 140, 28);
-    _hBtnAlexaSHState = mkBtn(L"Send State Report", IDC_BTN_ALEXA_SH_STATE, 164, y, 150, 28);
-    _hBtnAlexaSHChange = mkBtn(L"Send Change Report", IDC_BTN_ALEXA_SH_CHANGE, 322, y, 160, 28);
-    y += 36;
-
-    mkLbl(L"SKILL API LOG", 16, y, 100);
-    y += 18;
-    _hAlexaSHLog = mkEdit(nullptr, IDC_ALEXA_SH_LOG, 16, y, cx - 32, 140, true);
-    SetWindowText(_hAlexaSHLog,
-        L"Alexa Smart Home Skill API\r\n"
-        L"──────────────────────────────\r\n"
-        L"Interfaces: Alexa.Discovery, Alexa.EndpointHealth, Alexa.PowerController\r\n"
-        L"\r\n"
-        L"Send Discovery:      POST AddOrUpdateReport to Event Gateway\r\n"
-        L"                     Registers network devices as Alexa endpoints\r\n"
-        L"                     with connectivity & power capabilities\r\n"
-        L"\r\n"
-        L"Send State Report:   POST Alexa.StateReport for selected device\r\n"
-        L"                     Reports current connectivity & reachability\r\n"
-        L"\r\n"
-        L"Send Change Report:  POST Alexa.ChangeReport (proactive)\r\n"
-        L"                     Notifies Alexa when device state changes\r\n"
-        L"                     (online/offline, new device, port changes)\r\n"
-        L"\r\n"
-        L"Requires a valid access token from the section above.");
-    y += 148;
-
-    // ── Google Home Integration ──────────────────────────────────────────────
-    MakeSection(hwnd, L"Google Home Integration", y, cx, hInst);
-    y += 24;
-
-    _hGoogleStatus = mkLbl(L"Status: Not connected", 16, y, 300);
-    _hBtnGoogleLink = mkBtn(L"Link Google Account", IDC_BTN_GOOGLE_LINK, 16, y + 22, 160, 28);
-    _hBtnGoogleDiscover = mkBtn(L"Sync Devices", IDC_BTN_GOOGLE_DISCOVER, 184, y + 22, 150, 28);
-    y += 54;
-
-    mkLbl(L"GOOGLE HOME ACTIONS", 16, y, 200);
-    y += 18;
-    _hGoogleOut = mkEdit(nullptr, IDC_SMART_GOOGLE_OUT, 16, y, cx - 32, 70, true);
-    SetWindowText(_hGoogleOut,
-        L"Available actions when linked:\r\n"
-        L"  \"Hey Google, ask Transparency for a network status\"\r\n"
-        L"  \"Hey Google, ask Transparency to scan for new devices\"\r\n"
-        L"  \"Hey Google, ask Transparency if my network is secure\"");
-    y += 78;
-
-    // ── Google Home Access Token Retrieval ───────────────────────────────────
-    MakeSection(hwnd, L"Google Home Access Token Retrieval (OAuth 2.0)", y, cx, hInst);
-    y += 24;
-
-    mkLbl(L"CLIENT ID", 16, y, 80);
-    _hGoogleClientId = mkEdit(L"your-project.apps.googleusercontent.com", IDC_GOOGLE_CLIENT_ID,
-        100, y - 2, cx - 116, 24);
-    y += 28;
-
-    mkLbl(L"CLIENT SECRET", 16, y, 100);
-    _hGoogleClientSecret = mkEdit(L"Your client secret", IDC_GOOGLE_CLIENT_SECRET,
-        120, y - 2, cx - 136, 24);
-    SendMessage(_hGoogleClientSecret, EM_SETPASSWORDCHAR, (WPARAM)L'\x2022', 0);
-    y += 28;
-
-    mkLbl(L"REDIRECT URI", 16, y, 100);
-    _hGoogleRedirectUri = mkEdit(L"http://localhost/callback", IDC_GOOGLE_REDIRECT_URI,
-        120, y - 2, cx - 136, 24);
-    SetWindowText(_hGoogleRedirectUri, L"http://localhost/callback");
-    y += 28;
-
-    _hBtnGoogleOpenAuth = mkBtn(L"1. Open Authorization URL", IDC_BTN_GOOGLE_OPEN_AUTH,
-        16, y, 200, 28);
-    y += 36;
-
-    mkLbl(L"AUTH CODE", 16, y, 80);
-    _hGoogleAuthCode = mkEdit(L"Paste authorization code from redirect", IDC_GOOGLE_AUTH_CODE,
-        100, y - 2, cx - 116, 24);
-    y += 28;
-
-    _hBtnGoogleGetToken = mkBtn(L"2. Exchange for Token", IDC_BTN_GOOGLE_GET_TOKEN,
-        16, y, 180, 28);
-    _hBtnGoogleRefresh = mkBtn(L"3. Refresh Token", IDC_BTN_GOOGLE_REFRESH,
-        204, y, 150, 28);
-    y += 36;
-
-    mkLbl(L"TOKEN LOG", 16, y, 80);
-    y += 18;
-    _hGoogleTokenOut = mkEdit(nullptr, IDC_GOOGLE_TOKEN_OUT, 16, y, cx - 32, 100, true);
-    SetWindowText(_hGoogleTokenOut,
-        L"Google Home Access Token Retrieval\r\n"
-        L"─────────────────────────────────────\r\n"
-        L"1. Create a project at console.cloud.google.com\r\n"
-        L"2. Enable the HomeGraph API and create OAuth 2.0 credentials\r\n"
-        L"3. Set scopes: https://www.googleapis.com/auth/homegraph\r\n"
-        L"4. Enter Client ID & Secret, then click \"Open Authorization URL\"\r\n"
-        L"5. Paste the authorization code and click \"Exchange for Token\"\r\n"
-        L"\r\n"
-        L"Endpoint: https://oauth2.googleapis.com/token\r\n"
-        L"Scope: https://www.googleapis.com/auth/homegraph");
-    y += 108;
-
-    // ── Google Home Graph API ────────────────────────────────────────────────
-    MakeSection(hwnd, L"Google Home Graph API", y, cx, hInst);
-    y += 24;
-
-    mkLbl(L"PROJECT ID", 16, y, 80);
-    _hGoogleProjectId = mkEdit(L"your-google-cloud-project-id", IDC_GOOGLE_PROJECT_ID,
-        100, y - 2, cx - 116, 24);
+    mkLbl(L"Token", 16, y, 44);
+    _hHaToken = mkEdit(L"Paste Long-Lived Access Token from HA profile \u2192 Security", IDC_EDIT_HA_TOKEN,
+                       64, y - 2, cx - 80, 24, false, true);
     y += 30;
 
-    _hBtnGoogleHGSync = mkBtn(L"Request Sync", IDC_BTN_GOOGLE_HG_SYNC, 16, y, 130, 28);
-    _hBtnGoogleHGQuery = mkBtn(L"Query Devices", IDC_BTN_GOOGLE_HG_QUERY, 154, y, 130, 28);
-    _hBtnGoogleHGDisconnect = mkBtn(L"Disconnect Agent", IDC_BTN_GOOGLE_HG_DISCONNECT, 292, y, 140, 28);
-    y += 36;
+    _hHaLog = mkEdit(nullptr, IDC_SMART_HA_LOG, 16, y, cx - 32, 80, true);
+    SetWindowText(_hHaLog,
+        L"Home Assistant  \u2014  local REST API\r\n"
+        L"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\n"
+        L"1. In HA: Profile \u2192 Security \u2192 Long-lived access tokens \u2192 Create token\r\n"
+        L"2. Paste the token above and enter your HA URL\r\n"
+        L"3. Click Connect to verify, then Sync Devices to import entities");
+    y += 88;
 
-    mkLbl(L"HOME GRAPH LOG", 16, y, 120);
-    y += 18;
-    _hGoogleHGLog = mkEdit(nullptr, IDC_GOOGLE_HG_LOG, 16, y, cx - 32, 140, true);
-    SetWindowText(_hGoogleHGLog,
-        L"Google Home Graph API\r\n"
-        L"──────────────────────────────\r\n"
-        L"Request Sync:      POST google.home.graph.v1.HomeGraphApiService/RequestSync\r\n"
-        L"                   Triggers Google to re-sync devices from your smart home action\r\n"
-        L"                   Call after device list changes (new/removed devices)\r\n"
-        L"\r\n"
-        L"Query Devices:     POST google.home.graph.v1.HomeGraphApiService/ReportStateAndNotification\r\n"
-        L"                   Reports device state (online/offline, connectivity) to Google\r\n"
-        L"                   Enables real-time status in Google Home app\r\n"
-        L"\r\n"
-        L"Disconnect Agent:  POST google.home.graph.v1.HomeGraphApiService/Disconnect\r\n"
-        L"                   Removes all devices registered by this agent user\r\n"
-        L"\r\n"
-        L"Requires a valid OAuth access token and Google Cloud project ID.");
-    y += 148;
+    // ── PHILIPS HUE ──────────────────────────────────────────────────────────
+    y += 8;
+    mkSection(L"Philips Hue  (local \u2014 no cloud account needed)", y); y += 24;
 
-    // ── Automation Triggers ──────────────────────────────────────────────────
-    MakeSection(hwnd, L"Automation Triggers", y, cx, hInst);
-    y += 24;
+    _hHueStatus = mkLbl(L"Status: Not connected", 16, y, 400); y += 22;
 
-    mkLbl(L"WHEN", 16, y, 50);
+    mkLbl(L"Bridge IP", 16, y, 64);
+    _hHueBridgeIp = mkEdit(L"192.168.1.x  (auto-filled by Discover)", IDC_EDIT_HUE_IP,
+                            84, y - 2, cx - 378, 24);
+    _hBtnHueDiscover = mkBtn(L"Discover", IDC_BTN_HUE_DISCOVER, cx - 288, y - 2, 86, 26);
+    _hBtnHuePair     = mkBtn(L"Pair", IDC_BTN_HUE_PAIR, cx - 196, y - 2, 86, 26);
+    _hBtnHueSync     = mkBtn(L"Sync Lights", IDC_BTN_HUE_SYNC, cx - 104, y - 2, 88, 26);
+    y += 30;
+
+    _hHueLog = mkEdit(nullptr, IDC_SMART_HUE_LOG, 16, y, cx - 32, 80, true);
+    SetWindowText(_hHueLog,
+        L"Philips Hue  \u2014  local bridge API\r\n"
+        L"\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\r\n"
+        L"1. Click Discover to find your bridge on the network\r\n"
+        L"2. Press the physical button on the bridge, then click Pair\r\n"
+        L"3. Click Sync Lights to load your bulbs into the device list");
+    y += 88;
+
+    // ── DEVICE SECURITY ──────────────────────────────────────────────────────
+    y += 8;
+    mkSection(L"Device Security Assessment", y); y += 24;
+
+    _hSecurityLog = mkEdit(nullptr, 0, 16, y, cx - 32, 100, true);
+    SetWindowText(_hSecurityLog,
+        L"Run a network scan to see per-device security notes.\r\n"
+        L"Checks: Telnet exposed, FTP exposed, HTTP-only admin panels, open camera streams.");
+    y += 108;
+
+    // ── AUTOMATION TRIGGERS ──────────────────────────────────────────────────
+    y += 8;
+    mkSection(L"Automation Triggers", y); y += 24;
+
+    mkLbl(L"WHEN", 16, y, 46);
     _hComboTriggerEvent = CreateWindowEx(0, L"COMBOBOX", nullptr,
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        60, y - 2, 180, 200, hwnd, (HMENU)(INT_PTR)IDC_SMART_TRIGGER_EVENT, hInst, nullptr);
+        60, y - 2, 190, 200, hwnd, (HMENU)(INT_PTR)IDC_SMART_TRIGGER_EVENT, hInst, nullptr);
     SendMessage(_hComboTriggerEvent, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)L"New device joins");
-    SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)L"Device goes offline");
-    SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)L"Risky port detected");
-    SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)L"Internet outage");
-    SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)L"High latency");
-    SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)L"Scan complete");
+    const wchar_t* events[] = {
+        L"New device joins", L"Device goes offline", L"Risky port detected",
+        L"Internet outage", L"High latency", L"Scan complete", nullptr
+    };
+    for (int i = 0; events[i]; i++) SendMessage(_hComboTriggerEvent, CB_ADDSTRING, 0, (LPARAM)events[i]);
     SendMessage(_hComboTriggerEvent, CB_SETCURSEL, 0, 0);
 
-    mkLbl(L"THEN", 250, y, 50);
+    mkLbl(L"\u2192 THEN", 258, y, 52);
     _hComboTriggerAction = CreateWindowEx(0, L"COMBOBOX", nullptr,
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-        294, y - 2, 200, 200, hwnd, (HMENU)(INT_PTR)IDC_SMART_TRIGGER_ACTION, hInst, nullptr);
+        314, y - 2, 190, 200, hwnd, (HMENU)(INT_PTR)IDC_SMART_TRIGGER_ACTION, hInst, nullptr);
     SendMessage(_hComboTriggerAction, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)L"Flash smart lights red");
-    SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)L"Announce on Alexa");
-    SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)L"Announce on Google Home");
-    SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)L"Turn off smart plug");
-    SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)L"Send push notification");
-    SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)L"Run custom webhook");
+    const wchar_t* actions[] = {
+        L"Flash Hue lights red", L"Send webhook notification",
+        L"Log to ledger", L"Run port scan on device",
+        L"Send push notification", nullptr
+    };
+    for (int i = 0; actions[i]; i++) SendMessage(_hComboTriggerAction, CB_ADDSTRING, 0, (LPARAM)actions[i]);
     SendMessage(_hComboTriggerAction, CB_SETCURSEL, 0, 0);
-
     y += 30;
+
     _hBtnAddTrigger = mkBtn(L"Add Trigger", IDC_BTN_SMART_ADD_TRIGGER, 16, y, 110, 28);
     _hBtnDelTrigger = mkBtn(L"Remove", IDC_BTN_SMART_DEL_TRIGGER, 134, y, 80, 28);
     y += 36;
@@ -907,35 +749,12 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hTriggerList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     ListView_SetExtendedListViewStyle(_hTriggerList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     Theme::ApplyDarkScrollbar(_hTriggerList);
-
-    col.pszText = (LPWSTR)L"Event";  col.cx = 180; ListView_InsertColumn(_hTriggerList, 0, &col);
-    col.pszText = (LPWSTR)L"Action"; col.cx = 200; ListView_InsertColumn(_hTriggerList, 1, &col);
+    col.pszText = (LPWSTR)L"When";   col.cx = 190; ListView_InsertColumn(_hTriggerList, 0, &col);
+    col.pszText = (LPWSTR)L"Then";   col.cx = 200; ListView_InsertColumn(_hTriggerList, 1, &col);
     col.pszText = (LPWSTR)L"Status"; col.cx = 80;  ListView_InsertColumn(_hTriggerList, 2, &col);
-
     y += 110;
 
-    // ── Scenes ───────────────────────────────────────────────────────────────
-    MakeSection(hwnd, L"Scenes", y, cx, hInst);
-    y += 24;
-
-    _hEditSceneName = mkEdit(L"Scene name (e.g. \"Night Mode\")", IDC_SMART_SCENE_NAME, 16, y, 250, 26);
-    _hBtnAddScene = mkBtn(L"Create Scene", IDC_BTN_SMART_ADD_SCENE, 274, y, 110, 26);
-    _hBtnRunScene = mkBtn(L"Run Scene", IDC_BTN_SMART_RUN_SCENE, 392, y, 100, 26);
-    y += 34;
-
-    _hSceneList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER,
-        16, y, cx - 32, 90, hwnd, (HMENU)(INT_PTR)IDC_SMART_SCENE_LIST, hInst, nullptr);
-    SendMessage(_hSceneList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    ListView_SetExtendedListViewStyle(_hSceneList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
-    Theme::ApplyDarkScrollbar(_hSceneList);
-
-    col.pszText = (LPWSTR)L"Scene";    col.cx = 200; ListView_InsertColumn(_hSceneList, 0, &col);
-    col.pszText = (LPWSTR)L"Devices";  col.cx = 120; ListView_InsertColumn(_hSceneList, 1, &col);
-    col.pszText = (LPWSTR)L"Actions";  col.cx = 150; ListView_InsertColumn(_hSceneList, 2, &col);
-
-    y += 100;
-    _contentHeight = y;
+    _contentHeight = y + 20;
 }
 
 void TabSmartHome::LayoutControls(int cx, int cy) {
@@ -943,944 +762,224 @@ void TabSmartHome::LayoutControls(int cx, int cy) {
     UpdateScrollBar(_hwnd);
 }
 
-// ── Alexa Token Retrieval ────────────────────────────────────────────────────
-
-void TabSmartHome::AppendTokenLog(const std::wstring& text) {
-    if (!_hAlexaTokenOut) return;
-    int len = GetWindowTextLength(_hAlexaTokenOut);
-    SendMessage(_hAlexaTokenOut, EM_SETSEL, len, len);
-    SendMessage(_hAlexaTokenOut, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
-}
-
-void TabSmartHome::AlexaOpenAuth() {
-    wchar_t clientId[512] = {};
-    wchar_t redirectUri[512] = {};
-    GetWindowText(_hAlexaClientId, clientId, 512);
-    GetWindowText(_hAlexaRedirectUri, redirectUri, 512);
-
-    if (!clientId[0]) {
-        MessageBox(_hwnd,
-            L"Enter your Client ID in the \"Alexa Access Token Retrieval\" section below, "
-            L"then click \"Open Authorization URL\".",
-            L"Alexa Setup", MB_OK | MB_ICONINFORMATION);
-        // Scroll down to make the OAuth section visible
-        int maxScroll = _contentHeight - _viewHeight;
-        if (maxScroll > 0) {
-            int target = maxScroll / 3; // roughly where the OAuth section starts
-            if (target > maxScroll) target = maxScroll;
-            int delta = target - _scrollY;
-            if (delta != 0) {
-                _scrollY = target;
-                ScrollWindowEx(_hwnd, 0, -delta, nullptr, nullptr, nullptr, nullptr,
-                    SW_SCROLLCHILDREN | SW_INVALIDATE);
-                UpdateScrollBar(_hwnd);
-            }
-        }
-        return;
-    }
-
-    // Build the authorization URL
-    std::string cid = UrlEncode(WideToUtf8(clientId));
-    std::string ruri = UrlEncode(WideToUtf8(redirectUri));
-
-    std::string url = "https://www.amazon.com/ap/oa?"
-        "client_id=" + cid +
-        "&scope=alexa%3A%3Aall"
-        "&response_type=code"
-        "&redirect_uri=" + ruri;
-
-    wstring wurl = Utf8ToWide(url);
-    ShellExecute(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-
-    AppendTokenLog(L"[INFO] Authorization URL opened in browser");
-    AppendTokenLog(L"[INFO] After login, copy the 'code' parameter from the redirect URL");
-    if (_hAlexaStatus)
-        SetWindowText(_hAlexaStatus, L"Status: Waiting for authorization code...");
-}
-
-void TabSmartHome::AlexaExchangeToken() {
-    wchar_t clientId[512] = {}, clientSecret[512] = {};
-    wchar_t authCode[1024] = {}, redirectUri[512] = {};
-    GetWindowText(_hAlexaClientId, clientId, 512);
-    GetWindowText(_hAlexaClientSecret, clientSecret, 512);
-    GetWindowText(_hAlexaAuthCode, authCode, 1024);
-    GetWindowText(_hAlexaRedirectUri, redirectUri, 512);
-
-    if (!clientId[0] || !clientSecret[0] || !authCode[0]) {
-        AppendTokenLog(L"[ERROR] Client ID, Client Secret, and Auth Code are all required");
-        return;
-    }
-
-    AppendTokenLog(L"[INFO] Exchanging authorization code for tokens...");
-    if (_hAlexaStatus)
-        SetWindowText(_hAlexaStatus, L"Status: Exchanging token...");
-
-    // Build POST body
-    std::string body =
-        "grant_type=authorization_code"
-        "&code=" + UrlEncode(WideToUtf8(authCode)) +
-        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
-        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret)) +
-        "&redirect_uri=" + UrlEncode(WideToUtf8(redirectUri));
-
-    // Run in background thread to avoid blocking UI
-    HWND hwnd = _hwnd;
-    std::thread([this, body, hwnd]() {
-        std::string resp = HttpPost(L"api.amazon.com", L"/auth/o2/token", body);
-
-        // Post result back to UI thread
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 100, 0, (LPARAM)result);
-    }).detach();
-}
-
-void TabSmartHome::AlexaRefreshToken() {
-    if (_alexaRefreshToken.empty()) {
-        AppendTokenLog(L"[ERROR] No refresh token available. Exchange an auth code first.");
-        return;
-    }
-
-    wchar_t clientId[512] = {}, clientSecret[512] = {};
-    GetWindowText(_hAlexaClientId, clientId, 512);
-    GetWindowText(_hAlexaClientSecret, clientSecret, 512);
-
-    if (!clientId[0] || !clientSecret[0]) {
-        AppendTokenLog(L"[ERROR] Client ID and Client Secret are required for refresh");
-        return;
-    }
-
-    AppendTokenLog(L"[INFO] Refreshing access token...");
-    if (_hAlexaStatus)
-        SetWindowText(_hAlexaStatus, L"Status: Refreshing token...");
-
-    std::string body =
-        "grant_type=refresh_token"
-        "&refresh_token=" + UrlEncode(WideToUtf8(_alexaRefreshToken)) +
-        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
-        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret));
-
-    HWND hwnd = _hwnd;
-    std::thread([this, body, hwnd]() {
-        std::string resp = HttpPost(L"api.amazon.com", L"/auth/o2/token", body);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 101, 0, (LPARAM)result);
-    }).detach();
-}
-
-// ── Alexa Smart Home Skill API ───────────────────────────────────────────────
-
-void TabSmartHome::AppendSHLog(const std::wstring& text) {
-    if (!_hAlexaSHLog) return;
-    int len = GetWindowTextLength(_hAlexaSHLog);
-    SendMessage(_hAlexaSHLog, EM_SETSEL, len, len);
-    SendMessage(_hAlexaSHLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
-}
-
-std::wstring TabSmartHome::GetAlexaEventGatewayHost() const {
-    int sel = _hAlexaSHRegion ? (int)SendMessage(_hAlexaSHRegion, CB_GETCURSEL, 0, 0) : 0;
-    switch (sel) {
-    case 1:  return L"api.eu.amazonalexa.com";
-    case 2:  return L"api.fe.amazonalexa.com";
-    default: return L"api.amazonalexa.com";
-    }
-}
-
-std::string TabSmartHome::GenerateMessageId() {
-    // Simple pseudo-unique ID using timestamp + random
-    LARGE_INTEGER li;
-    QueryPerformanceCounter(&li);
-    char buf[64];
-    sprintf_s(buf, "%08x-%04x-%04x-%04x-%012llx",
-        (unsigned)(li.QuadPart & 0xFFFFFFFF),
-        (unsigned)((li.QuadPart >> 32) & 0xFFFF),
-        0x4000 | (unsigned)(li.QuadPart & 0x0FFF),
-        0x8000 | (unsigned)((li.QuadPart >> 12) & 0x3FFF),
-        (unsigned long long)(GetTickCount64()));
-    return buf;
-}
-
-std::string TabSmartHome::BuildDiscoveryPayload() {
-    // Build Alexa.Discovery.AddOrUpdateReport event
-    // Registers all discovered smart devices as Alexa endpoints
-
-    if (!_mainWnd) return "{}";
-    ScanResult r = _mainWnd->GetLastResult();
-    std::string msgId = GenerateMessageId();
-    std::string token = WideToUtf8(_alexaAccessToken);
-
-    // Build endpoints array
-    std::string endpoints;
-    int count = 0;
-    for (auto& d : r.devices) {
-        bool isSmart = false;
-        for (int p : d.openPorts) {
-            if (p == 8008 || p == 8009 || p == 8443 || p == 8123 ||
-                p == 1883 || p == 8883 || p == 49152 || p == 49153)
-                isSmart = true;
-        }
-        if (d.deviceType == L"IoT Device" || d.deviceType == L"Smart Speaker" ||
-            d.deviceType == L"Smart TV" || d.deviceType == L"Camera")
-            isSmart = true;
-        if (!d.vendor.empty() &&
-            (d.vendor.find(L"Amazon") != wstring::npos || d.vendor.find(L"Google") != wstring::npos ||
-             d.vendor.find(L"Philips") != wstring::npos || d.vendor.find(L"TP-Link") != wstring::npos ||
-             d.vendor.find(L"Ring") != wstring::npos || d.vendor.find(L"Sonos") != wstring::npos))
-            isSmart = true;
-
-        if (!isSmart) continue;
-
-        std::string epId = WideToUtf8(d.mac.empty() ? d.ip : d.mac);
-        std::string name = WideToUtf8(
-            !d.customName.empty() ? d.customName :
-            !d.hostname.empty()   ? d.hostname :
-            !d.vendor.empty()     ? d.vendor : L"Network Device");
-        std::string desc = WideToUtf8(d.deviceType) + " at " + WideToUtf8(d.ip);
-        std::string manufacturer = WideToUtf8(d.vendor.empty() ? L"Unknown" : d.vendor);
-
-        // Map device type to Alexa display category
-        std::string category = "OTHER";
-        std::string dType = WideToUtf8(d.deviceType);
-        if (dType.find("Speaker") != string::npos) category = "SPEAKER";
-        else if (dType.find("TV") != string::npos) category = "TV";
-        else if (dType.find("Camera") != string::npos) category = "CAMERA";
-        else if (dType.find("Light") != string::npos) category = "LIGHT";
-        else if (dType.find("Switch") != string::npos || dType.find("Plug") != string::npos) category = "SMARTPLUG";
-
-        if (count > 0) endpoints += ",";
-        endpoints +=
-            "{"
-            "\"endpointId\":\"" + epId + "\","
-            "\"manufacturerName\":\"" + manufacturer + "\","
-            "\"friendlyName\":\"" + name + "\","
-            "\"description\":\"" + desc + "\","
-            "\"displayCategories\":[\"" + category + "\"],"
-            "\"capabilities\":["
-                "{"
-                    "\"type\":\"AlexaInterface\","
-                    "\"interface\":\"Alexa.EndpointHealth\","
-                    "\"version\":\"3.2\","
-                    "\"properties\":{"
-                        "\"supported\":[{\"name\":\"connectivity\"}],"
-                        "\"proactivelyReported\":true,"
-                        "\"retrievable\":true"
-                    "}"
-                "},"
-                "{"
-                    "\"type\":\"AlexaInterface\","
-                    "\"interface\":\"Alexa.PowerController\","
-                    "\"version\":\"3\","
-                    "\"properties\":{"
-                        "\"supported\":[{\"name\":\"powerState\"}],"
-                        "\"proactivelyReported\":true,"
-                        "\"retrievable\":true"
-                    "}"
-                "},"
-                "{"
-                    "\"type\":\"AlexaInterface\","
-                    "\"interface\":\"Alexa\","
-                    "\"version\":\"3\""
-                "}"
-            "]"
-            "}";
-        count++;
-    }
-
-    // Full AddOrUpdateReport event
-    return
-        "{"
-        "\"event\":{"
-            "\"header\":{"
-                "\"namespace\":\"Alexa.Discovery\","
-                "\"name\":\"AddOrUpdateReport\","
-                "\"payloadVersion\":\"3\","
-                "\"messageId\":\"" + msgId + "\""
-            "},"
-            "\"payload\":{"
-                "\"endpoints\":[" + endpoints + "],"
-                "\"scope\":{"
-                    "\"type\":\"BearerToken\","
-                    "\"token\":\"" + token + "\""
-                "}"
-            "}"
-        "}"
-        "}";
-}
-
-std::string TabSmartHome::BuildStateReportPayload(const std::wstring& endpointId,
-                                                   const std::wstring& ip, bool online) {
-    std::string msgId = GenerateMessageId();
-    std::string corrId = GenerateMessageId();
-    std::string token = WideToUtf8(_alexaAccessToken);
-    std::string epId = WideToUtf8(endpointId);
-    std::string connectivity = online ? "OK" : "UNREACHABLE";
-    std::string powerState = online ? "ON" : "OFF";
-
-    // Get current ISO timestamp
-    SYSTEMTIME st;
-    GetSystemTime(&st);
-    char ts[64];
-    sprintf_s(ts, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-
-    return
-        "{"
-        "\"event\":{"
-            "\"header\":{"
-                "\"namespace\":\"Alexa\","
-                "\"name\":\"StateReport\","
-                "\"payloadVersion\":\"3\","
-                "\"messageId\":\"" + msgId + "\","
-                "\"correlationToken\":\"" + corrId + "\""
-            "},"
-            "\"endpoint\":{"
-                "\"endpointId\":\"" + epId + "\","
-                "\"scope\":{"
-                    "\"type\":\"BearerToken\","
-                    "\"token\":\"" + token + "\""
-                "}"
-            "},"
-            "\"payload\":{}"
-        "},"
-        "\"context\":{"
-            "\"properties\":["
-                "{"
-                    "\"namespace\":\"Alexa.EndpointHealth\","
-                    "\"name\":\"connectivity\","
-                    "\"value\":{\"value\":\"" + connectivity + "\"},"
-                    "\"timeOfSample\":\"" + string(ts) + "\","
-                    "\"uncertaintyInMilliseconds\":0"
-                "},"
-                "{"
-                    "\"namespace\":\"Alexa.PowerController\","
-                    "\"name\":\"powerState\","
-                    "\"value\":\"" + powerState + "\","
-                    "\"timeOfSample\":\"" + string(ts) + "\","
-                    "\"uncertaintyInMilliseconds\":0"
-                "}"
-            "]"
-        "}"
-        "}";
-}
-
-std::string TabSmartHome::BuildChangeReportPayload(const std::wstring& endpointId,
-                                                    const std::wstring& ip, bool online) {
-    std::string msgId = GenerateMessageId();
-    std::string token = WideToUtf8(_alexaAccessToken);
-    std::string epId = WideToUtf8(endpointId);
-    std::string connectivity = online ? "OK" : "UNREACHABLE";
-    std::string powerState = online ? "ON" : "OFF";
-
-    SYSTEMTIME st;
-    GetSystemTime(&st);
-    char ts[64];
-    sprintf_s(ts, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-
-    // ChangeReport: proactive state update pushed to Alexa Event Gateway
-    // cause.type = PHYSICAL_INTERACTION when device changes state on its own
-    return
-        "{"
-        "\"event\":{"
-            "\"header\":{"
-                "\"namespace\":\"Alexa\","
-                "\"name\":\"ChangeReport\","
-                "\"payloadVersion\":\"3\","
-                "\"messageId\":\"" + msgId + "\""
-            "},"
-            "\"endpoint\":{"
-                "\"endpointId\":\"" + epId + "\","
-                "\"scope\":{"
-                    "\"type\":\"BearerToken\","
-                    "\"token\":\"" + token + "\""
-                "}"
-            "},"
-            "\"payload\":{"
-                "\"change\":{"
-                    "\"cause\":{\"type\":\"PHYSICAL_INTERACTION\"},"
-                    "\"properties\":["
-                        "{"
-                            "\"namespace\":\"Alexa.EndpointHealth\","
-                            "\"name\":\"connectivity\","
-                            "\"value\":{\"value\":\"" + connectivity + "\"},"
-                            "\"timeOfSample\":\"" + string(ts) + "\","
-                            "\"uncertaintyInMilliseconds\":0"
-                        "}"
-                    "]"
-                "}"
-            "}"
-        "},"
-        "\"context\":{"
-            "\"properties\":["
-                "{"
-                    "\"namespace\":\"Alexa.PowerController\","
-                    "\"name\":\"powerState\","
-                    "\"value\":\"" + powerState + "\","
-                    "\"timeOfSample\":\"" + string(ts) + "\","
-                    "\"uncertaintyInMilliseconds\":0"
-                "}"
-            "]"
-        "}"
-        "}";
-}
-
-void TabSmartHome::AlexaSHSendDiscovery() {
-    if (_alexaAccessToken.empty()) {
-        AppendSHLog(L"[ERROR] No access token. Complete OAuth flow first.");
-        return;
-    }
-
-    AppendSHLog(L"[INFO] Building Alexa.Discovery.AddOrUpdateReport...");
-    std::string payload = BuildDiscoveryPayload();
-
-    wstring host = GetAlexaEventGatewayHost();
-    wstring token = _alexaAccessToken;
-    AppendSHLog(L"[INFO] POST to " + host + L"/v3/events");
-
-    HWND hwnd = _hwnd;
-    std::thread([this, payload, host, token, hwnd]() {
-        std::string resp = HttpPostJson(host, L"/v3/events", payload, token);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 102, 0, (LPARAM)result);
-    }).detach();
-}
-
-void TabSmartHome::AlexaSHSendStateReport() {
-    if (_alexaAccessToken.empty()) {
-        AppendSHLog(L"[ERROR] No access token. Complete OAuth flow first.");
-        return;
-    }
-
-    // Get selected device from device list
-    if (!_hDeviceList) return;
-    int sel = ListView_GetNextItem(_hDeviceList, -1, LVNI_SELECTED);
-    if (sel < 0) {
-        AppendSHLog(L"[ERROR] Select a device from the Smart Devices list first.");
-        return;
-    }
-
-    wchar_t ipBuf[128], nameBuf[128], statusBuf[32];
-    ListView_GetItemText(_hDeviceList, sel, 0, ipBuf, 128);
-    ListView_GetItemText(_hDeviceList, sel, 1, nameBuf, 128);
-    ListView_GetItemText(_hDeviceList, sel, 4, statusBuf, 32);
-    bool online = (wcscmp(statusBuf, L"Online") == 0);
-
-    // Use IP as endpoint ID (or MAC if available from scan)
-    wstring endpointId = ipBuf;
-    ScanResult r = _mainWnd->GetLastResult();
-    for (auto& d : r.devices) {
-        if (d.ip == ipBuf && !d.mac.empty()) { endpointId = d.mac; break; }
-    }
-
-    AppendSHLog(wstring(L"[INFO] Sending Alexa.StateReport for ") + nameBuf +
-                L" (" + ipBuf + L") — " + (online ? L"OK" : L"UNREACHABLE"));
-
-    std::string payload = BuildStateReportPayload(endpointId, ipBuf, online);
-    wstring host = GetAlexaEventGatewayHost();
-    wstring token = _alexaAccessToken;
-
-    HWND hwnd = _hwnd;
-    std::thread([this, payload, host, token, hwnd]() {
-        std::string resp = HttpPostJson(host, L"/v3/events", payload, token);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 103, 0, (LPARAM)result);
-    }).detach();
-}
-
-void TabSmartHome::AlexaSHSendChangeReport() {
-    if (_alexaAccessToken.empty()) {
-        AppendSHLog(L"[ERROR] No access token. Complete OAuth flow first.");
-        return;
-    }
-
-    if (!_hDeviceList) return;
-    int sel = ListView_GetNextItem(_hDeviceList, -1, LVNI_SELECTED);
-    if (sel < 0) {
-        AppendSHLog(L"[ERROR] Select a device from the Smart Devices list first.");
-        return;
-    }
-
-    wchar_t ipBuf[128], nameBuf[128], statusBuf[32];
-    ListView_GetItemText(_hDeviceList, sel, 0, ipBuf, 128);
-    ListView_GetItemText(_hDeviceList, sel, 1, nameBuf, 128);
-    ListView_GetItemText(_hDeviceList, sel, 4, statusBuf, 32);
-    bool online = (wcscmp(statusBuf, L"Online") == 0);
-
-    wstring endpointId = ipBuf;
-    ScanResult r = _mainWnd->GetLastResult();
-    for (auto& d : r.devices) {
-        if (d.ip == ipBuf && !d.mac.empty()) { endpointId = d.mac; break; }
-    }
-
-    AppendSHLog(wstring(L"[INFO] Sending Alexa.ChangeReport (proactive) for ") + nameBuf +
-                L" — connectivity: " + (online ? L"OK" : L"UNREACHABLE"));
-
-    std::string payload = BuildChangeReportPayload(endpointId, ipBuf, online);
-    wstring host = GetAlexaEventGatewayHost();
-    wstring token = _alexaAccessToken;
-
-    HWND hwnd = _hwnd;
-    std::thread([this, payload, host, token, hwnd]() {
-        std::string resp = HttpPostJson(host, L"/v3/events", payload, token);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 104, 0, (LPARAM)result);
-    }).detach();
-}
-
-// ── Google Home OAuth & Home Graph API ───────────────────────────────────────
-
-void TabSmartHome::AppendGoogleTokenLog(const std::wstring& text) {
-    if (!_hGoogleTokenOut) return;
-    int len = GetWindowTextLength(_hGoogleTokenOut);
-    SendMessage(_hGoogleTokenOut, EM_SETSEL, len, len);
-    SendMessage(_hGoogleTokenOut, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
-}
-
-void TabSmartHome::AppendGoogleHGLog(const std::wstring& text) {
-    if (!_hGoogleHGLog) return;
-    int len = GetWindowTextLength(_hGoogleHGLog);
-    SendMessage(_hGoogleHGLog, EM_SETSEL, len, len);
-    SendMessage(_hGoogleHGLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
-}
-
-void TabSmartHome::GoogleOpenAuth() {
-    wchar_t clientId[512] = {};
-    wchar_t redirectUri[512] = {};
-    GetWindowText(_hGoogleClientId, clientId, 512);
-    GetWindowText(_hGoogleRedirectUri, redirectUri, 512);
-
-    if (!clientId[0]) {
-        MessageBox(_hwnd,
-            L"Enter your Google OAuth Client ID in the \"Google Home Access Token Retrieval\" section, "
-            L"then click \"Open Authorization URL\".",
-            L"Google Home Setup", MB_OK | MB_ICONINFORMATION);
-        return;
-    }
-
-    // Build Google OAuth 2.0 authorization URL
-    std::string cid = UrlEncode(WideToUtf8(clientId));
-    std::string ruri = UrlEncode(WideToUtf8(redirectUri));
-
-    std::string url = "https://accounts.google.com/o/oauth2/v2/auth?"
-        "client_id=" + cid +
-        "&redirect_uri=" + ruri +
-        "&response_type=code"
-        "&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fhomegraph"
-        "&access_type=offline"
-        "&prompt=consent";
-
-    wstring wurl = Utf8ToWide(url);
-    ShellExecute(nullptr, L"open", wurl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-
-    AppendGoogleTokenLog(L"[INFO] Google authorization URL opened in browser");
-    AppendGoogleTokenLog(L"[INFO] After consent, copy the 'code' parameter from the redirect URL");
-    if (_hGoogleStatus)
-        SetWindowText(_hGoogleStatus, L"Status: Waiting for authorization code...");
-}
-
-void TabSmartHome::GoogleExchangeToken() {
-    wchar_t clientId[512] = {}, clientSecret[512] = {};
-    wchar_t authCode[1024] = {}, redirectUri[512] = {};
-    GetWindowText(_hGoogleClientId, clientId, 512);
-    GetWindowText(_hGoogleClientSecret, clientSecret, 512);
-    GetWindowText(_hGoogleAuthCode, authCode, 1024);
-    GetWindowText(_hGoogleRedirectUri, redirectUri, 512);
-
-    if (!clientId[0] || !clientSecret[0] || !authCode[0]) {
-        AppendGoogleTokenLog(L"[ERROR] Client ID, Client Secret, and Auth Code are all required");
-        return;
-    }
-
-    AppendGoogleTokenLog(L"[INFO] Exchanging authorization code for tokens...");
-    if (_hGoogleStatus)
-        SetWindowText(_hGoogleStatus, L"Status: Exchanging token...");
-
-    std::string body =
-        "grant_type=authorization_code"
-        "&code=" + UrlEncode(WideToUtf8(authCode)) +
-        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
-        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret)) +
-        "&redirect_uri=" + UrlEncode(WideToUtf8(redirectUri));
-
-    HWND hwnd = _hwnd;
-    std::thread([this, body, hwnd]() {
-        std::string resp = HttpPost(L"oauth2.googleapis.com", L"/token", body);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 110, 0, (LPARAM)result);
-    }).detach();
-}
-
-void TabSmartHome::GoogleRefreshToken() {
-    if (_googleRefreshToken.empty()) {
-        AppendGoogleTokenLog(L"[ERROR] No refresh token available. Exchange an auth code first.");
-        return;
-    }
-
-    wchar_t clientId[512] = {}, clientSecret[512] = {};
-    GetWindowText(_hGoogleClientId, clientId, 512);
-    GetWindowText(_hGoogleClientSecret, clientSecret, 512);
-
-    if (!clientId[0] || !clientSecret[0]) {
-        AppendGoogleTokenLog(L"[ERROR] Client ID and Client Secret are required for refresh");
-        return;
-    }
-
-    AppendGoogleTokenLog(L"[INFO] Refreshing Google access token...");
-    if (_hGoogleStatus)
-        SetWindowText(_hGoogleStatus, L"Status: Refreshing token...");
-
-    std::string body =
-        "grant_type=refresh_token"
-        "&refresh_token=" + UrlEncode(WideToUtf8(_googleRefreshToken)) +
-        "&client_id=" + UrlEncode(WideToUtf8(clientId)) +
-        "&client_secret=" + UrlEncode(WideToUtf8(clientSecret));
-
-    HWND hwnd = _hwnd;
-    std::thread([this, body, hwnd]() {
-        std::string resp = HttpPost(L"oauth2.googleapis.com", L"/token", body);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 111, 0, (LPARAM)result);
-    }).detach();
-}
-
-std::string TabSmartHome::BuildHomeGraphSyncPayload() {
-    wchar_t projectId[256] = {};
-    GetWindowText(_hGoogleProjectId, projectId, 256);
-    std::string agentUserId = WideToUtf8(projectId);
-    if (agentUserId.empty()) agentUserId = "transparency-user-1";
-
-    return "{\"agentUserId\":\"" + agentUserId + "\"}";
-}
-
-std::string TabSmartHome::BuildHomeGraphQueryPayload(const std::wstring& endpointId) {
-    // Build ReportStateAndNotification payload
-    if (!_mainWnd) return "{}";
-    ScanResult r = _mainWnd->GetLastResult();
-
-    wchar_t projectId[256] = {};
-    GetWindowText(_hGoogleProjectId, projectId, 256);
-    std::string agentUserId = WideToUtf8(projectId);
-    if (agentUserId.empty()) agentUserId = "transparency-user-1";
-
-    std::string requestId = GenerateMessageId();
-
-    // Build device states
-    std::string states;
-    int count = 0;
-    for (auto& d : r.devices) {
-        bool isSmart = false;
-        for (int p : d.openPorts) {
-            if (p == 8008 || p == 8009 || p == 8443 || p == 8123 ||
-                p == 1883 || p == 8883 || p == 49152 || p == 49153)
-                isSmart = true;
-        }
-        if (d.deviceType == L"IoT Device" || d.deviceType == L"Smart Speaker" ||
-            d.deviceType == L"Smart TV" || d.deviceType == L"Camera")
-            isSmart = true;
-        if (!d.vendor.empty() &&
-            (d.vendor.find(L"Google") != wstring::npos || d.vendor.find(L"Amazon") != wstring::npos ||
-             d.vendor.find(L"Philips") != wstring::npos || d.vendor.find(L"TP-Link") != wstring::npos))
-            isSmart = true;
-
-        if (!isSmart) continue;
-
-        std::string epId = WideToUtf8(d.mac.empty() ? d.ip : d.mac);
-        bool online = true; // device is in scan result, so it's online
-
-        if (count > 0) states += ",";
-        states += "\"" + epId + "\":{\"online\":true,\"status\":\"SUCCESS\"}";
-        count++;
-    }
-
-    return
-        "{"
-        "\"requestId\":\"" + requestId + "\","
-        "\"agentUserId\":\"" + agentUserId + "\","
-        "\"payload\":{"
-            "\"devices\":{"
-                "\"states\":{" + states + "}"
-            "}"
-        "}"
-        "}";
-}
-
-void TabSmartHome::GoogleHGRequestSync() {
-    if (_googleAccessToken.empty()) {
-        AppendGoogleHGLog(L"[ERROR] No access token. Complete Google OAuth flow first.");
-        return;
-    }
-
-    wchar_t projectId[256] = {};
-    GetWindowText(_hGoogleProjectId, projectId, 256);
-    if (!projectId[0]) {
-        AppendGoogleHGLog(L"[ERROR] Enter your Google Cloud Project ID.");
-        return;
-    }
-
-    AppendGoogleHGLog(L"[INFO] Sending Request Sync to Home Graph API...");
-    std::string payload = BuildHomeGraphSyncPayload();
-    wstring token = _googleAccessToken;
-
-    HWND hwnd = _hwnd;
-    std::thread([this, payload, token, hwnd]() {
-        std::string resp = HttpPostJson(
-            L"homegraph.googleapis.com",
-            L"/v1/devices:requestSync",
-            payload, token);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 112, 0, (LPARAM)result);
-    }).detach();
-}
-
-void TabSmartHome::GoogleHGQueryDevices() {
-    if (_googleAccessToken.empty()) {
-        AppendGoogleHGLog(L"[ERROR] No access token. Complete Google OAuth flow first.");
-        return;
-    }
-
-    wchar_t projectId[256] = {};
-    GetWindowText(_hGoogleProjectId, projectId, 256);
-    if (!projectId[0]) {
-        AppendGoogleHGLog(L"[ERROR] Enter your Google Cloud Project ID.");
-        return;
-    }
-
-    AppendGoogleHGLog(L"[INFO] Reporting device states to Home Graph API...");
-
-    // Report state for all smart devices
-    std::string payload = BuildHomeGraphQueryPayload(L"");
-    wstring token = _googleAccessToken;
-
-    HWND hwnd = _hwnd;
-    std::thread([this, payload, token, hwnd]() {
-        std::string resp = HttpPostJson(
-            L"homegraph.googleapis.com",
-            L"/v1/devices:reportStateAndNotification",
-            payload, token);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 113, 0, (LPARAM)result);
-    }).detach();
-}
-
-void TabSmartHome::GoogleHGDisconnect() {
-    if (_googleAccessToken.empty()) {
-        AppendGoogleHGLog(L"[ERROR] No access token. Complete Google OAuth flow first.");
-        return;
-    }
-
-    wchar_t projectId[256] = {};
-    GetWindowText(_hGoogleProjectId, projectId, 256);
-    if (!projectId[0]) {
-        AppendGoogleHGLog(L"[ERROR] Enter your Google Cloud Project ID.");
-        return;
-    }
-
-    int ret = MessageBox(_hwnd,
-        L"This will disconnect all devices registered by this agent user from Google Home. Continue?",
-        L"Disconnect Agent", MB_YESNO | MB_ICONWARNING);
-    if (ret != IDYES) return;
-
-    AppendGoogleHGLog(L"[INFO] Disconnecting agent user from Home Graph...");
-
-    std::string agentUserId = WideToUtf8(projectId);
-    if (agentUserId.empty()) agentUserId = "transparency-user-1";
-    std::string payload = "{\"agentUserId\":\"" + agentUserId + "\"}";
-    wstring token = _googleAccessToken;
-
-    HWND hwnd = _hwnd;
-    std::thread([this, payload, token, hwnd]() {
-        std::string resp = HttpPostJson(
-            L"homegraph.googleapis.com",
-            L"/v1/devices:disconnect",
-            payload, token);
-        wstring* result = new wstring(Utf8ToWide(resp));
-        PostMessage(hwnd, WM_APP + 114, 0, (LPARAM)result);
-    }).detach();
-}
-
-// ── Command handling ─────────────────────────────────────────────────────────
-
-LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
-    int id = LOWORD(wp);
-    switch (id) {
-    case IDC_BTN_ALEXA_LINK:
-    case IDC_BTN_ALEXA_OPEN_AUTH:
-        AlexaOpenAuth();
-        break;
-
-    case IDC_BTN_ALEXA_GET_TOKEN:
-        AlexaExchangeToken();
-        break;
-
-    case IDC_BTN_ALEXA_REFRESH:
-        AlexaRefreshToken();
-        break;
-
-    case IDC_BTN_ALEXA_DISCOVER:
-        if (_hAlexaStatus)
-            SetWindowText(_hAlexaStatus, L"Status: Discovering Alexa-compatible devices...");
-        PopulateSmartDevices();
-        break;
-
-    case IDC_BTN_ALEXA_SH_DISCOVER:
-        AlexaSHSendDiscovery();
-        break;
-
-    case IDC_BTN_ALEXA_SH_STATE:
-        AlexaSHSendStateReport();
-        break;
-
-    case IDC_BTN_ALEXA_SH_CHANGE:
-        AlexaSHSendChangeReport();
-        break;
-
-    case IDC_BTN_GOOGLE_LINK:
-    case IDC_BTN_GOOGLE_OPEN_AUTH:
-        GoogleOpenAuth();
-        break;
-
-    case IDC_BTN_GOOGLE_GET_TOKEN:
-        GoogleExchangeToken();
-        break;
-
-    case IDC_BTN_GOOGLE_REFRESH:
-        GoogleRefreshToken();
-        break;
-
-    case IDC_BTN_GOOGLE_DISCOVER:
-        if (_hGoogleStatus)
-            SetWindowText(_hGoogleStatus, L"Status: Syncing devices with Google Home...");
-        PopulateSmartDevices();
-        break;
-
-    case IDC_BTN_GOOGLE_HG_SYNC:
-        GoogleHGRequestSync();
-        break;
-
-    case IDC_BTN_GOOGLE_HG_QUERY:
-        GoogleHGQueryDevices();
-        break;
-
-    case IDC_BTN_GOOGLE_HG_DISCONNECT:
-        GoogleHGDisconnect();
-        break;
-
-    case IDC_BTN_SMART_ADD_TRIGGER: {
-        if (!_hComboTriggerEvent || !_hComboTriggerAction || !_hTriggerList) break;
-        wchar_t evtBuf[128], actBuf[128];
-        int evtIdx = (int)SendMessage(_hComboTriggerEvent, CB_GETCURSEL, 0, 0);
-        int actIdx = (int)SendMessage(_hComboTriggerAction, CB_GETCURSEL, 0, 0);
-        SendMessage(_hComboTriggerEvent, CB_GETLBTEXT, evtIdx, (LPARAM)evtBuf);
-        SendMessage(_hComboTriggerAction, CB_GETLBTEXT, actIdx, (LPARAM)actBuf);
-
-        int idx = ListView_GetItemCount(_hTriggerList);
-        LVITEM lvi = {};
-        lvi.mask = LVIF_TEXT;
-        lvi.iItem = idx;
-        lvi.pszText = evtBuf;
-        ListView_InsertItem(_hTriggerList, &lvi);
-        ListView_SetItemText(_hTriggerList, idx, 1, actBuf);
-        ListView_SetItemText(_hTriggerList, idx, 2, (LPWSTR)L"Active");
-        break;
-    }
-
-    case IDC_BTN_SMART_DEL_TRIGGER: {
-        if (!_hTriggerList) break;
-        int sel = ListView_GetNextItem(_hTriggerList, -1, LVNI_SELECTED);
-        if (sel >= 0) ListView_DeleteItem(_hTriggerList, sel);
-        break;
-    }
-
-    case IDC_BTN_SMART_ADD_SCENE: {
-        if (!_hEditSceneName || !_hSceneList) break;
-        wchar_t name[128];
-        GetWindowText(_hEditSceneName, name, 128);
-        if (!name[0]) break;
-
-        int idx = ListView_GetItemCount(_hSceneList);
-        LVITEM lvi = {};
-        lvi.mask = LVIF_TEXT;
-        lvi.iItem = idx;
-        lvi.pszText = name;
-        ListView_InsertItem(_hSceneList, &lvi);
-        ListView_SetItemText(_hSceneList, idx, 1, (LPWSTR)L"All");
-        ListView_SetItemText(_hSceneList, idx, 2, (LPWSTR)L"(configure)");
-        SetWindowText(_hEditSceneName, L"");
-        break;
-    }
-
-    case IDC_BTN_SMART_RUN_SCENE: {
-        if (!_hSceneList) break;
-        int sel = ListView_GetNextItem(_hSceneList, -1, LVNI_SELECTED);
-        if (sel >= 0) {
-            wchar_t name[128];
-            ListView_GetItemText(_hSceneList, sel, 0, name, 128);
-            wstring msg = wstring(L"Running scene: ") + name;
-            MessageBox(hwnd, msg.c_str(), L"Scene", MB_OK | MB_ICONINFORMATION);
-        }
-        break;
-    }
-    }
-
-    // Handle async token response (WM_APP+100 = exchange, WM_APP+101 = refresh)
-    // These are dispatched via WM_COMMAND fallthrough — actually handled in WndProc
-    return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
-}
-
-LRESULT TabSmartHome::OnNotify(HWND hwnd, NMHDR* hdr) {
-    return DefWindowProc(hwnd, WM_NOTIFY, 0, (LPARAM)hdr);
-}
+// ── Device population ─────────────────────────────────────────────────────────
 
 void TabSmartHome::PopulateSmartDevices() {
     if (!_hDeviceList || !_mainWnd) return;
     ListView_DeleteAllItems(_hDeviceList);
 
     ScanResult r = _mainWnd->GetLastResult();
-    int idx = 0;
+    int row = 0;
     for (auto& d : r.devices) {
-        bool isSmart = false;
-        wstring platform = L"Unknown";
-
-        for (int p : d.openPorts) {
-            if (p == 8008 || p == 8009 || p == 8443) { isSmart = true; platform = L"Google/Cast"; }
-            if (p == 8123)   { isSmart = true; platform = L"Home Assistant"; }
-            if (p == 1883 || p == 8883) { isSmart = true; platform = L"MQTT"; }
-            if (p == 49152 || p == 49153) { isSmart = true; platform = L"UPnP"; }
-        }
-        if (d.deviceType == L"IoT Device" || d.deviceType == L"Smart Speaker" ||
-            d.deviceType == L"Smart TV" || d.deviceType == L"Camera") {
-            isSmart = true;
-        }
-        if (!d.ssdpInfo.empty()) {
-            if (d.ssdpInfo.find(L"Amazon") != wstring::npos) { isSmart = true; platform = L"Amazon Alexa"; }
-            if (d.ssdpInfo.find(L"Google") != wstring::npos) { isSmart = true; platform = L"Google Home"; }
-        }
-        if (!d.vendor.empty()) {
-            if (d.vendor.find(L"Amazon") != wstring::npos) { isSmart = true; platform = L"Amazon Alexa"; }
-            if (d.vendor.find(L"Google") != wstring::npos) { isSmart = true; platform = L"Google/Nest"; }
-            if (d.vendor.find(L"Philips") != wstring::npos) { isSmart = true; platform = L"Hue"; }
-            if (d.vendor.find(L"TP-Link") != wstring::npos || d.vendor.find(L"Kasa") != wstring::npos) { isSmart = true; platform = L"TP-Link/Kasa"; }
-            if (d.vendor.find(L"Ring") != wstring::npos) { isSmart = true; platform = L"Ring"; }
-            if (d.vendor.find(L"Sonos") != wstring::npos) { isSmart = true; platform = L"Sonos"; }
-        }
-
-        if (!isSmart) continue;
-
+        if (!IsSmartDevice(d)) continue;
         wstring name = !d.customName.empty() ? d.customName
                      : !d.hostname.empty()   ? d.hostname
                      : !d.vendor.empty()     ? d.vendor
                      : L"Unknown Device";
+        wstring platform = SmartPlatform(d);
+        wstring security = SecurityNote(d);
 
-        LVITEM lvi = {};
-        lvi.mask = LVIF_TEXT;
-        lvi.iItem = idx;
+        LVITEM lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = row;
         lvi.pszText = (LPWSTR)d.ip.c_str();
         ListView_InsertItem(_hDeviceList, &lvi);
-        ListView_SetItemText(_hDeviceList, idx, 1, (LPWSTR)name.c_str());
-        ListView_SetItemText(_hDeviceList, idx, 2, (LPWSTR)d.deviceType.c_str());
-        ListView_SetItemText(_hDeviceList, idx, 3, (LPWSTR)platform.c_str());
-        ListView_SetItemText(_hDeviceList, idx, 4, (LPWSTR)(d.online ? L"Online" : L"Offline"));
-        idx++;
+        ListView_SetItemText(_hDeviceList, row, 1, (LPWSTR)name.c_str());
+        ListView_SetItemText(_hDeviceList, row, 2, (LPWSTR)d.deviceType.c_str());
+        ListView_SetItemText(_hDeviceList, row, 3, (LPWSTR)platform.c_str());
+        ListView_SetItemText(_hDeviceList, row, 4, (LPWSTR)security.c_str());
+        ListView_SetItemText(_hDeviceList, row, 5, (LPWSTR)(d.online ? L"Online" : L"Offline"));
+        row++;
     }
+    PopulateSecurityLog();
+}
+
+void TabSmartHome::PopulateSecurityLog() {
+    if (!_hSecurityLog || !_mainWnd) return;
+    ScanResult r = _mainWnd->GetLastResult();
+
+    wstring log;
+    int issues = 0;
+    for (auto& d : r.devices) {
+        if (!IsSmartDevice(d)) continue;
+        wstring note = SecurityNote(d);
+        if (note.empty()) continue;
+        wstring name = !d.customName.empty() ? d.customName
+                     : !d.hostname.empty()   ? d.hostname
+                     : d.ip;
+        log += name + L"  (" + d.ip + L")  \u2014  " + note + L"\r\n";
+        issues++;
+    }
+    if (log.empty())
+        log = issues == 0 && r.devices.empty()
+            ? L"Run a network scan to see per-device security notes.\r\nChecks: Telnet, FTP, HTTP-only admin panels, open camera streams."
+            : L"\u2714 No security issues found on smart home devices.";
+    SetWindowText(_hSecurityLog, log.c_str());
+}
+
+// ── Home Assistant ────────────────────────────────────────────────────────────
+
+void TabSmartHome::HaAppendLog(const wstring& text) {
+    if (!_hHaLog) return;
+    int len = GetWindowTextLength(_hHaLog);
+    SendMessage(_hHaLog, EM_SETSEL, len, len);
+    SendMessage(_hHaLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+void TabSmartHome::HaConnect() {
+    wchar_t urlBuf[512] = {}, tokBuf[1024] = {};
+    if (_hHaUrl)   GetWindowText(_hHaUrl,   urlBuf, 512);
+    if (_hHaToken) GetWindowText(_hHaToken, tokBuf, 1024);
+
+    if (!urlBuf[0]) {
+        HaAppendLog(L"[ERROR] Enter the Home Assistant URL (e.g. http://192.168.1.x:8123)");
+        return;
+    }
+    if (!tokBuf[0]) {
+        HaAppendLog(L"[ERROR] Paste a Long-Lived Access Token (HA \u2192 Profile \u2192 Security)");
+        return;
+    }
+    _haBaseUrl = urlBuf;
+    _haToken   = tokBuf;
+
+    // Strip trailing slash
+    if (!_haBaseUrl.empty() && _haBaseUrl.back() == L'/') _haBaseUrl.pop_back();
+
+    HaAppendLog(L"[INFO] Connecting to " + _haBaseUrl + L" ...");
+    if (_hHaStatus) SetWindowText(_hHaStatus, L"Status: Connecting...");
+
+    wstring url   = _haBaseUrl + L"/api/";
+    wstring token = _haToken;
+    HWND hwnd     = _hwnd;
+    std::thread([url, token, hwnd]() {
+        string resp = HttpGetJson(url, token);
+        PostMessage(hwnd, WM_HA_CONNECT, 0, (LPARAM)new wstring(Utf8ToWide(resp)));
+    }).detach();
+}
+
+void TabSmartHome::HaSync() {
+    if (_haBaseUrl.empty() || _haToken.empty()) {
+        HaAppendLog(L"[ERROR] Connect to Home Assistant first.");
+        return;
+    }
+    HaAppendLog(L"[INFO] Fetching entity states...");
+    wstring url   = _haBaseUrl + L"/api/states";
+    wstring token = _haToken;
+    HWND hwnd     = _hwnd;
+    std::thread([url, token, hwnd]() {
+        string resp = HttpGetJson(url, token);
+        PostMessage(hwnd, WM_HA_SYNC, 0, (LPARAM)new wstring(Utf8ToWide(resp)));
+    }).detach();
+}
+
+// ── Philips Hue ───────────────────────────────────────────────────────────────
+
+void TabSmartHome::HueAppendLog(const wstring& text) {
+    if (!_hHueLog) return;
+    int len = GetWindowTextLength(_hHueLog);
+    SendMessage(_hHueLog, EM_SETSEL, len, len);
+    SendMessage(_hHueLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+void TabSmartHome::HueDiscover() {
+    HueAppendLog(L"[INFO] Searching for Hue bridge on network...");
+    if (_hHueStatus) SetWindowText(_hHueStatus, L"Status: Searching...");
+
+    if (!_mainWnd) { HueAppendLog(L"[INFO] Run a scan first to see discovered devices."); return; }
+
+    // Look for Hue bridge in scan results (mDNS _hue._tcp or Philips vendor on port 80)
+    ScanResult r = _mainWnd->GetLastResult();
+    wstring found;
+    for (auto& d : r.devices) {
+        bool isHue = false;
+        for (auto& svc : d.mdnsServices)
+            if (svc.find(L"_hue") != wstring::npos) { isHue = true; break; }
+        if (!isHue && d.vendor.find(L"Philips") != wstring::npos) {
+            for (int p : d.openPorts) if (p == 80) { isHue = true; break; }
+        }
+        if (isHue) { found = d.ip; break; }
+    }
+
+    HWND hwnd = _hwnd;
+    if (!found.empty()) {
+        PostMessage(hwnd, WM_HUE_DISC, 0, (LPARAM)new wstring(L"found:" + found));
+    } else {
+        PostMessage(hwnd, WM_HUE_DISC, 0, (LPARAM)new wstring(L"not found"));
+    }
+}
+
+void TabSmartHome::HuePair() {
+    wchar_t ipBuf[64] = {};
+    if (_hHueBridgeIp) GetWindowText(_hHueBridgeIp, ipBuf, 64);
+    if (!ipBuf[0]) {
+        HueAppendLog(L"[ERROR] Enter or discover the bridge IP first.");
+        return;
+    }
+    _hueBridgeIp = ipBuf;
+    HueAppendLog(L"[INFO] Pairing with bridge at " + _hueBridgeIp + L" ...");
+    HueAppendLog(L"[INFO] Make sure you pressed the link button on the bridge!");
+
+    wstring host = _hueBridgeIp;
+    HWND hwnd = _hwnd;
+    std::thread([host, hwnd]() {
+        string resp = HttpPostLocal(host, 80, L"/api",
+                                    "{\"devicetype\":\"transparency#windows\"}");
+        PostMessage(hwnd, WM_HUE_PAIR, 0, (LPARAM)new wstring(Utf8ToWide(resp)));
+    }).detach();
+}
+
+void TabSmartHome::HueSync() {
+    if (_hueBridgeIp.empty()) {
+        HueAppendLog(L"[ERROR] Discover and pair with a bridge first.");
+        return;
+    }
+    if (_hueUsername.empty()) {
+        HueAppendLog(L"[ERROR] Complete pairing first — the bridge username is required.");
+        return;
+    }
+    HueAppendLog(L"[INFO] Fetching lights from bridge " + _hueBridgeIp + L" ...");
+    wstring host = _hueBridgeIp, user = _hueUsername;
+    HWND hwnd = _hwnd;
+    std::thread([host, user, hwnd]() {
+        string resp = HttpGetJson(L"http://" + host + L"/api/" + user + L"/lights");
+        PostMessage(hwnd, WM_HUE_SYNC, 0, (LPARAM)new wstring(Utf8ToWide(resp)));
+    }).detach();
+}
+
+// ── Command handling ──────────────────────────────────────────────────────────
+
+LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
+    switch (LOWORD(wp)) {
+    case IDC_BTN_HA_CONNECT:      HaConnect();  break;
+    case IDC_BTN_HA_SYNC:         HaSync();     break;
+    case IDC_BTN_HUE_DISCOVER:    HueDiscover(); break;
+    case IDC_BTN_HUE_PAIR:        HuePair();    break;
+    case IDC_BTN_HUE_SYNC:        HueSync();    break;
+
+    case IDC_BTN_SMART_ADD_TRIGGER: {
+        if (!_hComboTriggerEvent || !_hComboTriggerAction || !_hTriggerList) break;
+        wchar_t evtBuf[128], actBuf[128];
+        int ei = (int)SendMessage(_hComboTriggerEvent,  CB_GETCURSEL, 0, 0);
+        int ai = (int)SendMessage(_hComboTriggerAction, CB_GETCURSEL, 0, 0);
+        SendMessage(_hComboTriggerEvent,  CB_GETLBTEXT, ei, (LPARAM)evtBuf);
+        SendMessage(_hComboTriggerAction, CB_GETLBTEXT, ai, (LPARAM)actBuf);
+        int idx = ListView_GetItemCount(_hTriggerList);
+        LVITEM lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = idx; lvi.pszText = evtBuf;
+        ListView_InsertItem(_hTriggerList, &lvi);
+        ListView_SetItemText(_hTriggerList, idx, 1, actBuf);
+        ListView_SetItemText(_hTriggerList, idx, 2, (LPWSTR)L"Active");
+        break;
+    }
+    case IDC_BTN_SMART_DEL_TRIGGER: {
+        if (!_hTriggerList) break;
+        int sel = ListView_GetNextItem(_hTriggerList, -1, LVNI_SELECTED);
+        if (sel >= 0) ListView_DeleteItem(_hTriggerList, sel);
+        break;
+    }
+    }
+    return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
+}
+
+LRESULT TabSmartHome::OnNotify(HWND hwnd, NMHDR* hdr) {
+    return DefWindowProc(hwnd, WM_NOTIFY, 0, (LPARAM)hdr);
 }
 
 void TabSmartHome::RefreshDevices() {

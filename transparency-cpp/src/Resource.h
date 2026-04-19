@@ -135,53 +135,27 @@
 
 // Smart Home tab IDs
 #define IDC_SMART_DEVICE_LIST       11001
-#define IDC_BTN_ALEXA_LINK          11010
-#define IDC_BTN_ALEXA_DISCOVER      11011
-#define IDC_SMART_ALEXA_OUT         11012
-#define IDC_BTN_GOOGLE_LINK         11020
-#define IDC_BTN_GOOGLE_DISCOVER     11021
-#define IDC_SMART_GOOGLE_OUT        11022
+
+// Home Assistant integration (local — no cloud account)
+#define IDC_BTN_HA_CONNECT          11010
+#define IDC_BTN_HA_SYNC             11011
+#define IDC_EDIT_HA_URL             11012
+#define IDC_EDIT_HA_TOKEN           11013
+#define IDC_SMART_HA_LOG            11014
+
+// Philips Hue integration (local — no cloud account)
+#define IDC_BTN_HUE_DISCOVER        11020
+#define IDC_BTN_HUE_PAIR            11021
+#define IDC_BTN_HUE_SYNC            11022
+#define IDC_EDIT_HUE_IP             11023
+#define IDC_SMART_HUE_LOG           11024
+
+// Automation triggers
 #define IDC_SMART_TRIGGER_EVENT     11030
 #define IDC_SMART_TRIGGER_ACTION    11031
 #define IDC_SMART_TRIGGER_LIST      11032
 #define IDC_BTN_SMART_ADD_TRIGGER   11033
 #define IDC_BTN_SMART_DEL_TRIGGER   11034
-#define IDC_SMART_SCENE_NAME        11040
-#define IDC_SMART_SCENE_LIST        11041
-#define IDC_BTN_SMART_ADD_SCENE     11042
-#define IDC_BTN_SMART_RUN_SCENE     11043
-
-// Alexa Token Retrieval
-#define IDC_ALEXA_CLIENT_ID         11050
-#define IDC_ALEXA_CLIENT_SECRET     11051
-#define IDC_ALEXA_AUTH_CODE         11052
-#define IDC_ALEXA_REDIRECT_URI      11053
-#define IDC_BTN_ALEXA_GET_TOKEN     11054
-#define IDC_BTN_ALEXA_REFRESH       11055
-#define IDC_ALEXA_TOKEN_OUT         11056
-#define IDC_BTN_ALEXA_OPEN_AUTH     11057
-
-// Alexa Smart Home Skill API
-#define IDC_ALEXA_SH_REGION         11060
-#define IDC_BTN_ALEXA_SH_DISCOVER   11061
-#define IDC_BTN_ALEXA_SH_STATE      11062
-#define IDC_BTN_ALEXA_SH_CHANGE     11063
-#define IDC_ALEXA_SH_LOG            11064
-
-// Google Home OAuth & Home Graph API
-#define IDC_GOOGLE_CLIENT_ID        11070
-#define IDC_GOOGLE_CLIENT_SECRET    11071
-#define IDC_GOOGLE_AUTH_CODE        11072
-#define IDC_GOOGLE_REDIRECT_URI     11073
-#define IDC_BTN_GOOGLE_OPEN_AUTH    11074
-#define IDC_BTN_GOOGLE_GET_TOKEN    11075
-#define IDC_BTN_GOOGLE_REFRESH      11076
-#define IDC_GOOGLE_TOKEN_OUT        11077
-#define IDC_GOOGLE_PROJECT_ID       11080
-#define IDC_BTN_GOOGLE_HG_SYNC     11081
-#define IDC_BTN_GOOGLE_HG_QUERY    11082
-#define IDC_BTN_GOOGLE_HG_DISCONNECT 11083
-#define IDC_GOOGLE_HG_LOG          11084
 
 // Nav IDs
 #define IDC_NAV_SMARTHOME   2007
