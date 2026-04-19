@@ -877,6 +877,16 @@ ipcMain.handle('delete-local-device', async (_e, ip) => {
   return { success:true, removed: before - lastSnapshot.length };
 });
 
+ipcMain.handle('bulk-delete-local-devices', async (_e, ips) => {
+  const before = lastSnapshot.length;
+  const ipsSet = new Set(ips);
+  lastSnapshot = lastSnapshot.filter(d => !ipsSet.has(d.ip));
+  if (lastScanResult) {
+    lastScanResult = { ...lastScanResult, devices: lastScanResult.devices.filter(d => !ipsSet.has(d.ip)) };
+  }
+  return { success:true, removed: before - lastSnapshot.length };
+});
+
 // ── IPC: Report export ────────────────────────────────────────────────────────
 ipcMain.handle('export-report', async () => {
   try {

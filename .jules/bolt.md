@@ -25,3 +25,6 @@
 ## 2026-10-25 - [O(1) Anomaly Lookups in UI Bulk Operations]
 **Learning:** Using an $O(N)$ operation like `Array.prototype.find()` or `Array.prototype.includes()` inside a loop over selected devices creates a significant performance bottleneck ($O(N \times M)$ complexity) when applying bulk actions on large device lists. This can cause the UI to freeze or become unresponsive.
 **Action:** When implementing bulk operations on large data sets (like devices or tables), pre-compute a lookup table (e.g. `Map` or `Set`) before the loop. Replace $O(N)$ lookups with $O(1)$ operations (`Map.prototype.get()` or `Set.prototype.has()`) to reduce the complexity to $O(N + M)$ and maintain a smooth user experience.
+## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
+**Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
+**Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
