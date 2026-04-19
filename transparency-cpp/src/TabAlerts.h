@@ -44,6 +44,8 @@ private:
     MainWindow* _mainWnd = nullptr;
 
     HWND _hAlertList      = nullptr;
+    HWND _hRiskPrevalence = nullptr;   // "Prevalence: Common (78/100) · ..."
+    HWND _hRiskAction     = nullptr;   // "Action Required" / "No Action Needed" etc.
     HWND _hExplainPanel   = nullptr;   // three-part explanation panel
     HWND _hExplainWhat    = nullptr;   // "What happened"
     HWND _hExplainWhy     = nullptr;   // "Why it matters"
@@ -57,6 +59,8 @@ private:
     HWND _hBtnDelRule     = nullptr;
     HWND _hBtnClearAll    = nullptr;
     HWND _hFilterBtns[5]  = {};
+
+    COLORREF _actionColor = RGB(136, 146, 168); // initialized to TEXT_SECONDARY
 
     int _alertFilter   = 0; // 0=All, 1=High, 2=Medium, 3=Low, 4=Unack
     int _selectedAlert = -1;

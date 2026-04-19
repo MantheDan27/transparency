@@ -22,11 +22,13 @@ static const wchar_t* ALERT_FILTER_LABELS[] = { L"All", L"High", L"Medium", L"Lo
 // Fixed content layout heights — tab scrolls vertically to fit all sections
 static const int ALERT_LIST_Y  = 52;    // top of alert list (below filter bar)
 static const int ALERT_LIST_H  = 280;   // alert list (~12 rows)
-static const int EXPLAIN_Y     = 344;   // ALERT_LIST_Y + ALERT_LIST_H + 12
+static const int RISK_PREV_Y   = 360;   // prevalence label (below list + section header)
+static const int RISK_ACT_Y    = 384;   // action recommendation label
+static const int EXPLAIN_Y     = 430;   // explain panel (pushed down to fit risk context)
 static const int EXPLAIN_H     = 280;   // explain panel
-static const int RULE_LIST_Y   = 660;   // EXPLAIN_Y + EXPLAIN_H + 36 (header + button gap)
+static const int RULE_LIST_Y   = 746;   // EXPLAIN_Y + EXPLAIN_H + 36
 static const int RULE_LIST_H   = 260;   // rule list
-static const int TAB_CONTENT_H = 940;   // RULE_LIST_Y + RULE_LIST_H + 20
+static const int TAB_CONTENT_H = 1026;  // RULE_LIST_Y + RULE_LIST_H + 20
 
 bool TabAlerts::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
@@ -127,8 +129,13 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
-        SetTextColor((HDC)wp, Theme::TEXT_PRIMARY);
-        SetBkColor((HDC)wp, Theme::BG_SURFACE);
+        HDC hdc = (HDC)wp;
+        HWND ctrl = (HWND)lp;
+        SetBkColor(hdc, Theme::BG_SURFACE);
+        if (self && ctrl == self->_hRiskAction)
+            SetTextColor(hdc, self->_actionColor);
+        else
+            SetTextColor(hdc, Theme::TEXT_PRIMARY);
         return (LRESULT)Theme::BrushSurface();
     }
     case WM_VSCROLL:    return self->OnVScroll(hwnd, wp);
@@ -212,6 +219,18 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 
     if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
 
+    // Risk context labels — direct children of tab (not explain panel) so WM_CTLCOLORSTATIC reaches WndProc
+    _hRiskPrevalence = CreateWindowEx(0, L"STATIC",
+        L"Select an alert above to see risk context.",
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+        16, RISK_PREV_Y, cx - 32, 22, hwnd, nullptr, hInst, nullptr);
+    SendMessage(_hRiskPrevalence, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
+
+    _hRiskAction = CreateWindowEx(0, L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+        16, RISK_ACT_Y, cx - 32, 22, hwnd, nullptr, hInst, nullptr);
+    SendMessage(_hRiskAction, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
+
     // Rules section — positioned below explain panel
     _hBtnAddRule = CreateWindowEx(0, L"BUTTON", L"Add Rule",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
@@ -270,6 +289,10 @@ void TabAlerts::LayoutControls(int cx, int cy) {
 
     // Alert list — fixed height
     deferMove(_hAlertList, 16, ALERT_LIST_Y + sOff, cx - 32, ALERT_LIST_H);
+
+    // Risk context labels
+    deferMove(_hRiskPrevalence, 16, RISK_PREV_Y + sOff, cx - 32, 22);
+    deferMove(_hRiskAction,     16, RISK_ACT_Y  + sOff, cx - 32, 22);
 
     // Explain panel — fixed height, children stay relative to panel
     deferMove(_hExplainPanel, 16, EXPLAIN_Y + sOff, cx - 32, EXPLAIN_H);
@@ -377,6 +400,18 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     RECT hdr1 = { 16, ALERT_LIST_Y - 16 + sOff, 200, ALERT_LIST_Y - 2 + sOff };
     DrawText(hdc, L"ACTIVE ALERTS", -1, &hdr1, DT_LEFT | DT_SINGLELINE);
 
+    // separator + "RISK CONTEXT" between list and risk labels
+    RECT sep2 = { 16, RISK_PREV_Y - 16 + sOff, rc.right - 16, RISK_PREV_Y - 15 + sOff };
+    FillRect(hdc, &sep2, Theme::BrushBorderSubtle());
+    RECT hdr_risk = { 16, RISK_PREV_Y - 14 + sOff, 200, RISK_PREV_Y - 2 + sOff };
+    DrawText(hdc, L"RISK CONTEXT", -1, &hdr_risk, DT_LEFT | DT_SINGLELINE);
+
+    // separator + "ALERT DETAIL" between risk context and explain panel
+    RECT sep3 = { 16, EXPLAIN_Y - 16 + sOff, rc.right - 16, EXPLAIN_Y - 15 + sOff };
+    FillRect(hdc, &sep3, Theme::BrushBorderSubtle());
+    RECT hdr_detail = { 16, EXPLAIN_Y - 14 + sOff, 200, EXPLAIN_Y - 2 + sOff };
+    DrawText(hdc, L"ALERT DETAIL", -1, &hdr_detail, DT_LEFT | DT_SINGLELINE);
+
     // "ALERT RULES" — just above the rule buttons
     RECT hdr2 = { 16, RULE_LIST_Y - 48 + sOff, 200, RULE_LIST_Y - 34 + sOff };
     DrawText(hdc, L"ALERT RULES", -1, &hdr2, DT_LEFT | DT_SINGLELINE);
@@ -433,6 +468,38 @@ LRESULT TabAlerts::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
 }
 
+struct AlertRisk {
+    int prevalence;              // 0-100, how often this appears on typical home networks
+    const wchar_t* label;        // "Very Common", "Common", "Uncommon", "Rare"
+    const wchar_t* actionText;   // short action verdict
+    COLORREF actionColor;        // semantic color from Theme
+    const wchar_t* actionReason; // one-line rationale
+};
+
+static AlertRisk GetAlertRisk(const wstring& type) {
+    if (type == L"new_device")
+        return {78, L"Very Common",  L"Review Suggested",      Theme::ACCENT_CYAN,   L"New devices join routinely \u2014 verify it\u2019s one you recognize"};
+    if (type == L"risky_port")
+        return {28, L"Uncommon",     L"Action Required",        Theme::ACCENT_RED,    L"Exposed services create a real attack surface on your network"};
+    if (type == L"port_changed")
+        return {38, L"Uncommon",     L"Action Recommended",     Theme::ACCENT_AMBER,  L"Port changes may indicate a firmware update or an unauthorized service"};
+    if (type == L"device_offline")
+        return {85, L"Very Common",  L"No Action Needed",       Theme::ACCENT_GREEN,  L"Devices go offline constantly \u2014 this is expected behavior"};
+    if (type == L"ip_changed")
+        return {60, L"Common",       L"No Action Needed",       Theme::ACCENT_GREEN,  L"DHCP lease renewals are normal \u2014 only investigate if the device is sensitive"};
+    if (type == L"internet_outage")
+        return {55, L"Common",       L"Review Suggested",       Theme::ACCENT_CYAN,   L"Check router/modem if the outage lasts more than a few minutes"};
+    if (type == L"gateway_mac_changed")
+        return {3,  L"Rare",         L"Action Required",        Theme::ACCENT_RED,    L"Strongly indicates ARP spoofing or an unauthorized router replacement"};
+    if (type == L"dns_changed")
+        return {6,  L"Rare",         L"Action Required",        Theme::ACCENT_RED,    L"DNS hijacking can silently redirect all internet traffic on your network"};
+    if (type == L"high_latency")
+        return {65, L"Common",       L"No Action Needed",       Theme::ACCENT_GREEN,  L"Usually transient \u2014 investigate only if latency is persistent or severe"};
+    if (type == L"hostname_changed")
+        return {20, L"Uncommon",     L"Action Recommended",     Theme::ACCENT_AMBER,  L"Device was renamed \u2014 verify this change was intentional"};
+    return    {25, L"Uncommon",     L"Review Suggested",       Theme::ACCENT_CYAN,   L"Investigate to confirm this is expected behavior on your network"};
+}
+
 void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
     if (!_mainWnd) return;
     ScanResult r = _mainWnd->GetLastResult();
@@ -447,13 +514,28 @@ void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
     }
 
     if (anomalyIdx < 0 || anomalyIdx >= (int)visible.size()) {
-        if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
-        if (_hExplainWhy)  SetWindowText(_hExplainWhy, L"");
-        if (_hExplainDo)   SetWindowText(_hExplainDo, L"");
+        if (_hExplainWhat)    SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
+        if (_hExplainWhy)     SetWindowText(_hExplainWhy, L"");
+        if (_hExplainDo)      SetWindowText(_hExplainDo, L"");
+        if (_hRiskPrevalence) SetWindowText(_hRiskPrevalence, L"Select an alert above to see risk context.");
+        if (_hRiskAction)     SetWindowText(_hRiskAction, L"");
+        _actionColor = Theme::TEXT_SECONDARY;
         return;
     }
 
     const Anomaly& a = *visible[anomalyIdx];
+
+    // Risk context
+    AlertRisk risk = GetAlertRisk(a.type);
+    wstring prevText = L"Prevalence on home networks: " + wstring(risk.label) +
+                       L" (" + std::to_wstring(risk.prevalence) + L"/100)  \u00B7  " +
+                       risk.actionReason;
+    if (_hRiskPrevalence) SetWindowText(_hRiskPrevalence, prevText.c_str());
+    if (_hRiskAction) {
+        SetWindowText(_hRiskAction, risk.actionText);
+        _actionColor = risk.actionColor;
+        InvalidateRect(_hRiskAction, nullptr, FALSE);
+    }
 
     wstring what = a.description;
     if (!a.deviceIp.empty()) what += L"\r\nDevice: " + a.deviceIp;
