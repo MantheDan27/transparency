@@ -107,8 +107,6 @@ LRESULT CALLBACK TabOverview::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return self->OnVScroll(hwnd, wp);
     case WM_MOUSEWHEEL:
         return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
-    case WM_LBUTTONDOWN:
-        return self->OnLButtonDown(hwnd, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
     case WM_SCAN_COMPLETE:
         return self->OnScanComplete(hwnd);
     case WM_SCAN_PROGRESS:
@@ -129,11 +127,11 @@ LRESULT TabOverview::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 }
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-static const int TILE_Y  = 120;  // pushed down for NIC selector row
-static const int TILE_H  = 110; // taller for Display-size numbers + sparkline
+static const int TILE_Y     = 120;  // pushed down for NIC selector row
+static const int TILE_H     = 110;  // taller for Display-size numbers + sparkline
 static const int PILL_Y_OFF = 36;
-static const int BTN_H  = 44;  // min interactive target per design system
-static const int MAP_MIN_H = 400; // minimum topology map height so it isn't crammed
+static const int BTN_H      = 44;   // min interactive target per design system
+static const int DASH_MIN_H = 380;  // minimum security dashboard height
 
 static void GetLayoutMetrics(int cx, int /*cy*/,
     int& tileW, int& pillY, int& btnY, int& listY) {
@@ -147,7 +145,7 @@ static void GetLayoutMetrics(int cx, int /*cy*/,
 static int ComputeContentHeight(int cx, int cy) {
     int tileW, pillY, btnY, listY;
     GetLayoutMetrics(cx, cy, tileW, pillY, btnY, listY);
-    int mapH = std::max(cy - listY - 16, MAP_MIN_H);
+    int mapH = std::max(cy - listY - 16, DASH_MIN_H);
     return listY + mapH + 40;
 }
 
@@ -321,9 +319,9 @@ void TabOverview::LayoutControls(int cx, int cy) {
     deferMove(_hNicPin, 402, 44 + sOff, 50, 24);
     deferMove(_hNicReason, 16, 72 + sOff, cx - 32, 30);
 
-    // Topology map rect (left 60%) — enforce minimum height
+    // Security dashboard rect (left 60%) — enforce minimum height
     int mapW = (cx - 40) * 6 / 10;
-    int mapH = std::max(cy - listY - 16, MAP_MIN_H);
+    int mapH = std::max(cy - listY - 16, DASH_MIN_H);
     _mapRect = { 16, listY + sOff, 16 + mapW, listY + mapH + sOff };
 
     // Changes list (right 40%)
@@ -399,36 +397,6 @@ LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
     return 0;
 }
 
-wstring TabOverview::HitTestMapNode(int mx, int my) const {
-    for (auto& node : _mapNodes) {
-        int dx = mx - node.cx;
-        int dy = my - node.cy;
-        int r  = node.radius + 4; // small hit margin
-        if (dx * dx + dy * dy <= r * r)
-            return node.stableId;
-    }
-    return L"";
-}
-
-LRESULT TabOverview::OnLButtonDown(HWND hwnd, int mx, int my) {
-    wstring sid = HitTestMapNode(mx, my);
-    if (sid.empty() || !_mainWnd) return 0;
-
-    // Resolve stable ID (MAC or IP) → current array index in _lastResult.
-    // This is done at click time so stale paint-time indices never reach the
-    // Devices tab, even if a scan completed between the last paint and this click.
-    ScanResult r = _mainWnd->GetLastResult();
-    for (int i = 0; i < (int)r.devices.size(); i++) {
-        const Device& d = r.devices[i];
-        wstring id = d.mac.empty() ? d.ip : d.mac;
-        if (id == sid) {
-            _mainWnd->SwitchTab(Tab::Devices);
-            PostMessage(_mainWnd->GetHwnd(), WM_MAP_DEVICE_CLICK, (WPARAM)i, 0);
-            break;
-        }
-    }
-    return 0;
-}
 
 // ── Owner-draw KPI tiles ──────────────────────────────────────────────────────
 
@@ -557,268 +525,312 @@ void TabOverview::DrawSparkline(HDC hdc, const RECT& rc,
     DeleteObject(barBrush);
 }
 
-// ── Topology Map ──────────────────────────────────────────────────────────────
+// ── Security Dashboard ────────────────────────────────────────────────────────
 
-// Draw a device node using plain GDI (no per-call GDI+ context creation)
-static void DrawMapNode(HDC hdc, int nx, int ny, int r, COLORREF col) {
-    // Glow ring (dark tinted version)
-    COLORREF glow = RGB(GetRValue(col) / 4, GetGValue(col) / 4, GetBValue(col) / 4);
-    HBRUSH glowBr = CreateSolidBrush(glow);
-    HPEN   glowPn = CreatePen(PS_SOLID, 1, RGB(GetRValue(col)/2, GetGValue(col)/2, GetBValue(col)/2));
-    HBRUSH ob = (HBRUSH)SelectObject(hdc, glowBr);
-    HPEN   op = (HPEN)SelectObject(hdc, glowPn);
-    Ellipse(hdc, nx-r-3, ny-r-3, nx+r+3, ny+r+3);
-    // Fill circle
-    HBRUSH fillBr = CreateSolidBrush(col);
-    HPEN   fillPn = CreatePen(PS_SOLID, 1, col);
-    SelectObject(hdc, fillBr);
-    SelectObject(hdc, fillPn);
-    DeleteObject(glowBr);
-    DeleteObject(glowPn);
-    Ellipse(hdc, nx-r, ny-r, nx+r, ny+r);
-    SelectObject(hdc, ob);
-    SelectObject(hdc, op);
-    DeleteObject(fillBr);
-    DeleteObject(fillPn);
+void TabOverview::RebuildSecurityData(const ScanResult& r) {
+    _trustCounts = {};
+    _iotRiskCount = 0;
+    for (auto& d : r.devices) {
+        if      (d.trustState == L"owned")     _trustCounts.owned++;
+        else if (d.trustState == L"known")     _trustCounts.known++;
+        else if (d.trustState == L"guest")     _trustCounts.guest++;
+        else if (d.trustState == L"unknown")   _trustCounts.unknown++;
+        else if (d.trustState == L"blocked")   _trustCounts.blocked++;
+        else if (d.trustState == L"watchlist") _trustCounts.watchlist++;
+        if (d.iotRisk) _iotRiskCount++;
+    }
+
+    int score = 100;
+    score -= std::min(_trustCounts.unknown * 8, 40);
+    score -= std::min(_iotRiskCount * 12, 30);
+    score -= std::min((int)r.anomalies.size() * 5, 20);
+    if (score < 0) score = 0;
+    _secScore = r.devices.empty() ? -1 : score;
+
+    _topRisks.clear();
+    if (_trustCounts.unknown > 0) {
+        wchar_t buf[80];
+        swprintf_s(buf, L"%d unknown device%ls on network",
+                   _trustCounts.unknown, _trustCounts.unknown == 1 ? L"" : L"s");
+        _topRisks.push_back(buf);
+    }
+    if (_iotRiskCount > 0) {
+        wchar_t buf[80];
+        swprintf_s(buf, L"%d IoT device%ls with risky port combinations",
+                   _iotRiskCount, _iotRiskCount == 1 ? L"" : L"s");
+        _topRisks.push_back(buf);
+    }
+    if (!r.anomalies.empty()) {
+        wchar_t buf[80];
+        swprintf_s(buf, L"%d active anomal%ls detected",
+                   (int)r.anomalies.size(), r.anomalies.size() == 1 ? L"y" : L"ies");
+        _topRisks.push_back(buf);
+    }
+    if (_trustCounts.blocked > 0) {
+        wchar_t buf[80];
+        swprintf_s(buf, L"%d blocked device%ls still on network",
+                   _trustCounts.blocked, _trustCounts.blocked == 1 ? L"" : L"s");
+        _topRisks.push_back(buf);
+    }
+    if (_trustCounts.watchlist > 0) {
+        wchar_t buf[80];
+        swprintf_s(buf, L"%d device%ls on watchlist",
+                   _trustCounts.watchlist, _trustCounts.watchlist == 1 ? L"" : L"s");
+        _topRisks.push_back(buf);
+    }
+    if (_topRisks.size() > 5) _topRisks.resize(5);
 }
 
-static void DrawGatewayNode(HDC hdc, int gx, int gy, int r) {
-    COLORREF col = Theme::ACCENT_GLOW;
-    // Glow ring
-    COLORREF glow = RGB(GetRValue(col)/5, GetGValue(col)/5, GetBValue(col)/5);
-    HBRUSH glowBr = CreateSolidBrush(glow);
-    HPEN   glowPn = CreatePen(PS_SOLID, 2, col);
-    HBRUSH ob = (HBRUSH)SelectObject(hdc, glowBr);
-    HPEN   op = (HPEN)SelectObject(hdc, glowPn);
-    Ellipse(hdc, gx-r-5, gy-r-5, gx+r+5, gy+r+5);
-    // Fill
-    HBRUSH fillBr = CreateSolidBrush(col);
-    HPEN   fillPn = CreatePen(PS_SOLID, 1, col);
-    SelectObject(hdc, fillBr);
-    SelectObject(hdc, fillPn);
-    DeleteObject(glowBr);
-    DeleteObject(glowPn);
-    Ellipse(hdc, gx-r, gy-r, gx+r, gy+r);
-    SelectObject(hdc, ob);
-    SelectObject(hdc, op);
-    DeleteObject(fillBr);
-    DeleteObject(fillPn);
-    // Label
-    SetTextColor(hdc, Theme::BG_APP);
-    SelectObject(hdc, Theme::FontNavActive());
-    RECT gwRc = { gx-r, gy-8, gx+r, gy+8 };
-    SetBkMode(hdc, TRANSPARENT);
-    DrawText(hdc, L"GW", -1, &gwRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-}
-
-static COLORREF DeviceNodeColor(const Device& d) {
-    if (!d.online)                          return Theme::TEXT_TERTIARY;
-    if (d.iotRisk)                          return Theme::ACCENT_AMBER;
-    if (d.trustState == L"owned")           return Theme::ACCENT_GREEN;
-    if (d.trustState == L"known")           return Theme::ACCENT_BLUE;
-    if (d.trustState == L"guest")           return Theme::ACCENT_AMBER;
-    if (d.trustState == L"blocked")         return Theme::ACCENT_RED;
-    if (d.trustState == L"watchlist")       return Theme::ACCENT_PURPLE;
-    return Theme::TEXT_SECONDARY;
-}
-
-void TabOverview::DrawTopologyMap(HDC hdc, const RECT& rc) {
-    _mapNodes.clear();
-
-    // Glass panel background for the map
+void TabOverview::DrawSecurityDashboard(HDC hdc, const RECT& rc) {
     Theme::DrawGlassPanel(hdc, rc, Theme::RADIUS_MD);
-
-    HPEN borderPen = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
-    HPEN oldPen = (HPEN)SelectObject(hdc, borderPen);
-
-    // Section label
     SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+
     HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontCaption());
-    RECT hdrRc = { rc.left + 12, rc.top + 8, rc.right - 12, rc.top + 22 };
-    DrawText(hdc, L"NETWORK MAP", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    RECT hdrRc = { rc.left + 12, rc.top + 8, rc.right - 150, rc.top + 24 };
+    DrawText(hdc, L"SECURITY OVERVIEW", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
 
-    // Hint text
-    {
-        RECT hintRc = { rc.right - 200, rc.top + 8, rc.right - 12, rc.top + 22 };
+    if (_secScore < 0) {
+        SelectObject(hdc, Theme::FontBody());
         SetTextColor(hdc, Theme::TEXT_TERTIARY);
-        DrawText(hdc, L"Click a device to inspect", -1, &hintRc, DT_RIGHT | DT_SINGLELINE);
+        RECT noRc = { rc.left, rc.top + 28, rc.right, rc.bottom };
+        DrawText(hdc, L"Run a scan to see your network security assessment.",
+                 -1, &noRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldFont);
+        return;
     }
 
-    if (!_mainWnd) goto cleanup;
+    COLORREF scoreCol = (_secScore >= 80) ? Theme::ACCENT_GREEN :
+                        (_secScore >= 60) ? Theme::ACCENT_BLUE  :
+                        (_secScore >= 40) ? Theme::ACCENT_AMBER : Theme::ACCENT_RED;
+    const wchar_t* grade = (_secScore >= 80) ? L"SECURE"   :
+                           (_secScore >= 60) ? L"FAIR"     :
+                           (_secScore >= 40) ? L"AT RISK"  : L"CRITICAL";
+
+    // Grade pill (top-right)
+    Theme::DrawPillBadge(hdc,
+        rc.right - 110, rc.top + 6, 98, 20,
+        scoreCol, grade, Theme::FontCaption());
+
+    // ── Score ring ────────────────────────────────────────────────────────────
+    const int circleCx = rc.left + 90;
+    const int circleCy = rc.top  + 118;
+    const int circleR  = 54;
+    const int innerR   = circleR - 12;
+
     {
-        // Use cached result — set at scan-complete time, never locked inside OnPaint.
-        const ScanResult& r = _mapCache;
-        if (r.devices.empty()) {
-            SetTextColor(hdc, Theme::TEXT_TERTIARY);
-            SelectObject(hdc, Theme::FontBody());
-            RECT noRc = { rc.left, rc.top + 28, rc.right, rc.bottom };
-            DrawText(hdc, L"Run a scan to see the network map.",
-                     -1, &noRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            goto cleanup;
+        Gdiplus::Graphics g(hdc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        float ax = (float)(circleCx - circleR + 2);
+        float ay = (float)(circleCy - circleR + 2);
+        float aw = (float)((circleR - 2) * 2);
+
+        Gdiplus::Pen trackPen(Theme::GdipColor(Theme::BORDER_DEFAULT, 200), 9.0f);
+        trackPen.SetLineCap(Gdiplus::LineCapRound, Gdiplus::LineCapRound, Gdiplus::DashCapFlat);
+        g.DrawEllipse(&trackPen, ax, ay, aw, aw);
+
+        float sweep = (_secScore / 100.0f) * 360.0f;
+        if (sweep > 0.5f) {
+            Gdiplus::Pen arcPen(Theme::GdipColor(scoreCol), 9.0f);
+            arcPen.SetLineCap(Gdiplus::LineCapRound, Gdiplus::LineCapRound, Gdiplus::DashCapFlat);
+            g.DrawArc(&arcPen, ax, ay, aw, aw, -90.0f, sweep);
         }
 
-        // Group devices by subnet
-        std::map<wstring, std::vector<int>> subnetGroups;
-        for (int i = 0; i < (int)r.devices.size(); i++) {
-            wstring sub = r.devices[i].subnet;
-            if (sub.empty()) sub = L"default";
-            subnetGroups[sub].push_back(i);
-        }
+        Gdiplus::SolidBrush innerBr(Theme::GdipColor(Theme::BG_ELEVATED));
+        g.FillEllipse(&innerBr,
+            (float)(circleCx - innerR), (float)(circleCy - innerR),
+            (float)(innerR * 2), (float)(innerR * 2));
+    }
 
-        int mapLeft   = rc.left   + 16;
-        int mapTop    = rc.top    + 32;
-        int mapRight  = rc.right  - 16;
-        int mapBottom = rc.bottom - 16;
+    // Score number inside ring
+    {
+        wchar_t scoreStr[8];
+        swprintf_s(scoreStr, L"%d", _secScore);
+        SelectObject(hdc, Theme::FontH2());
+        SetTextColor(hdc, scoreCol);
+        RECT numRc = { circleCx - 30, circleCy - 16, circleCx + 30, circleCy + 16 };
+        DrawText(hdc, scoreStr, -1, &numRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-        int totalDevices = (int)r.devices.size();
+        SelectObject(hdc, Theme::FontSmall());
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        RECT subRc = { circleCx - 30, circleCy + 14, circleCx + 30, circleCy + 28 };
+        DrawText(hdc, L"/ 100", -1, &subRc, DT_CENTER | DT_SINGLELINE);
+    }
 
-        // Scale node radius down as device count grows so all nodes fit visually
-        const int NODE_R = (totalDevices > 60) ? 4
-                         : (totalDevices > 30) ? 6
-                         : (totalDevices > 15) ? 8 : 10;
-        const int GW_R = 18;
-        // Only draw per-node labels when there's enough spacing to avoid clutter
-        const bool showLabels = (totalDevices <= 24);
+    // "SCORE" caption below ring
+    {
+        SelectObject(hdc, Theme::FontCaption());
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        RECT capRc = { circleCx - 50, circleCy + circleR + 6,
+                       circleCx + 50, circleCy + circleR + 22 };
+        DrawText(hdc, L"SCORE", -1, &capRc, DT_CENTER | DT_SINGLELINE);
+    }
 
-        // drawNode / drawGateway now use static GDI helpers (no per-node GDI+ context)
-        auto drawNode    = [&](int nx, int ny, COLORREF col) { DrawMapNode(hdc, nx, ny, NODE_R, col); };
-        auto drawGateway = [&](int gx, int gy)              { DrawGatewayNode(hdc, gx, gy, GW_R);   };
+    // ── Risk factors (right of score circle) ──────────────────────────────────
+    int riskX = circleCx + circleR + 20;
+    int riskY = rc.top + 30;
+    int riskW = rc.right - riskX - 16;
 
-        if (subnetGroups.size() <= 1) {
-            // Single subnet — radial layout, ALL devices
-            int cx = (mapLeft + mapRight) / 2;
-            int cy = (mapTop  + mapBottom) / 2;
+    SelectObject(hdc, Theme::FontBody());
+    SetTextColor(hdc, Theme::TEXT_PRIMARY);
+    RECT rHdrRc = { riskX, riskY, riskX + riskW, riskY + 20 };
+    DrawText(hdc, L"Risk Factors", -1, &rHdrRc, DT_LEFT | DT_SINGLELINE);
+    riskY += 26;
 
-            // Radius: large enough to space nodes, but capped to available area
-            int available = (std::min(mapRight - mapLeft, mapBottom - mapTop) / 2) - NODE_R - 20;
-            int minForSpacing = (totalDevices > 1)
-                ? (int)(totalDevices * (NODE_R * 2 + 4) / (2.0 * 3.14159265)) + 10
-                : 40;
-            int radius = std::max(40, std::min(available, minForSpacing));
-
-            int n = totalDevices;  // all devices — no cap
-
-            // Connection lines
-            HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
-            SelectObject(hdc, linePen);
-            for (int i = 0; i < n; i++) {
-                double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
-                int nx = cx + (int)(radius * cos(angle));
-                int ny = cy + (int)(radius * sin(angle));
-                MoveToEx(hdc, cx, cy, nullptr);
-                LineTo(hdc, nx, ny);
-            }
-            DeleteObject(linePen);
-
-            // Device nodes
-            for (int i = 0; i < n; i++) {
-                const Device& d = r.devices[i];
-                double angle = 2.0 * 3.14159265 * i / n - 3.14159265 / 2.0;
-                int nx = cx + (int)(radius * cos(angle));
-                int ny = cy + (int)(radius * sin(angle));
-
-                drawNode(nx, ny, DeviceNodeColor(d));
-                _mapNodes.push_back({ nx, ny, NODE_R, d.mac.empty() ? d.ip : d.mac });
-
-                if (showLabels) {
-                    wstring lbl = d.customName.empty()
-                        ? (d.hostname.empty() ? d.ip : d.hostname)
-                        : d.customName;
-                    if ((int)lbl.size() > 12) lbl = lbl.substr(0, 12);
-                    SetTextColor(hdc, Theme::TEXT_SECONDARY);
-                    SelectObject(hdc, Theme::FontSmall());
-                    RECT lblRc = { nx - 48, ny + NODE_R + 3, nx + 48, ny + NODE_R + 16 };
-                    DrawText(hdc, lbl.c_str(), -1, &lblRc,
-                             DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
-                }
-            }
-
-            // Gateway center node
-            drawGateway(cx, cy);
-
-        } else {
-            // Multi-subnet — horizontal bands, ALL subnets and ALL devices
-            int gwCx = (mapLeft + mapRight) / 2;
-            int gwCy = mapTop + 20;
-
-            drawGateway(gwCx, gwCy);
-
-            int bandTop    = gwCy + GW_R + 12;
-            int totalH     = mapBottom - bandTop;
-            int numSubnets = (int)subnetGroups.size();  // no cap
-            int bandH      = totalH / std::max(numSubnets, 1);
-
-            int subIdx = 0;
-            for (auto& [subName, devIndices] : subnetGroups) {
-                int bTop = bandTop + subIdx * bandH;
-                int bBot = bTop + bandH - 8;
-
-                // Subnet label
-                SetTextColor(hdc, Theme::ACCENT_BLUE);
-                SelectObject(hdc, Theme::FontCaption());
-                RECT subRc = { mapLeft, bTop, mapRight, bTop + 16 };
-                DrawText(hdc, subName.c_str(), -1, &subRc, DT_LEFT | DT_SINGLELINE);
-
-                // Dashed separator
-                HPEN sepPen = CreatePen(PS_DOT, 1, Theme::BORDER_DEFAULT);
-                SelectObject(hdc, sepPen);
-                MoveToEx(hdc, mapLeft, bTop + 18, nullptr);
-                LineTo(hdc, mapRight, bTop + 18);
-                DeleteObject(sepPen);
-
-                int subCx = (mapLeft + mapRight) / 2;
-                int subCy = (bTop + 20 + bBot) / 2;
-
-                // Line from gateway to subnet center
-                HPEN linePen = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
-                SelectObject(hdc, linePen);
-                MoveToEx(hdc, gwCx, gwCy + GW_R, nullptr);
-                LineTo(hdc, subCx, bTop + 20);
-                DeleteObject(linePen);
-
-                // All devices in this subnet — horizontal spread, no cap
-                int n     = (int)devIndices.size();
-                int nodeW = (mapRight - mapLeft) / std::max(n, 1);
-                bool subShowLabels = showLabels && (nodeW >= NODE_R * 2 + 8);
-
-                for (int i = 0; i < n; i++) {
-                    const Device& d = r.devices[devIndices[i]];
-                    int nx = mapLeft + nodeW / 2 + i * nodeW;
-                    int ny = subCy;
-
-                    // Line from subnet anchor
-                    HPEN lp2 = CreatePen(PS_SOLID, 1, Theme::BORDER_SUBTLE);
-                    SelectObject(hdc, lp2);
-                    MoveToEx(hdc, subCx, bTop + 20, nullptr);
-                    LineTo(hdc, nx, ny);
-                    DeleteObject(lp2);
-
-                    drawNode(nx, ny, DeviceNodeColor(d));
-                    _mapNodes.push_back({ nx, ny, NODE_R, d.mac.empty() ? d.ip : d.mac });
-
-                    if (subShowLabels) {
-                        wstring lbl = d.customName.empty()
-                            ? (d.hostname.empty() ? d.ip : d.hostname)
-                            : d.customName;
-                        if ((int)lbl.size() > 10) lbl = lbl.substr(0, 10);
-                        SetTextColor(hdc, Theme::TEXT_SECONDARY);
-                        SelectObject(hdc, Theme::FontSmall());
-                        RECT lblRc = { nx - 40, ny + NODE_R + 3, nx + 40, ny + NODE_R + 16 };
-                        DrawText(hdc, lbl.c_str(), -1, &lblRc,
-                                 DT_CENTER | DT_SINGLELINE | DT_NOCLIP);
-                    }
-                }
-
-                subIdx++;
-            }
+    if (_topRisks.empty()) {
+        RECT bannerRc = { riskX, riskY, riskX + riskW, riskY + 28 };
+        Theme::DrawAlertBanner(hdc, bannerRc, Theme::ACCENT_GREEN);
+        SelectObject(hdc, Theme::FontBodySm());
+        SetTextColor(hdc, Theme::ACCENT_GREEN);
+        RECT okRc = { riskX + 12, riskY, riskX + riskW, riskY + 28 };
+        DrawText(hdc, L"No active risks — network looks clean", -1, &okRc,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    } else {
+        for (const auto& risk : _topRisks) {
+            RECT bannerRc = { riskX, riskY, riskX + riskW, riskY + 26 };
+            Theme::DrawAlertBanner(hdc, bannerRc, Theme::ACCENT_AMBER);
+            SelectObject(hdc, Theme::FontBodySm());
+            SetTextColor(hdc, Theme::TEXT_SECONDARY);
+            RECT txtRc = { riskX + 12, riskY, riskX + riskW - 4, riskY + 26 };
+            DrawText(hdc, risk.c_str(), -1, &txtRc,
+                     DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            riskY += 30;
         }
     }
 
-cleanup:
+    // ── Trust distribution bar ────────────────────────────────────────────────
+    int barY = circleCy + circleR + 34;
+    int barX = rc.left + 16;
+    int barW = rc.right - rc.left - 32;
+    const int barH = 18;
+
+    SelectObject(hdc, Theme::FontCaption());
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    RECT barHdrRc = { barX, barY, barX + barW, barY + 16 };
+    DrawText(hdc, L"DEVICE TRUST DISTRIBUTION", -1, &barHdrRc, DT_LEFT | DT_SINGLELINE);
+    barY += 20;
+
+    int total = _trustCounts.total();
+    struct TrustSeg { int count; COLORREF col; const wchar_t* label; };
+    const TrustSeg segs[] = {
+        { _trustCounts.owned,     Theme::ACCENT_GREEN,   L"Owned"     },
+        { _trustCounts.known,     Theme::ACCENT_BLUE,    L"Known"     },
+        { _trustCounts.guest,     Theme::ACCENT_AMBER,   L"Guest"     },
+        { _trustCounts.unknown,   Theme::TEXT_SECONDARY, L"Unknown"   },
+        { _trustCounts.blocked,   Theme::ACCENT_RED,     L"Blocked"   },
+        { _trustCounts.watchlist, Theme::ACCENT_PURPLE,  L"Watchlist" },
+    };
+
+    // Track background
+    RECT trackRc = { barX, barY, barX + barW, barY + barH };
+    FillRect(hdc, &trackRc, Theme::BrushElevated());
+
+    if (total > 0) {
+        int x = barX;
+        for (const auto& seg : segs) {
+            if (seg.count <= 0) continue;
+            int segW = (seg.count * barW) / total;
+            if (segW < 2) segW = 2;
+            HBRUSH br = CreateSolidBrush(seg.col);
+            RECT sRc = { x, barY + 1, std::min(x + segW, barX + barW) - 1, barY + barH - 1 };
+            FillRect(hdc, &sRc, br);
+            DeleteObject(br);
+            x += segW;
+        }
+    } else {
+        SelectObject(hdc, Theme::FontSmall());
+        SetTextColor(hdc, Theme::TEXT_TERTIARY);
+        DrawText(hdc, L"No device data", -1, &trackRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    // Bar border
+    {
+        HPEN bp = CreatePen(PS_SOLID, 1, Theme::BORDER_DEFAULT);
+        HPEN oldPen = (HPEN)SelectObject(hdc, bp);
+        HBRUSH nullBr = (HBRUSH)GetStockObject(NULL_BRUSH);
+        HBRUSH oldBr  = (HBRUSH)SelectObject(hdc, nullBr);
+        Rectangle(hdc, barX, barY, barX + barW, barY + barH);
+        SelectObject(hdc, oldPen);
+        SelectObject(hdc, oldBr);
+        DeleteObject(bp);
+    }
+
+    // Legend
+    if (total > 0) {
+        int legX = barX;
+        int legY = barY + barH + 8;
+        SelectObject(hdc, Theme::FontSmall());
+        for (const auto& seg : segs) {
+            if (seg.count <= 0) continue;
+            HBRUSH swBr = CreateSolidBrush(seg.col);
+            RECT swRc = { legX, legY + 3, legX + 10, legY + 11 };
+            FillRect(hdc, &swRc, swBr);
+            DeleteObject(swBr);
+            wchar_t legTxt[40];
+            swprintf_s(legTxt, L"%ls (%d)", seg.label, seg.count);
+            SetTextColor(hdc, Theme::TEXT_SECONDARY);
+            SIZE tsz = {};
+            GetTextExtentPoint32(hdc, legTxt, (int)wcslen(legTxt), &tsz);
+            RECT legRc = { legX + 14, legY, legX + 14 + tsz.cx + 4, legY + 14 };
+            DrawText(hdc, legTxt, -1, &legRc, DT_LEFT | DT_SINGLELINE);
+            legX += 14 + tsz.cx + 14;
+            if (legX + 80 > barX + barW) { legX = barX; legY += 16; }
+        }
+    }
+
+    // ── Network health strip ──────────────────────────────────────────────────
+    int hlthY = rc.bottom - 52;
+
+    {
+        Gdiplus::Graphics g(hdc);
+        Gdiplus::Pen divPen(Theme::GdipColor(Theme::BORDER_SUBTLE, 140), 1.0f);
+        g.DrawLine(&divPen,
+            (float)(rc.left + 12), (float)(hlthY - 8),
+            (float)(rc.right - 12), (float)(hlthY - 8));
+    }
+
+    SelectObject(hdc, Theme::FontCaption());
+    SetTextColor(hdc, Theme::TEXT_TERTIARY);
+    RECT hlthHdrRc = { rc.left + 16, hlthY - 4, rc.left + 200, hlthY + 12 };
+    DrawText(hdc, L"NETWORK HEALTH", -1, &hlthHdrRc, DT_LEFT | DT_SINGLELINE);
+
+    int dotX = rc.left + 16;
+    int dotY = hlthY + 16;
+
+    auto drawHealthItem = [&](const wchar_t* label, bool ok, const wchar_t* detail) {
+        COLORREF dotCol = ok ? Theme::ACCENT_GREEN : Theme::ACCENT_RED;
+        {
+            Gdiplus::Graphics g(hdc);
+            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            Gdiplus::SolidBrush dotBr(Theme::GdipColor(dotCol));
+            g.FillEllipse(&dotBr, (float)dotX, (float)(dotY + 3), 7.0f, 7.0f);
+        }
+        wchar_t txt[80];
+        swprintf_s(txt, L"%ls: %ls", label, detail);
+        SelectObject(hdc, Theme::FontBodySm());
+        SetTextColor(hdc, Theme::TEXT_SECONDARY);
+        SIZE tsz = {};
+        GetTextExtentPoint32(hdc, txt, (int)wcslen(txt), &tsz);
+        RECT hRc = { dotX + 12, dotY, dotX + 12 + tsz.cx + 4, dotY + 16 };
+        DrawText(hdc, txt, -1, &hRc, DT_LEFT | DT_SINGLELINE);
+        dotX += 12 + tsz.cx + 22;
+    };
+
+    wchar_t latBuf[24];
+    if (_internetOnline && _internetLatency >= 0)
+        swprintf_s(latBuf, L"%dms", _internetLatency);
+    else
+        wcscpy_s(latBuf, L"--");
+
+    wchar_t alertBuf[24];
+    swprintf_s(alertBuf, L"%d", _kpiVal[2]);
+
+    drawHealthItem(L"Internet", _internetOnline, _internetOnline ? L"Online" : L"Offline");
+    drawHealthItem(L"Gateway",  _kpiVal[3] >= 0, _kpiVal[3] >= 0 ? L"Reachable" : L"Unreachable");
+    drawHealthItem(L"Latency",  _internetOnline && _internetLatency >= 0 && _internetLatency < 100, latBuf);
+    drawHealthItem(L"Alerts",   _kpiVal[2] == 0, _kpiVal[2] == 0 ? L"None" : alertBuf);
+
     SelectObject(hdc, oldFont);
-    SelectObject(hdc, oldPen);
-    DeleteObject(borderPen);
 }
 
 // ── OnPaint ───────────────────────────────────────────────────────────────────
@@ -839,9 +851,9 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
 
     FillRect(hdc, &rc, Theme::BrushSurface());
 
-    // Topology map (left portion of bottom area)
+    // Security dashboard (left portion of bottom area)
     if (_mapRect.right > _mapRect.left && _mapRect.bottom > _mapRect.top)
-        DrawTopologyMap(hdc, _mapRect);
+        DrawSecurityDashboard(hdc, _mapRect);
 
     // Section header "RECENT CHANGES" above the changes list
     {
@@ -982,14 +994,16 @@ LRESULT TabOverview::OnScanProgress(HWND hwnd, WPARAM pct, LPARAM msgPtr) {
 }
 
 LRESULT TabOverview::OnScanComplete(HWND hwnd) {
-    // Refresh the map cache before invalidating so DrawTopologyMap sees the new data.
-    if (_mainWnd) _mapCache = _mainWnd->GetLastResult();
+    if (_mainWnd) {
+        ScanResult r = _mainWnd->GetLastResult();
+        RebuildSecurityData(r);
+    }
 
     RefreshKPIs();
     if (_hStatusText)  SetWindowText(_hStatusText, L"Scan complete.");
     if (_hProgressBar) SendMessage(_hProgressBar, PBM_SETPOS, 100, 0);
 
-    // Invalidate map area to repaint topology
+    // Invalidate security dashboard area to repaint
     if (_mapRect.right > _mapRect.left)
         InvalidateRect(hwnd, &_mapRect, FALSE);
 
@@ -1126,11 +1140,14 @@ void TabOverview::RefreshNetworkInfo() {
 }
 
 void TabOverview::UpdateFromResult(const ScanResult& result) {
-    _mapCache = result;  // keep map cache in sync for DrawTopologyMap
+    RebuildSecurityData(result);
     RefreshKPIs();
 }
 
 void TabOverview::UpdateMonitorStatus(bool running, const InternetStatus& is) {
+    _internetOnline  = is.online;
+    _internetLatency = is.latencyMs;
+
     if (_hMonitorStatus) {
         SetWindowText(_hMonitorStatus,
             running ? L"Monitoring: Active" : L"Monitoring: Stopped");

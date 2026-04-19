@@ -34,17 +34,16 @@ private:
     LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
     LRESULT OnVScroll(HWND hwnd, WPARAM wp);
     LRESULT OnMouseWheel(HWND hwnd, int delta);
-    LRESULT OnLButtonDown(HWND hwnd, int mx, int my);
 
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
     void UpdateScrollBar(HWND hwnd);
     void RefreshKPIs();
     void RefreshNetworkInfo();
-    void DrawTopologyMap(HDC hdc, const RECT& rc);
+    void DrawSecurityDashboard(HDC hdc, const RECT& rc);
     void DrawSparkline(HDC hdc, const RECT& rc,
                        const std::vector<int>& vals, COLORREF col);
-    std::wstring HitTestMapNode(int mx, int my) const; // returns stableId or empty
+    void RebuildSecurityData(const ScanResult& r);
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
@@ -90,7 +89,7 @@ private:
     std::vector<int> _alertHistory;
     std::vector<int> _latencyHistory;
 
-    // Topology map draw area (set in LayoutControls)
+    // Security dashboard draw area (set in LayoutControls, was topology map rect)
     RECT _mapRect = {};
 
     // Current scan mode
@@ -101,16 +100,19 @@ private:
     int _contentHeight = 0; // total content height
     int _viewHeight = 0;    // visible viewport height
 
-    // Interactive map — node hit targets (screen coords, scroll-adjusted in HitTest).
-    // stableId = MAC address if known, else IP — never a raw array index, so it
-    // remains valid across rescans and async result updates.
-    struct MapNode { int cx, cy, radius; std::wstring stableId; };
-    std::vector<MapNode> _mapNodes;
-    int _hoveredNode = -1;
+    // Security dashboard data — rebuilt at scan-complete time
+    struct TrustCounts {
+        int owned = 0, known = 0, guest = 0, unknown = 0, blocked = 0, watchlist = 0;
+        int total() const { return owned + known + guest + unknown + blocked + watchlist; }
+    };
+    TrustCounts _trustCounts;
+    int _secScore     = -1;
+    int _iotRiskCount = 0;
+    std::vector<std::wstring> _topRisks;
 
-    // Cached scan result used by DrawTopologyMap — updated at scan-complete time
-    // so OnPaint never needs to acquire _dataMutex.
-    ScanResult _mapCache;
+    // Cached internet status from monitor (more accurate than gateway latency alone)
+    bool _internetOnline  = false;
+    int  _internetLatency = -1;
 
     static const wchar_t* s_className;
 };
