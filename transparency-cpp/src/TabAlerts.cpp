@@ -293,7 +293,7 @@ void TabAlerts::LayoutControls(int cx, int cy) {
 
     if (hdwp) EndDeferWindowPos(hdwp);
 
-    UpdateScrollBar(hwnd);
+    UpdateScrollBar(_hwnd);
 }
 
 void TabAlerts::UpdateScrollBar(HWND hwnd) {
