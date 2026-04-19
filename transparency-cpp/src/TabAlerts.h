@@ -33,6 +33,9 @@ private:
 
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
+    void UpdateScrollBar(HWND hwnd);
+    LRESULT OnVScroll(HWND hwnd, WPARAM wp);
+    LRESULT OnMouseWheel(HWND hwnd, int delta);
     void ShowRuleDialog(const AlertRule* existing = nullptr);
     void PopulateAlerts();
     void PopulateRules();
@@ -55,8 +58,13 @@ private:
     HWND _hBtnClearAll    = nullptr;
     HWND _hFilterBtns[5]  = {};
 
-    int _alertFilter = 0; // 0=All, 1=High, 2=Medium, 3=Low, 4=Unack
+    int _alertFilter   = 0; // 0=All, 1=High, 2=Medium, 3=Low, 4=Unack
     int _selectedAlert = -1;
+
+    // Scroll state
+    int _scrollY      = 0;
+    int _contentHeight = 0;
+    int _viewHeight   = 0;
 
     void ShowAlertExplanation(int anomalyIdx);
 

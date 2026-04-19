@@ -19,6 +19,15 @@ const wchar_t* TabAlerts::s_className = L"TransparencyTabAlerts";
 
 static const wchar_t* ALERT_FILTER_LABELS[] = { L"All", L"High", L"Medium", L"Low", L"Unack'd" };
 
+// Fixed content layout heights — tab scrolls vertically to fit all sections
+static const int ALERT_LIST_Y  = 52;    // top of alert list (below filter bar)
+static const int ALERT_LIST_H  = 280;   // alert list (~12 rows)
+static const int EXPLAIN_Y     = 344;   // ALERT_LIST_Y + ALERT_LIST_H + 12
+static const int EXPLAIN_H     = 280;   // explain panel
+static const int RULE_LIST_Y   = 660;   // EXPLAIN_Y + EXPLAIN_H + 36 (header + button gap)
+static const int RULE_LIST_H   = 260;   // rule list
+static const int TAB_CONTENT_H = 940;   // RULE_LIST_Y + RULE_LIST_H + 20
+
 bool TabAlerts::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
     _mainWnd = mainWnd;
 
@@ -32,7 +41,7 @@ bool TabAlerts::Create(HWND parent, int x, int y, int w, int h, MainWindow* main
     RegisterClassEx(&wc);
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
-        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
 
     return _hwnd != nullptr;
@@ -122,6 +131,8 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetBkColor((HDC)wp, Theme::BG_SURFACE);
         return (LRESULT)Theme::BrushSurface();
     }
+    case WM_VSCROLL:    return self->OnVScroll(hwnd, wp);
+    case WM_MOUSEWHEEL: return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
     case WM_SCAN_COMPLETE: return self->OnScanComplete(hwnd);
     default: return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -149,12 +160,10 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         cx - 110, 10, 94, 30, hwnd, (HMENU)IDC_BTN_CLEAR_ALERTS, hInst, nullptr);
 
-    // Alert list (25% of available space)
-    int avail = cy - 80;
-    int alertH = avail * 15 / 100;
+    // Alert list — fixed height, scrollable tab compensates
     _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
-        16, 48, cx - 32, alertH,
+        16, ALERT_LIST_Y, cx - 32, ALERT_LIST_H,
         hwnd, (HMENU)IDC_LIST_ALERTS, hInst, nullptr);
 
     SendMessage(_hAlertList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
@@ -173,12 +182,10 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         ListView_InsertColumn(_hAlertList, i, &col);
     }
 
-    // Explanation panel (three-part: What / Why / What to do) — 60% of space
-    int explainY = 48 + alertH + 6;
-    int explainH = avail * 60 / 100 - 6;
+    // Explanation panel (three-part: What / Why / What to do)
     _hExplainPanel = CreateWindowEx(WS_EX_STATICEDGE, L"STATIC", nullptr,
         WS_CHILD | WS_VISIBLE,
-        16, explainY, cx - 32, explainH, hwnd, nullptr, hInst, nullptr);
+        16, EXPLAIN_Y, cx - 32, EXPLAIN_H, hwnd, nullptr, hInst, nullptr);
 
     auto mkExplainLbl = [&](const wchar_t* hdr, int y) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", hdr, WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -194,7 +201,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
         Theme::ApplyDarkEdit(hw);
         return hw;
     };
-    int thirdH = (explainH - 12) / 3 - 18;
+    int thirdH = (EXPLAIN_H - 12) / 3 - 18;
     int ey = 4;
     _hLblWhat = mkExplainLbl(L"What happened:", ey); ey += 18;
     _hExplainWhat = mkExplainEdit(9650, ey, thirdH); ey += thirdH + 4;
@@ -203,33 +210,24 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
     _hLblDo = mkExplainLbl(L"What to do:", ey); ey += 18;
     _hExplainDo  = mkExplainEdit(9652, ey, thirdH);
 
-    // Default text when no alert selected
     if (_hExplainWhat) SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
 
-    // Rules section (remaining ~30% of space)
-    int rulesY = explainY + explainH + 18;
-
-    HWND hRulesHdr = CreateWindowEx(0, L"STATIC", L"ALERT RULES",
-        WS_CHILD | WS_VISIBLE | SS_LEFT,
-        16, rulesY - 20, 200, 18, hwnd, nullptr, hInst, nullptr);
-    SendMessage(hRulesHdr, WM_SETFONT, (WPARAM)Theme::FontSmall(), TRUE);
-
+    // Rules section — positioned below explain panel
     _hBtnAddRule = CreateWindowEx(0, L"BUTTON", L"Add Rule",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        cx - 308, rulesY - 26, 96, 28, hwnd, (HMENU)IDC_BTN_ADD_RULE, hInst, nullptr);
+        cx - 308, RULE_LIST_Y - 30, 96, 28, hwnd, (HMENU)IDC_BTN_ADD_RULE, hInst, nullptr);
 
     _hBtnEditRule = CreateWindowEx(0, L"BUTTON", L"Edit",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        cx - 206, rulesY - 26, 68, 28, hwnd, (HMENU)IDC_BTN_EDIT_RULE, hInst, nullptr);
+        cx - 206, RULE_LIST_Y - 30, 68, 28, hwnd, (HMENU)IDC_BTN_EDIT_RULE, hInst, nullptr);
 
     _hBtnDelRule = CreateWindowEx(0, L"BUTTON", L"Delete",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        cx - 132, rulesY - 26, 68, 28, hwnd, (HMENU)IDC_BTN_DEL_RULE, hInst, nullptr);
+        cx - 132, RULE_LIST_Y - 30, 68, 28, hwnd, (HMENU)IDC_BTN_DEL_RULE, hInst, nullptr);
 
-    int ruleH = cy - rulesY - 16;
     _hRuleList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
-        16, rulesY, cx - 32, ruleH,
+        16, RULE_LIST_Y, cx - 32, RULE_LIST_H,
         hwnd, (HMENU)IDC_LIST_RULES, hInst, nullptr);
 
     SendMessage(_hRuleList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
@@ -248,32 +246,110 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 }
 
 void TabAlerts::LayoutControls(int cx, int cy) {
-    int avail = cy - 80;
-    int alertH = avail * 15 / 100;
-    if (_hAlertList) SetWindowPos(_hAlertList, nullptr, 16, 48, cx - 32, alertH, SWP_NOZORDER);
-    if (_hBtnClearAll) SetWindowPos(_hBtnClearAll, nullptr, cx - 100, 12, 84, 26, SWP_NOZORDER);
+    _viewHeight    = cy;
+    _contentHeight = TAB_CONTENT_H;
 
-    int explainY = 48 + alertH + 6;
-    int explainH = avail * 60 / 100 - 6;
-    if (_hExplainPanel) SetWindowPos(_hExplainPanel, nullptr, 16, explainY, cx - 32, explainH, SWP_NOZORDER);
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
 
-    // Re-layout the three explanation sections inside the panel
+    int sOff = -_scrollY;
+
+    HDWP hdwp = BeginDeferWindowPos(16);
+    auto deferMove = [&](HWND hw, int x, int y, int w, int h) {
+        if (hw && hdwp)
+            hdwp = DeferWindowPos(hdwp, hw, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+    };
+
+    // Filter bar (scrolls with content)
+    int btnX = 16;
+    for (int i = 0; i < 5; i++) {
+        deferMove(_hFilterBtns[i], btnX, 10 + sOff, 80, 30);
+        btnX += 84;
+    }
+    deferMove(_hBtnClearAll, cx - 110, 10 + sOff, 94, 30);
+
+    // Alert list — fixed height
+    deferMove(_hAlertList, 16, ALERT_LIST_Y + sOff, cx - 32, ALERT_LIST_H);
+
+    // Explain panel — fixed height, children stay relative to panel
+    deferMove(_hExplainPanel, 16, EXPLAIN_Y + sOff, cx - 32, EXPLAIN_H);
+
+    // Re-layout explain panel children on width change
     int panelW = cx - 48;
-    int thirdH = (explainH - 12) / 3 - 18;
+    int thirdH = (EXPLAIN_H - 12) / 3 - 18;
     int ey = 4;
-    if (_hLblWhat)     SetWindowPos(_hLblWhat, nullptr, 6, ey, panelW, 18, SWP_NOZORDER); ey += 18;
+    if (_hLblWhat)     SetWindowPos(_hLblWhat,     nullptr, 6, ey, panelW, 18,     SWP_NOZORDER); ey += 18;
     if (_hExplainWhat) SetWindowPos(_hExplainWhat, nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER); ey += thirdH + 4;
-    if (_hLblWhy)      SetWindowPos(_hLblWhy, nullptr, 6, ey, panelW, 18, SWP_NOZORDER); ey += 18;
-    if (_hExplainWhy)  SetWindowPos(_hExplainWhy, nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER); ey += thirdH + 4;
-    if (_hLblDo)       SetWindowPos(_hLblDo, nullptr, 6, ey, panelW, 18, SWP_NOZORDER); ey += 18;
-    if (_hExplainDo)   SetWindowPos(_hExplainDo, nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER);
+    if (_hLblWhy)      SetWindowPos(_hLblWhy,      nullptr, 6, ey, panelW, 18,     SWP_NOZORDER); ey += 18;
+    if (_hExplainWhy)  SetWindowPos(_hExplainWhy,  nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER); ey += thirdH + 4;
+    if (_hLblDo)       SetWindowPos(_hLblDo,       nullptr, 6, ey, panelW, 18,     SWP_NOZORDER); ey += 18;
+    if (_hExplainDo)   SetWindowPos(_hExplainDo,   nullptr, 6, ey, panelW, thirdH, SWP_NOZORDER);
 
-    int rulesY = explainY + explainH + 18;
-    int ruleH = cy - rulesY - 16;
-    if (_hRuleList) SetWindowPos(_hRuleList, nullptr, 16, rulesY, cx - 32, ruleH, SWP_NOZORDER);
-    if (_hBtnAddRule) SetWindowPos(_hBtnAddRule, nullptr, cx - 292, rulesY - 22, 88, 22, SWP_NOZORDER);
-    if (_hBtnEditRule) SetWindowPos(_hBtnEditRule, nullptr, cx - 200, rulesY - 22, 60, 22, SWP_NOZORDER);
-    if (_hBtnDelRule) SetWindowPos(_hBtnDelRule, nullptr, cx - 136, rulesY - 22, 60, 22, SWP_NOZORDER);
+    // Rules section — fixed height
+    deferMove(_hBtnAddRule,  cx - 308, RULE_LIST_Y - 30 + sOff, 96, 28);
+    deferMove(_hBtnEditRule, cx - 206, RULE_LIST_Y - 30 + sOff, 68, 28);
+    deferMove(_hBtnDelRule,  cx - 132, RULE_LIST_Y - 30 + sOff, 68, 28);
+    deferMove(_hRuleList,    16,       RULE_LIST_Y + sOff,       cx - 32, RULE_LIST_H);
+
+    if (hdwp) EndDeferWindowPos(hdwp);
+
+    UpdateScrollBar(hwnd);
+}
+
+void TabAlerts::UpdateScrollBar(HWND hwnd) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = _contentHeight;
+    si.nPage  = _viewHeight;
+    si.nPos   = _scrollY;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+}
+
+LRESULT TabAlerts::OnVScroll(HWND hwnd, WPARAM wp) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_ALL;
+    GetScrollInfo(hwnd, SB_VERT, &si);
+
+    int oldPos = _scrollY;
+    switch (LOWORD(wp)) {
+    case SB_LINEUP:     _scrollY -= 30;         break;
+    case SB_LINEDOWN:   _scrollY += 30;         break;
+    case SB_PAGEUP:     _scrollY -= si.nPage;   break;
+    case SB_PAGEDOWN:   _scrollY += si.nPage;   break;
+    case SB_THUMBTRACK: _scrollY = si.nTrackPos; break;
+    }
+
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    if (_scrollY < 0)          _scrollY = 0;
+    if (_scrollY > maxScroll)  _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        UpdateScrollBar(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
+    return 0;
+}
+
+LRESULT TabAlerts::OnMouseWheel(HWND hwnd, int delta) {
+    int oldPos = _scrollY;
+    _scrollY -= delta / 2;
+
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    if (_scrollY < 0)         _scrollY = 0;
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        UpdateScrollBar(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
+    return 0;
 }
 
 LRESULT TabAlerts::OnSize(HWND hwnd, int cx, int cy) {
@@ -287,25 +363,25 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     RECT rc; GetClientRect(hwnd, &rc);
     FillRect(hdc, &rc, Theme::BrushSurface());
 
-    // Section separator
-    RECT sep = { 16, 44, rc.right - 16, 45 };
+    int sOff = -_scrollY;
+
+    // Separator below filter bar
+    RECT sep = { 16, 44 + sOff, rc.right - 16, 45 + sOff };
     FillRect(hdc, &sep, Theme::BrushBorderSubtle());
 
-    // Section labels — caption style (uppercase, tertiary)
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
     HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
 
-    RECT hdr1 = { 16, 36, 200, 48 };
+    // "ACTIVE ALERTS" — just above the alert list
+    RECT hdr1 = { 16, ALERT_LIST_Y - 16 + sOff, 200, ALERT_LIST_Y - 2 + sOff };
     DrawText(hdc, L"ACTIVE ALERTS", -1, &hdr1, DT_LEFT | DT_SINGLELINE);
 
-    int alertH = (rc.bottom - 80) / 3;
-    int rulesY = 48 + alertH * 2 + 18;
-    RECT hdr2 = { 16, rulesY - 36, 200, rulesY - 24 };
+    // "ALERT RULES" — just above the rule buttons
+    RECT hdr2 = { 16, RULE_LIST_Y - 48 + sOff, 200, RULE_LIST_Y - 34 + sOff };
     DrawText(hdc, L"ALERT RULES", -1, &hdr2, DT_LEFT | DT_SINGLELINE);
 
     SelectObject(hdc, old);
-
     EndPaint(hwnd, &ps);
     return 0;
 }
