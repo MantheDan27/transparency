@@ -312,6 +312,7 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     _hDetailVendor    = makeSmLbl  (L"", dy, 18); dy += 22;
     _hDetailMac       = makeMonoLbl(L"", dy, 18); dy += 22;
     _hDetailSubnet    = makeMonoLbl(L"", dy, 18); dy += 22;
+    _hDetailIpDesc    = makeSmLbl  (L"", dy, 36); dy += 40;  // IP range explanation
     _hDetailIpHistory = makeSmLbl  (L"", dy, 18); dy += 22;
 
     // ── Timing ───────────────────────────────────────────────────────────────
@@ -451,15 +452,17 @@ LRESULT TabDevices::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
             static const wchar_t* trustOpts[] = { L"unknown", L"owned", L"watchlist", L"guest", L"blocked" };
             wstring trust = (trustSel >= 0 && trustSel < 5) ? trustOpts[trustSel] : L"unknown";
 
-            std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
-            for (auto& d : _mainWnd->_lastResult.devices) {
-                if (d.ip == _detailDeviceIp) {
-                    d.customName = nameBuf;
-                    d.notes = notesBuf;
-                    d.trustState = trust;
-                    break;
+            {
+                std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+                for (auto& d : _mainWnd->_lastResult.devices) {
+                    if (d.ip == _detailDeviceIp) {
+                        d.customName = nameBuf;
+                        d.notes = notesBuf;
+                        d.trustState = trust;
+                        break;
+                    }
                 }
-            }
+            } // release lock before calling ApplyFilter/HideDetailPanel
             ApplyFilter();
             HideDetailPanel();
         }
@@ -819,6 +822,29 @@ void TabDevices::HideDetailPanel() {
     InvalidateRect(_hwnd, nullptr, FALSE);
 }
 
+static wstring GetIpDescription(const wstring& ip) {
+    int o1 = 0, o2 = 0, o3 = 0, o4 = 0;
+    swscanf_s(ip.c_str(), L"%d.%d.%d.%d", &o1, &o2, &o3, &o4);
+
+    if (o1 == 10)
+        return L"RFC 1918 private (10.0.0.0/8) \u2014 used in home and enterprise LANs. Not routable on the internet.";
+    if (o1 == 172 && o2 >= 16 && o2 <= 31)
+        return L"RFC 1918 private (172.16\u201331.x.x) \u2014 often used in corporate or cloud virtual networks. Not internet-routable.";
+    if (o1 == 192 && o2 == 168)
+        return L"RFC 1918 private (192.168.x.x) \u2014 the most common home/small-office range. Not reachable from the internet.";
+    if (o1 == 169 && o2 == 254)
+        return L"APIPA link-local (169.254.0.0/16) \u2014 self-assigned when no DHCP server responded. May indicate network misconfiguration.";
+    if (o1 == 127)
+        return L"Loopback (127.0.0.0/8) \u2014 always refers to this device itself. Seeing this on the network is unusual.";
+    if (o1 == 100 && o2 >= 64 && o2 <= 127)
+        return L"Shared address space (100.64.0.0/10) \u2014 used by ISPs for carrier-grade NAT. You may be behind a double NAT.";
+    if (o1 >= 224 && o1 <= 239)
+        return L"Multicast address \u2014 used for group traffic such as mDNS and UPnP discovery, not a directly addressable device.";
+    if (o1 >= 240)
+        return L"Reserved (Class E) \u2014 not used in normal networks.";
+    return L"Public IP address \u2014 this device may be directly reachable from the internet. Verify firewall rules if unexpected on your LAN.";
+}
+
 void TabDevices::UpdateDetailPanel(const Device& dev) {
     if (!_hDetailPanel) return;
 
@@ -874,6 +900,12 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
     if (_hDetailSubnet) {
         wstring sub = dev.subnet.empty() ? L"Subnet: unknown" : L"Subnet: " + dev.subnet;
         SetWindowText(_hDetailSubnet, sub.c_str());
+    }
+
+    // IP address description
+    if (_hDetailIpDesc) {
+        wstring desc = GetIpDescription(dev.ip);
+        SetWindowText(_hDetailIpDesc, desc.c_str());
     }
 
     // First seen / Last seen / Sightings
