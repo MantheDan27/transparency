@@ -10,3 +10,7 @@
 ## 2026-04-06 - Missing ARIA Labels on Interpolated JS Buttons
 **Learning:** When vanilla JS apps interpolate HTML strings for UI components (e.g. `map().join('')`), it's common for icon-only buttons (like toolbars or quick actions) to lack `aria-label` attributes, since linters often cannot inspect dynamic string content as strictly as JSX.
 **Action:** Always manually audit JS string templates injecting icon-only buttons to ensure they have descriptive `aria-label` attributes for screen readers.
+
+## 2026-04-20 - Accessible Toggle Switches
+**Learning:** Custom UI toggle components built by wrapping a hidden `<input type="checkbox">` inside a `<label>` without a `for` attribute and `aria-label` fail to announce correctly to screen readers. Relying solely on visually implicit associations via inner text spans bypasses accessibility standards.
+**Action:** When implementing or refactoring custom toggle switches, ensure the wrapping `<label>` explicitly declares a `for` attribute linked to the target `<input>` ID, and add an explicit `aria-label` directly to the `<input>` element with descriptive text.
