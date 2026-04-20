@@ -150,6 +150,17 @@
 #define IDC_EDIT_HUE_IP             11023
 #define IDC_SMART_HUE_LOG           11024
 
+// Amazon Alexa (local discovery — no cloud account)
+#define IDC_SMART_ALEXA_LIST        11040
+#define IDC_BTN_ALEXA_REFRESH       11041
+#define IDC_BTN_ALEXA_OPEN          11042
+
+// Google Home / Cast (local — no cloud account)
+#define IDC_SMART_GOOGLE_LIST       11050
+#define IDC_BTN_GOOGLE_SYNC         11051
+#define IDC_BTN_GOOGLE_OPEN         11052
+#define IDC_SMART_GOOGLE_LOG        11053
+
 // Automation triggers
 #define IDC_SMART_TRIGGER_EVENT     11030
 #define IDC_SMART_TRIGGER_ACTION    11031
@@ -157,9 +168,19 @@
 #define IDC_BTN_SMART_ADD_TRIGGER   11033
 #define IDC_BTN_SMART_DEL_TRIGGER   11034
 
+// History tab IDs
+#define IDC_HIST_LIST           12001
+#define IDC_BTN_HIST_CLEAR      12002
+#define IDC_BTN_HIST_ALL        12003
+#define IDC_BTN_HIST_JOINED     12004
+#define IDC_BTN_HIST_LEFT       12005
+#define IDC_BTN_HIST_RECONNECTED 12006
+
 // Nav IDs
 #define IDC_NAV_SMARTHOME   2007
 #define IDC_PANEL_SMARTHOME 3007
+#define IDC_NAV_HISTORY     2008
+#define IDC_PANEL_HISTORY   3008
 
 // WM_USER custom messages
 #define WM_SCAN_COMPLETE        (WM_USER + 1)

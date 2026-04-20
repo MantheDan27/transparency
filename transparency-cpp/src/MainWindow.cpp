@@ -28,6 +28,7 @@
 #include "TabLedger.h"
 #include "TabPrivacy.h"
 #include "TabSmartHome.h"
+#include "TabHistory.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -42,11 +43,12 @@ static const NavItem NAV_ITEMS[] = {
     { L"\u25AB", L"Dashboard",    Tab::Overview  },
     { L"\u229E", L"Devices",      Tab::Devices   },
     { L"\u2691", L"Alerts",       Tab::Alerts    },
+    { L"\u23F3", L"History",      Tab::History   },
     { L"\u25CE", L"Topology",     Tab::SmartHome },
     { L"\u25B3", L"Diagnostics",  Tab::Tools     },
     { L"\u2630", L"Scan History", Tab::Ledger    },
 };
-static const int NAV_ITEM_COUNT = 6;
+static const int NAV_ITEM_COUNT = 7;
 
 // Bottom nav items (pinned)
 static const NavItem NAV_BOTTOM[] = {
@@ -256,21 +258,38 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     int panelW = cx - sw;
     int panelH = contentBot - contentTop;
 
-    _tabOverview = std::make_unique<TabOverview>();
-    _tabDevices  = std::make_unique<TabDevices>();
-    _tabAlerts   = std::make_unique<TabAlerts>();
-    _tabTools    = std::make_unique<TabTools>();
-    _tabLedger   = std::make_unique<TabLedger>();
-    _tabPrivacy  = std::make_unique<TabPrivacy>();
+    _tabOverview  = std::make_unique<TabOverview>();
+    _tabDevices   = std::make_unique<TabDevices>();
+    _tabAlerts    = std::make_unique<TabAlerts>();
+    _tabTools     = std::make_unique<TabTools>();
+    _tabLedger    = std::make_unique<TabLedger>();
+    _tabPrivacy   = std::make_unique<TabPrivacy>();
     _tabSmartHome = std::make_unique<TabSmartHome>();
+    _tabHistory   = std::make_unique<TabHistory>();
 
-    _tabOverview->Create(hwnd, panelX, contentTop, panelW, panelH, this);
-    _tabDevices ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
-    _tabAlerts  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
-    _tabTools   ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
-    _tabLedger  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
-    _tabPrivacy ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabOverview ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabDevices  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabAlerts   ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabTools    ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabLedger   ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabPrivacy  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabSmartHome->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabHistory  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+
+    // Notification panel (floating child)
+    WNDCLASSEX ncwc = {};
+    ncwc.cbSize = sizeof(ncwc);
+    ncwc.lpfnWndProc   = NotifWndProc;
+    ncwc.hInstance     = _hInstance;
+    ncwc.hbrBackground = Theme::BrushElevated();
+    ncwc.lpszClassName = L"TransparencyNotifPanel";
+    ncwc.style         = CS_HREDRAW | CS_VREDRAW;
+    RegisterClassEx(&ncwc);
+    _hNotifWnd = CreateWindowEx(0, L"TransparencyNotifPanel", nullptr,
+        WS_CHILD | WS_CLIPCHILDREN,
+        cx - 356, TITLEBAR_H + 2, 340, 80,
+        hwnd, nullptr, _hInstance, nullptr);
+    if (_hNotifWnd) SetWindowLongPtr(_hNotifWnd, GWLP_USERDATA, (LONG_PTR)this);
 
     ShowActivePanel();
 
@@ -291,6 +310,16 @@ LRESULT MainWindow::OnLButtonDown(HWND hwnd, int x, int y) {
 
     // Title bar toolbar buttons: Quick Scan, Deep Scan, Stop
     if (y < TITLEBAR_H && x > sw + 20) {
+        RECT rc2; GetClientRect(hwnd, &rc2);
+        int cxW = rc2.right;
+
+        // Notification bell button
+        int bellX = cxW - 174;
+        if (x >= bellX && x < bellX + 40) {
+            ShowNotifPanel(!_notifPanelOpen);
+            return 0;
+        }
+
         int tbX = sw + 20;
         // Quick Scan button
         if (x >= tbX && x < tbX + 80) { StartQuickScan(); return 0; }
@@ -300,6 +329,11 @@ LRESULT MainWindow::OnLButtonDown(HWND hwnd, int x, int y) {
         tbX += 88;
         // Stop button
         if (x >= tbX && x < tbX + 50) { StopMonitor(); return 0; }
+    }
+
+    // Clicking outside the notification panel closes it
+    if (_notifPanelOpen) {
+        ShowNotifPanel(false);
     }
 
     // Sidebar collapse toggle
@@ -386,6 +420,14 @@ void MainWindow::LayoutChildren(int cx, int cy) {
     resize(_tabLedger);
     resize(_tabPrivacy);
     resize(_tabSmartHome);
+    resize(_tabHistory);
+
+    // Keep notification panel anchored to top-right
+    if (_hNotifWnd) {
+        RECT nr; GetWindowRect(_hNotifWnd, &nr);
+        int nH = nr.bottom - nr.top;
+        SetWindowPos(_hNotifWnd, HWND_TOP, cx - 356, TITLEBAR_H + 2, 340, nH, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 }
 
 // ─── OnSize ──────────────────────────────────────────────────────────────────
@@ -472,6 +514,36 @@ void MainWindow::DrawTitleBar(HDC hdc, int cx) {
         Theme::DrawRoundedCard(hdc, badge, 3, Theme::BG_ROOT, Theme::BORDER_DEFAULT);
         RECT badgeText = { cpX + 152, 12, cpX + 194, TITLEBAR_H - 12 };
         DrawText(hdc, L"Ctrl+K", -1, &badgeText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    // Notification bell button — right side of title bar (before system controls)
+    int bellX = cx - 174;   // ~3 × 46px system buttons + 12px margin
+    int bellY = 5;
+    int bellW = 32;
+    int bellH = TITLEBAR_H - 10;
+    RECT bellRc = { bellX, bellY, bellX + bellW, bellY + bellH };
+
+    bool bellHover = (_notifPanelOpen);
+    if (bellHover)
+        Theme::DrawRoundedCard(hdc, bellRc, 5, Theme::BG_OVERLAY, Theme::BORDER_DEFAULT, 0);
+
+    SetTextColor(hdc, _notifications.empty() ? Theme::TEXT_TERTIARY : Theme::ACCENT_AMBER);
+    SelectObject(hdc, Theme::FontBody());
+    DrawText(hdc, L"\U0001F514", -1, &bellRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    // Badge with unread count
+    if (!_notifications.empty()) {
+        wchar_t badge[8];
+        int cnt = (int)_notifications.size();
+        if (cnt > 99) wcscpy_s(badge, L"99+");
+        else swprintf_s(badge, L"%d", cnt);
+        RECT bRc = { bellX + 18, bellY + 2, bellX + bellW + 8, bellY + 14 };
+        HBRUSH badgeBrush = CreateSolidBrush(Theme::ACCENT_RED);
+        FillRect(hdc, &bRc, badgeBrush);
+        DeleteObject(badgeBrush);
+        SetTextColor(hdc, RGB(255, 255, 255));
+        SelectObject(hdc, Theme::FontSmall());
+        DrawText(hdc, badge, -1, &bRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
     SelectObject(hdc, old);
@@ -584,6 +656,7 @@ void MainWindow::DrawContentHeader(HDC hdc, int cx, int cy) {
     case Tab::Ledger:   viewTitle = L"Scan History"; break;
     case Tab::Privacy:  viewTitle = L"Settings";     break;
     case Tab::SmartHome:viewTitle = L"Topology";     break;
+    case Tab::History:  viewTitle = L"History";      break;
     default: break;
     }
     RECT titleRc = { sw + 20, hdrTop, sw + 200, hdrTop + CONTENT_HDR_H };
@@ -812,13 +885,14 @@ void MainWindow::ShowActivePanel() {
         }
     };
 
-    show(_tabOverview, _currentTab == Tab::Overview);
-    show(_tabDevices,  _currentTab == Tab::Devices);
-    show(_tabAlerts,   _currentTab == Tab::Alerts);
-    show(_tabTools,    _currentTab == Tab::Tools);
-    show(_tabLedger,   _currentTab == Tab::Ledger);
-    show(_tabPrivacy,  _currentTab == Tab::Privacy);
+    show(_tabOverview,  _currentTab == Tab::Overview);
+    show(_tabDevices,   _currentTab == Tab::Devices);
+    show(_tabAlerts,    _currentTab == Tab::Alerts);
+    show(_tabTools,     _currentTab == Tab::Tools);
+    show(_tabLedger,    _currentTab == Tab::Ledger);
+    show(_tabPrivacy,   _currentTab == Tab::Privacy);
     show(_tabSmartHome, _currentTab == Tab::SmartHome);
+    show(_tabHistory,   _currentTab == Tab::History);
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
@@ -1014,6 +1088,142 @@ void MainWindow::AddLedgerEntry(const std::wstring& action, const std::wstring& 
 ScanResult MainWindow::GetLastResult() const {
     std::lock_guard<std::mutex> lk(_dataMutex);
     return _lastResult;
+}
+
+std::vector<HistoryEvent> MainWindow::GetDeviceHistory() const {
+    std::lock_guard<std::mutex> lk(_dataMutex);
+    return _deviceHistory;
+}
+
+void MainWindow::ClearDeviceHistory() {
+    std::lock_guard<std::mutex> lk(_dataMutex);
+    _deviceHistory.clear();
+}
+
+// ─── Notification panel WndProc ──────────────────────────────────────────────
+
+LRESULT CALLBACK MainWindow::NotifWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    MainWindow* self = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+
+    switch (msg) {
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdcScr = BeginPaint(hwnd, &ps);
+        RECT rc; GetClientRect(hwnd, &rc);
+        int cx = rc.right, cy = rc.bottom;
+
+        HDC hdc = CreateCompatibleDC(hdcScr);
+        HBITMAP bmp = CreateCompatibleBitmap(hdcScr, cx, cy);
+        HBITMAP old = (HBITMAP)SelectObject(hdc, bmp);
+
+        // Panel background + border
+        Theme::DrawRoundedCard(hdc, rc, 8, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
+
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, Theme::TEXT_PRIMARY);
+        HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBold());
+
+        // Header row
+        RECT hdRc = { 12, 10, cx - 80, 30 };
+        DrawText(hdc, L"Notifications", -1, &hdRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        // Clear button
+        SetTextColor(hdc, Theme::ACCENT_BLUE);
+        SelectObject(hdc, Theme::FontBodySm());
+        RECT clearRc = { cx - 72, 10, cx - 12, 30 };
+        DrawText(hdc, L"Clear all", -1, &clearRc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+
+        // Separator
+        RECT sep = { 12, 32, cx - 12, 33 };
+        FillRect(hdc, &sep, Theme::BrushBorderSubtle());
+
+        // Notification list
+        if (!self || self->_notifications.empty()) {
+            SetTextColor(hdc, Theme::TEXT_TERTIARY);
+            SelectObject(hdc, Theme::FontBody());
+            RECT emptyRc = { 12, 44, cx - 12, 70 };
+            DrawText(hdc, L"No notifications", -1, &emptyRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        } else {
+            SelectObject(hdc, Theme::FontBody());
+            int y = 40;
+            int shown = 0;
+            for (auto& n : self->_notifications) {
+                if (y + 22 > cy - 8) break;
+                // Icon
+                bool isNew  = n.find(L"joined")  != wstring::npos;
+                bool isLeft = n.find(L"left")     != wstring::npos;
+                bool isUnkn = n.find(L"Unknown")  != wstring::npos || n.find(L"unknown") != wstring::npos;
+                COLORREF col = isNew ? Theme::ACCENT_GREEN :
+                               isLeft ? Theme::ACCENT_RED :
+                               isUnkn ? Theme::ACCENT_AMBER : Theme::TEXT_SECONDARY;
+                SetTextColor(hdc, col);
+                RECT rowRc = { 12, y, cx - 12, y + 22 };
+                DrawText(hdc, n.c_str(), -1, &rowRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+                y += 24;
+                shown++;
+            }
+        }
+
+        BitBlt(hdcScr, 0, 0, cx, cy, hdc, 0, 0, SRCCOPY);
+        SelectObject(hdc, oldFont);
+        SelectObject(hdc, old);
+        DeleteObject(bmp);
+        DeleteDC(hdc);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_LBUTTONDOWN: {
+        if (!self) break;
+        int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp);
+        RECT rc; GetClientRect(hwnd, &rc);
+        // "Clear all" hit area
+        if (x >= rc.right - 72 && x <= rc.right - 12 && y >= 10 && y <= 30) {
+            self->_notifications.clear();
+            InvalidateRect(hwnd, nullptr, FALSE);
+            // Repaint parent title bar for badge
+            if (self->_hwnd) InvalidateRect(self->_hwnd, nullptr, FALSE);
+        }
+        break;
+    }
+    default: break;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+void MainWindow::ShowNotifPanel(bool show) {
+    _notifPanelOpen = show;
+    if (!_hNotifWnd) return;
+
+    if (show) {
+        // Resize to fit content (min 80px, max 440px)
+        int rows = (int)_notifications.size();
+        int h = 44 + std::max(1, std::min(rows, 16)) * 24 + 12;
+        RECT rc; GetClientRect(_hwnd, &rc);
+        int panelW = 340;
+        int panelX = rc.right - panelW - 16;
+        int panelY = TITLEBAR_H + 2;
+        SetWindowPos(_hNotifWnd, HWND_TOP, panelX, panelY, panelW, h, SWP_SHOWWINDOW);
+        InvalidateRect(_hNotifWnd, nullptr, FALSE);
+    } else {
+        ShowWindow(_hNotifWnd, SW_HIDE);
+    }
+    // Repaint title bar bell
+    if (_hwnd) { RECT rc2 = { 0, 0, 9999, TITLEBAR_H }; InvalidateRect(_hwnd, &rc2, FALSE); }
+}
+
+void MainWindow::AddNotification(const std::wstring& msg) {
+    // Prepend timestamp
+    SYSTEMTIME st; GetLocalTime(&st);
+    wchar_t ts[20];
+    swprintf_s(ts, L"%02d:%02d:%02d", st.wHour, st.wMinute, st.wSecond);
+    _notifications.insert(_notifications.begin(), wstring(ts) + L"  " + msg);
+    if (_notifications.size() > 50) _notifications.pop_back();
+    // Repaint title bar area to refresh bell badge
+    if (_hwnd) {
+        RECT rc = { 0, 0, 9999, TITLEBAR_H };
+        InvalidateRect(_hwnd, &rc, FALSE);
+    }
 }
 
 // ─── Scan/Monitor Message Handlers ───────────────────────────────────────────
@@ -1269,13 +1479,88 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
     auto* result = reinterpret_cast<ScanResult*>(lp);
     if (!result) return 0;
 
+    ScanResult prev;
     {
         std::lock_guard<std::mutex> lk(_dataMutex);
+        prev        = _previousResult;
         _lastResult = *result;
     }
     delete result;
     _lastScanTick = GetTickCount();
     InvalidateRect(hwnd, nullptr, FALSE);
+
+    // ── Build device history diff ──────────────────────────────────────────────
+    if (!prev.devices.empty()) {
+        SYSTEMTIME st; GetLocalTime(&st);
+        wchar_t ts[32];
+        swprintf_s(ts, L"%04d-%02d-%02d %02d:%02d:%02d",
+                   st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+        // Snapshot current devices while holding the lock briefly
+        std::vector<Device> currDevices;
+        {
+            std::lock_guard<std::mutex> lk(_dataMutex);
+            currDevices = _lastResult.devices;
+        }
+
+        // Build lookup maps (no lock needed — operating on local copies)
+        std::map<wstring, const Device*> prevMap, currMap;
+        for (auto& d : prev.devices)
+            if (!d.mac.empty()) prevMap[d.mac] = &d;
+        for (auto& d : currDevices)
+            if (!d.mac.empty()) currMap[d.mac] = &d;
+
+        auto devName = [](const Device& d) -> wstring {
+            if (!d.customName.empty()) return d.customName;
+            if (!d.hostname.empty())   return d.hostname;
+            if (!d.vendor.empty())     return d.vendor;
+            return d.ip;
+        };
+
+        // Collect events locally, then commit
+        std::vector<HistoryEvent> newEvents;
+
+        for (auto& d : currDevices) {
+            if (d.mac.empty()) continue;
+            auto it = prevMap.find(d.mac);
+            if (it == prevMap.end())
+                newEvents.push_back({ ts, L"joined",      d.ip, d.mac, devName(d), d.vendor });
+            else if (!it->second->online && d.online)
+                newEvents.push_back({ ts, L"reconnected", d.ip, d.mac, devName(d), d.vendor });
+        }
+        for (auto& pd : prev.devices) {
+            if (pd.mac.empty() || !pd.online) continue;
+            auto it = currMap.find(pd.mac);
+            if (it == currMap.end() || !it->second->online)
+                newEvents.push_back({ ts, L"left", pd.ip, pd.mac, devName(pd), pd.vendor });
+        }
+
+        // Commit to history and fire monitor notifications (both main-thread only — no mutex needed)
+        for (auto& ev : newEvents) {
+            _deviceHistory.push_back(ev);
+            if (_deviceHistory.size() > 1000)
+                _deviceHistory.erase(_deviceHistory.begin());
+        }
+
+        // Monitor-mode notifications for joined devices
+        if (_monitorActive) {
+            for (auto& ev : newEvents) {
+                if (ev.eventType != L"joined") continue;
+                // Determine trust state from current snapshot
+                bool unknown = true;
+                for (auto& d : currDevices) {
+                    if (d.mac == ev.deviceMac) {
+                        unknown = (d.trustState == L"unknown" || d.trustState.empty());
+                        break;
+                    }
+                }
+                if (unknown)
+                    AddNotification(L"\u26A0 Unknown device joined: " + ev.deviceName + L" (" + ev.deviceIp + L")");
+                else
+                    AddNotification(L"\u2191 New device joined: " + ev.deviceName + L" (" + ev.deviceIp + L")");
+            }
+        }
+    }
 
     if (_tabOverview && _tabOverview->GetHwnd())
         SendMessage(_tabOverview->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
@@ -1289,6 +1574,8 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
         SendMessage(_tabTools->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
     if (_tabSmartHome && _tabSmartHome->GetHwnd())
         SendMessage(_tabSmartHome->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
+    if (_tabHistory && _tabHistory->GetHwnd())
+        SendMessage(_tabHistory->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
 
     ScanResult r = GetLastResult();
     AddLedgerEntry(L"Scan Complete",

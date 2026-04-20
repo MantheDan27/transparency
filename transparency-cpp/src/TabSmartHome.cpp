@@ -10,6 +10,7 @@
 #include <vector>
 #include <thread>
 #include <algorithm>
+#include <utility>
 
 #pragma comment(lib, "winhttp.lib")
 
@@ -29,6 +30,7 @@ static const UINT WM_HA_SYNC     = WM_APP + 121;
 static const UINT WM_HUE_DISC    = WM_APP + 122;
 static const UINT WM_HUE_PAIR    = WM_APP + 123;
 static const UINT WM_HUE_SYNC    = WM_APP + 124;
+static const UINT WM_GOOGLE_CAST = WM_APP + 125; // lp = new pair<wstring ip, wstring json>*
 
 // ── String helpers ────────────────────────────────────────────────────────────
 
@@ -299,6 +301,24 @@ bool TabSmartHome::IsSmartDevice(const Device& d) {
     return false;
 }
 
+bool TabSmartHome::IsAlexaDevice(const Device& d) {
+    for (auto& svc : d.mdnsServices)
+        if (svc.find(L"_amzn") != wstring::npos || svc.find(L"_alexa") != wstring::npos) return true;
+    if (!d.ssdpInfo.empty() && d.ssdpInfo.find(L"Amazon") != wstring::npos) return true;
+    wstring v = d.vendor;
+    return v.find(L"Amazon") != wstring::npos;
+}
+
+bool TabSmartHome::IsGoogleDevice(const Device& d) {
+    for (auto& svc : d.mdnsServices)
+        if (svc.find(L"_googlecast") != wstring::npos) return true;
+    for (int p : d.openPorts)
+        if (p == 8008 || p == 8009) return true;
+    if (!d.ssdpInfo.empty() && d.ssdpInfo.find(L"Google") != wstring::npos) return true;
+    wstring v = d.vendor;
+    return v.find(L"Google") != wstring::npos || v.find(L"Nest") != wstring::npos;
+}
+
 // ── Window setup ──────────────────────────────────────────────────────────────
 
 bool TabSmartHome::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -489,6 +509,32 @@ LRESULT CALLBACK TabSmartHome::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         }
         self->HueAppendLog(L"[OK] Synced " + std::to_wstring(count) + L" lights from Hue bridge");
         delete resp; return 0;
+    }
+
+    case WM_APP + 125: { // Google Cast eureka_info response
+        auto* p = reinterpret_cast<std::pair<wstring, string>*>(lp);
+        if (!p || !self->_hGoogleList) { delete p; return 0; }
+        wstring ip  = p->first;
+        string json = p->second;
+        delete p;
+
+        if (json.find("Error") == 0) { self->GoogleAppendLog(L"[INFO] " + ip + L": no Cast info"); return 0; }
+
+        string name    = JsonExtract(json, "name");
+        string model   = JsonExtract(json, "model_name");
+        string version = JsonExtract(json, "cast_build_revision");
+        if (name.empty()) name = "Google Device";
+
+        int row = ListView_GetItemCount(self->_hGoogleList);
+        LVITEM lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = row;
+        lvi.pszText = (LPWSTR)ip.c_str();
+        ListView_InsertItem(self->_hGoogleList, &lvi);
+        ListView_SetItemText(self->_hGoogleList, row, 1, (LPWSTR)Utf8ToWide(name).c_str());
+        ListView_SetItemText(self->_hGoogleList, row, 2, (LPWSTR)Utf8ToWide(model).c_str());
+        ListView_SetItemText(self->_hGoogleList, row, 3, (LPWSTR)L"Online");
+        ListView_SetItemText(self->_hGoogleList, row, 4,
+            version.empty() ? (LPWSTR)L"" : (LPWSTR)Utf8ToWide(version).c_str());
+        return 0;
     }
 
     default: return DefWindowProc(hwnd, msg, wp, lp);
@@ -698,6 +744,72 @@ void TabSmartHome::CreateControls(HWND hwnd, int cx, int cy) {
         L"2. Press the physical button on the bridge, then click Pair\r\n"
         L"3. Click Sync Lights to load your bulbs into the device list");
     y += 88;
+
+    // ── AMAZON ALEXA ─────────────────────────────────────────────────────────
+    y += 8;
+    mkSection(L"Amazon Alexa  (local discovery \u2014 no cloud account needed)", y); y += 24;
+
+    mkLbl(L"Alexa devices detected on your network. Manage them in the Alexa app or web.", 16, y, cx - 32); y += 20;
+
+    _hAlexaList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        16, y, cx - 32, 120, hwnd, (HMENU)(INT_PTR)IDC_SMART_ALEXA_LIST, hInst, nullptr);
+    SendMessage(_hAlexaList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    ListView_SetExtendedListViewStyle(_hAlexaList,
+        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+    Theme::ApplyDarkScrollbar(_hAlexaList);
+    {
+        LVCOLUMN col2 = {}; col2.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col2.fmt = LVCFMT_LEFT;
+        struct ColDef2 { const wchar_t* name; int w; };
+        static const ColDef2 AC[] = {
+            {L"IP Address", 130}, {L"Name / Hostname", 180}, {L"Model / Vendor", 160}, {L"Status", 70}
+        };
+        for (int i = 0; i < 4; i++) { col2.cx = AC[i].w; col2.pszText = (LPWSTR)AC[i].name; ListView_InsertColumn(_hAlexaList, i, &col2); }
+    }
+    y += 128;
+
+    {
+        HWND btn1 = mkBtn(L"\u21BB Refresh", IDC_BTN_ALEXA_REFRESH, 16, y, 100, 26);
+        HWND btn2 = mkBtn(L"\U0001F310 Open Alexa Web", IDC_BTN_ALEXA_OPEN, 124, y, 148, 26);
+        (void)btn1; (void)btn2;
+    }
+    y += 34;
+
+    // ── GOOGLE HOME / CAST ───────────────────────────────────────────────────
+    y += 8;
+    mkSection(L"Google Home / Chromecast  (local \u2014 no cloud account needed)", y); y += 24;
+
+    mkLbl(L"Google Cast devices respond locally on port 8008. Click Sync to query device info.", 16, y, cx - 32); y += 20;
+
+    _hGoogleList = CreateWindowEx(0, WC_LISTVIEW, nullptr,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,
+        16, y, cx - 32, 120, hwnd, (HMENU)(INT_PTR)IDC_SMART_GOOGLE_LIST, hInst, nullptr);
+    SendMessage(_hGoogleList, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    ListView_SetExtendedListViewStyle(_hGoogleList,
+        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_GRIDLINES);
+    Theme::ApplyDarkScrollbar(_hGoogleList);
+    {
+        LVCOLUMN col2 = {}; col2.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT; col2.fmt = LVCFMT_LEFT;
+        struct ColDef2 { const wchar_t* name; int w; };
+        static const ColDef2 GC[] = {
+            {L"IP Address", 130}, {L"Device Name", 180}, {L"Model", 160}, {L"Status", 70}, {L"Firmware", 100}
+        };
+        for (int i = 0; i < 5; i++) { col2.cx = GC[i].w; col2.pszText = (LPWSTR)GC[i].name; ListView_InsertColumn(_hGoogleList, i, &col2); }
+    }
+    y += 128;
+
+    {
+        HWND btn1 = mkBtn(L"\u21BB Sync Cast Info", IDC_BTN_GOOGLE_SYNC, 16, y, 130, 26);
+        HWND btn2 = mkBtn(L"\U0001F310 Open Google Home", IDC_BTN_GOOGLE_OPEN, 154, y, 156, 26);
+        (void)btn1; (void)btn2;
+    }
+    y += 34;
+
+    _hGoogleLog = mkEdit(nullptr, IDC_SMART_GOOGLE_LOG, 16, y, cx - 32, 60, true);
+    SetWindowText(_hGoogleLog,
+        L"Sync queries each discovered Google/Nest/Chromecast device for Cast device info.\r\n"
+        L"No Google account required \u2014 queries the local Cast companion port (8008) directly.");
+    y += 68;
 
     // ── DEVICE SECURITY ──────────────────────────────────────────────────────
     y += 8;
@@ -944,6 +1056,75 @@ void TabSmartHome::HueSync() {
     }).detach();
 }
 
+// ── Amazon Alexa ──────────────────────────────────────────────────────────────
+
+void TabSmartHome::AlexaRefresh() {
+    if (!_hAlexaList || !_mainWnd) return;
+    ListView_DeleteAllItems(_hAlexaList);
+
+    ScanResult r = _mainWnd->GetLastResult();
+    int row = 0;
+    for (auto& d : r.devices) {
+        if (!IsAlexaDevice(d)) continue;
+        wstring name = !d.customName.empty() ? d.customName
+                     : !d.hostname.empty()   ? d.hostname
+                     : !d.vendor.empty()     ? d.vendor
+                     : L"Amazon Echo";
+        wstring model = !d.deviceType.empty() ? d.deviceType : d.vendor;
+
+        LVITEM lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = row;
+        lvi.pszText = (LPWSTR)d.ip.c_str();
+        ListView_InsertItem(_hAlexaList, &lvi);
+        ListView_SetItemText(_hAlexaList, row, 1, (LPWSTR)name.c_str());
+        ListView_SetItemText(_hAlexaList, row, 2, (LPWSTR)model.c_str());
+        ListView_SetItemText(_hAlexaList, row, 3, (LPWSTR)(d.online ? L"Online" : L"Offline"));
+        row++;
+    }
+    if (row == 0) {
+        LVITEM lvi = {}; lvi.mask = LVIF_TEXT; lvi.iItem = 0;
+        lvi.pszText = (LPWSTR)L"";
+        ListView_InsertItem(_hAlexaList, &lvi);
+        ListView_SetItemText(_hAlexaList, 0, 1,
+            (LPWSTR)L"No Alexa devices found \u2014 run a scan first");
+    }
+}
+
+// ── Google Home / Cast ────────────────────────────────────────────────────────
+
+void TabSmartHome::GoogleAppendLog(const wstring& text) {
+    if (!_hGoogleLog) return;
+    int len = GetWindowTextLength(_hGoogleLog);
+    SendMessage(_hGoogleLog, EM_SETSEL, len, len);
+    SendMessage(_hGoogleLog, EM_REPLACESEL, FALSE, (LPARAM)(L"\r\n" + text).c_str());
+}
+
+void TabSmartHome::GoogleSync() {
+    if (!_mainWnd) {
+        GoogleAppendLog(L"[INFO] Run a scan first to discover Google Cast devices.");
+        return;
+    }
+    ScanResult r = _mainWnd->GetLastResult();
+    ListView_DeleteAllItems(_hGoogleList);
+
+    int count = 0;
+    HWND hwnd = _hwnd;
+    for (auto& d : r.devices) {
+        if (!IsGoogleDevice(d)) continue;
+        wstring ip = d.ip;
+        count++;
+        std::thread([ip, hwnd]() {
+            string resp = HttpGetJson(L"http://" + ip + L":8008/setup/eureka_info");
+            PostMessage(hwnd, WM_GOOGLE_CAST, 0,
+                (LPARAM)new std::pair<wstring, string>(ip, resp));
+        }).detach();
+    }
+    if (count == 0)
+        GoogleAppendLog(L"[INFO] No Google Cast / Nest devices found. Run a scan first.");
+    else
+        GoogleAppendLog(L"[INFO] Querying " + std::to_wstring(count) +
+                        L" Cast device(s) for local device info...");
+}
+
 // ── Command handling ──────────────────────────────────────────────────────────
 
 LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
@@ -953,6 +1134,17 @@ LRESULT TabSmartHome::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     case IDC_BTN_HUE_DISCOVER:    HueDiscover(); break;
     case IDC_BTN_HUE_PAIR:        HuePair();    break;
     case IDC_BTN_HUE_SYNC:        HueSync();    break;
+
+    case IDC_BTN_ALEXA_REFRESH:   AlexaRefresh(); break;
+    case IDC_BTN_ALEXA_OPEN:
+        ShellExecute(nullptr, L"open", L"https://alexa.amazon.com",
+                     nullptr, nullptr, SW_SHOWNORMAL);
+        break;
+    case IDC_BTN_GOOGLE_SYNC:     GoogleSync();   break;
+    case IDC_BTN_GOOGLE_OPEN:
+        ShellExecute(nullptr, L"open", L"https://home.google.com",
+                     nullptr, nullptr, SW_SHOWNORMAL);
+        break;
 
     case IDC_BTN_SMART_ADD_TRIGGER: {
         if (!_hComboTriggerEvent || !_hComboTriggerAction || !_hTriggerList) break;
@@ -984,4 +1176,5 @@ LRESULT TabSmartHome::OnNotify(HWND hwnd, NMHDR* hdr) {
 
 void TabSmartHome::RefreshDevices() {
     PopulateSmartDevices();
+    AlexaRefresh();
 }

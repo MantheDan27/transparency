@@ -61,10 +61,19 @@ private:
                                      const std::string& json, const std::wstring& bearerToken);
     static std::string  JsonExtract(const std::string& json, const std::string& key);
 
+    // Amazon Alexa (local — no cloud account)
+    void AlexaRefresh();
+
+    // Google Home / Cast (local — no cloud account)
+    void GoogleSync();
+    void GoogleAppendLog(const std::wstring& text);
+
     // Smart device helpers
     static std::wstring SmartPlatform(const Device& d);
     static std::wstring SecurityNote(const Device& d);
     static bool         IsSmartDevice(const Device& d);
+    static bool         IsAlexaDevice(const Device& d);
+    static bool         IsGoogleDevice(const Device& d);
 
     HWND _hwnd    = nullptr;
     MainWindow* _mainWnd = nullptr;
@@ -96,6 +105,13 @@ private:
     HWND _hHueLog          = nullptr;
     std::wstring _hueBridgeIp;
     std::wstring _hueUsername;
+
+    // Amazon Alexa
+    HWND _hAlexaList    = nullptr;
+
+    // Google Home
+    HWND _hGoogleList   = nullptr;
+    HWND _hGoogleLog    = nullptr;
 
     // Device security log
     HWND _hSecurityLog = nullptr;
