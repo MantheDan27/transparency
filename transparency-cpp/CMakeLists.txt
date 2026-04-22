@@ -26,6 +26,7 @@ set(SOURCES
     src/TabHistory.cpp
     src/Scanner.cpp
     src/Monitor.cpp
+    resources/app.rc
 )
 
 set(HEADERS
