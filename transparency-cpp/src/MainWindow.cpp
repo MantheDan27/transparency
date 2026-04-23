@@ -1542,22 +1542,24 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
                 _deviceHistory.erase(_deviceHistory.begin());
         }
 
-        // Monitor-mode notifications for joined devices
+        // Monitor-mode notifications for joined/left devices
         if (_monitorActive) {
             for (auto& ev : newEvents) {
-                if (ev.eventType != L"joined") continue;
-                // Determine trust state from current snapshot
-                bool unknown = true;
-                for (auto& d : currDevices) {
-                    if (d.mac == ev.deviceMac) {
-                        unknown = (d.trustState == L"unknown" || d.trustState.empty());
-                        break;
+                if (ev.eventType == L"joined") {
+                    bool unknown = true;
+                    for (auto& d : currDevices) {
+                        if (d.mac == ev.deviceMac) {
+                            unknown = (d.trustState == L"unknown" || d.trustState.empty());
+                            break;
+                        }
                     }
+                    if (unknown)
+                        AddNotification(L"\u26A0 Unknown device joined: " + ev.deviceName + L" (" + ev.deviceIp + L")");
+                    else
+                        AddNotification(L"\u2191 Device joined: " + ev.deviceName + L" (" + ev.deviceIp + L")");
+                } else if (ev.eventType == L"left") {
+                    AddNotification(L"\u2193 Device left: " + ev.deviceName + L" (" + ev.deviceIp + L")");
                 }
-                if (unknown)
-                    AddNotification(L"\u26A0 Unknown device joined: " + ev.deviceName + L" (" + ev.deviceIp + L")");
-                else
-                    AddNotification(L"\u2191 New device joined: " + ev.deviceName + L" (" + ev.deviceIp + L")");
             }
         }
     }
