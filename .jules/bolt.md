@@ -25,3 +25,6 @@
 ## 2026-10-25 - [O(1) Anomaly Lookups in UI Bulk Operations]
 **Learning:** Using an $O(N)$ operation like `Array.prototype.find()` or `Array.prototype.includes()` inside a loop over selected devices creates a significant performance bottleneck ($O(N \times M)$ complexity) when applying bulk actions on large device lists. This can cause the UI to freeze or become unresponsive.
 **Action:** When implementing bulk operations on large data sets (like devices or tables), pre-compute a lookup table (e.g. `Map` or `Set`) before the loop. Replace $O(N)$ lookups with $O(1)$ operations (`Map.prototype.get()` or `Set.prototype.has()`) to reduce the complexity to $O(N + M)$ and maintain a smooth user experience.
+## 2025-03-22 - [O(1) Pass for Filter Counts]
+**Learning:** Using chained `.filter().length` calls on a large array (like `allDevices`) creates redundant $O(N)$ passes and unnecessary intermediate array allocations, slowing down UI updates.
+**Action:** When calculating multiple counts based on conditions from a single large array, use a single `for...of` loop with accumulator variables to reduce time complexity to $O(N)$ and avoid creating intermediate arrays.
