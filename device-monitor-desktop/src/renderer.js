@@ -809,9 +809,9 @@ async function bulkAction(action) {
   }
   if (action === 'forget') {
     if (!confirm(`Forget ${ips.length} device(s)? This removes their names, tags, and history from this app.`)) return;
-    for (const ip of ips) {
-      await window.electronAPI.deleteLocalDevice(ip);
-    }
+    // ⚡ Bolt Performance Optimization:
+    // Replace O(N) IPC calls with a single bulk IPC call to avoid N+1 bottleneck
+    await window.electronAPI.bulkDeleteLocalDevices(ips);
     allDevices = allDevices.filter(d => !selectedDevices.has(d.ip));
     clearSelection();
     renderDeviceTable();
