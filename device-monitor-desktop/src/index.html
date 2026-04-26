@@ -175,7 +175,7 @@
             <span id="scanDropdownToggle" class="hidden"></span>
             <div id="scanDropdownMenu" class="hidden"></div>
             <span id="scanDropdownBtn" class="hidden"></span>
-            <input type="checkbox" id="monitorToggleSwitch" class="hidden">
+            <input type="checkbox" id="monitorToggleSwitch" class="hidden" aria-label="Toggle monitoring">
             <button class="btn btn-secondary" id="btnMonitorToggle" onclick="window.toggleMonitoring()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span id="monitorBtnLabel">Start Monitor</span>
@@ -191,7 +191,7 @@
           </div>
           <div class="scan-toggles">
             <label class="toggle-switch" title="Gentle Mode — throttles packet rate">
-              <input type="checkbox" id="gentleToggle">
+              <input type="checkbox" id="gentleToggle" aria-label="Toggle Gentle Mode">
               <span class="toggle-knob"></span>
               <span class="toggle-text">Gentle</span>
             </label>
@@ -347,7 +347,7 @@
           </div>
           <div class="toggle-wrap">
             <span class="toggle-label" id="cloudToggleLabel">Enabled</span>
-            <label class="toggle-switch"><input type="checkbox" id="cloudEnrichToggle" checked><span class="toggle-knob"></span></label>
+            <label class="toggle-switch"><input type="checkbox" id="cloudEnrichToggle" checked aria-label="Toggle Cloud Enrichment"><span class="toggle-knob"></span></label>
           </div>
         </div>
 
@@ -797,10 +797,10 @@
               </div>
             </div>
             <div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem">
-              <label class="toggle-switch"><input type="checkbox" id="privAlertOutage" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on internet outage</span></label>
-              <label class="toggle-switch"><input type="checkbox" id="privAlertGwMac" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on gateway MAC change</span></label>
-              <label class="toggle-switch"><input type="checkbox" id="privAlertDns" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on DNS server change</span></label>
-              <label class="toggle-switch"><input type="checkbox" id="privAlertLatency"><span class="toggle-knob"></span><span class="toggle-text">Alert on high latency</span></label>
+              <label class="toggle-switch"><input type="checkbox" id="privAlertOutage" checked aria-label="Alert on internet outage"><span class="toggle-knob"></span><span class="toggle-text">Alert on internet outage</span></label>
+              <label class="toggle-switch"><input type="checkbox" id="privAlertGwMac" checked aria-label="Alert on gateway MAC change"><span class="toggle-knob"></span><span class="toggle-text">Alert on gateway MAC change</span></label>
+              <label class="toggle-switch"><input type="checkbox" id="privAlertDns" checked aria-label="Alert on DNS server change"><span class="toggle-knob"></span><span class="toggle-text">Alert on DNS server change</span></label>
+              <label class="toggle-switch"><input type="checkbox" id="privAlertLatency" aria-label="Alert on high latency"><span class="toggle-knob"></span><span class="toggle-text">Alert on high latency</span></label>
             </div>
             <button class="btn btn-primary btn-sm" style="margin-top:0.75rem" onclick="window.savePrivacyMonitorConfig()">Save Configuration</button>
           </div>
@@ -917,7 +917,7 @@
             </p>
             <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem">
               <span class="api-badge">http://localhost:7722</span>
-              <label class="toggle-switch"><input type="checkbox" id="apiEnabled" checked><span class="toggle-knob"></span><span class="toggle-text">API Enabled</span></label>
+              <label class="toggle-switch"><input type="checkbox" id="apiEnabled" checked aria-label="Toggle API Enabled"><span class="toggle-knob"></span><span class="toggle-text">API Enabled</span></label>
             </div>
             <div class="api-key-section">
               <span class="settings-sub" style="margin:0">API Key</span>
@@ -1094,7 +1094,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
           <input type="text" class="tool-input" id="rbWebhook" placeholder="https://...">
         </div>
         <label class="toggle-switch" style="margin-top:0.5rem">
-          <input type="checkbox" id="rbEnabled" checked>
+          <input type="checkbox" id="rbEnabled" checked aria-label="Toggle Alert Rule Enabled">
           <span class="toggle-knob"></span>
           <span class="toggle-text">Rule Enabled</span>
         </label>
@@ -1135,10 +1135,10 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
           <div class="rule-form-group"><label for="mcQuietEnd">Quiet End</label><input type="time" class="tool-input" id="mcQuietEnd"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.75rem">
-          <label class="toggle-switch"><input type="checkbox" id="mcAlertOutage" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on internet outage</span></label>
-          <label class="toggle-switch"><input type="checkbox" id="mcAlertGatewayMac" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on gateway MAC change</span></label>
-          <label class="toggle-switch"><input type="checkbox" id="mcAlertDns" checked><span class="toggle-knob"></span><span class="toggle-text">Alert on DNS change</span></label>
-          <label class="toggle-switch"><input type="checkbox" id="mcAlertLatency"><span class="toggle-knob"></span><span class="toggle-text">Alert on high latency</span></label>
+          <label class="toggle-switch"><input type="checkbox" id="mcAlertOutage" checked aria-label="Alert on internet outage"><span class="toggle-knob"></span><span class="toggle-text">Alert on internet outage</span></label>
+          <label class="toggle-switch"><input type="checkbox" id="mcAlertGatewayMac" checked aria-label="Alert on gateway MAC change"><span class="toggle-knob"></span><span class="toggle-text">Alert on gateway MAC change</span></label>
+          <label class="toggle-switch"><input type="checkbox" id="mcAlertDns" checked aria-label="Alert on DNS change"><span class="toggle-knob"></span><span class="toggle-text">Alert on DNS change</span></label>
+          <label class="toggle-switch"><input type="checkbox" id="mcAlertLatency" aria-label="Alert on high latency"><span class="toggle-knob"></span><span class="toggle-text">Alert on high latency</span></label>
         </div>
         <div class="rule-form-group" style="margin-top:0.5rem">
           <label for="mcLatencyThreshold">High Latency Threshold (ms)</label>
@@ -1189,7 +1189,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
         </div>
         <div class="rule-form-group"><label for="schedTime">Time</label><input type="time" class="tool-input" id="schedTime" value="03:00"></div>
         <div class="rule-form-group"><label for="schedExportFormat">Auto-Export Format</label><select class="tool-select" id="schedExportFormat"><option value="">None</option><option value="json">JSON</option><option value="csv">CSV</option><option value="pdf">PDF</option></select></div>
-        <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="schedExport"><span class="toggle-knob"></span><span class="toggle-text">Auto-export after scan</span></label>
+        <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="schedExport" aria-label="Toggle Auto-export after scan"><span class="toggle-knob"></span><span class="toggle-text">Auto-export after scan</span></label>
       </div>
     </div>
     <div class="modal-footer">
@@ -1211,7 +1211,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
         <div class="rule-form-group"><label for="hookEvent">Trigger Event</label><select class="tool-select" id="hookEvent"><option value="scan_complete">Scan Complete</option><option value="new_device">New Device Detected</option><option value="device_offline">Device Went Offline</option><option value="alert_fired">Alert Fired</option><option value="port_changed">Port Changed</option></select></div>
         <div class="rule-form-group"><label for="hookCmd">Script / Command</label><input type="text" class="tool-input" id="hookCmd" placeholder="/path/to/script.sh or command"></div>
         <div class="rule-form-group"><label for="hookDesc">Description</label><input type="text" class="tool-input" id="hookDesc" placeholder="Optional description"></div>
-        <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="hookEnabled" checked><span class="toggle-knob"></span><span class="toggle-text">Hook Enabled</span></label>
+        <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="hookEnabled" checked aria-label="Toggle Hook Enabled"><span class="toggle-knob"></span><span class="toggle-text">Hook Enabled</span></label>
       </div>
     </div>
     <div class="modal-footer">
@@ -1265,7 +1265,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
         <div class="rule-form-group"><label for="segName">Segment Name</label><input type="text" class="tool-input" id="segName" placeholder="e.g. IoT VLAN, Guest Network"></div>
         <div class="rule-form-group"><label for="segSubnet">Subnet (CIDR)</label><input type="text" class="tool-input" id="segSubnet" placeholder="e.g. 192.168.10.0/24"></div>
         <div class="rule-form-group"><label for="segGateway">Gateway IP (optional)</label><input type="text" class="tool-input" id="segGateway" placeholder="e.g. 192.168.10.1"></div>
-        <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="segEnabled" checked><span class="toggle-knob"></span><span class="toggle-text">Include in scans</span></label>
+        <label class="toggle-switch" style="margin-top:0.5rem"><input type="checkbox" id="segEnabled" checked aria-label="Toggle Include in scans"><span class="toggle-knob"></span><span class="toggle-text">Include in scans</span></label>
       </div>
     </div>
     <div class="modal-footer">
