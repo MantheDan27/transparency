@@ -1105,7 +1105,7 @@ function openDetailPanel(dev, tab) {
         </div>
       </div>
       <div class="detail-field"><span class="detail-label">Trust</span>
-        <select class="trust-select detail-trust-sel" data-ip="${escHtml(dev.ip)}">
+        <select class="trust-select detail-trust-sel" data-ip="${escHtml(dev.ip)}" aria-label="Device trust level">
           ${['owned','known','guest','unknown','watchlist','blocked'].map(t => `<option value="${t}" ${trust===t?'selected':''}>${TRUST_LABELS[t]}</option>`).join('')}
         </select>
       </div>
@@ -1235,7 +1235,7 @@ function openDetailPanel(dev, tab) {
 
   const notesContent = `<div class="detail-section">
     <div class="detail-section-title">Notes</div>
-    <textarea class="notes-input" id="detailNotes" placeholder="Private notes about this device…" data-ip="${escHtml(dev.ip)}">${escHtml(notes)}</textarea>
+    <textarea class="notes-input" id="detailNotes" placeholder="Private notes about this device…" data-ip="${escHtml(dev.ip)}" aria-label="Device notes">${escHtml(notes)}</textarea>
     <button class="btn btn-secondary btn-sm" style="margin-top:0.5rem" onclick="window.saveDeviceNotes()">Save Notes</button>
   </div>`;
 
@@ -1949,7 +1949,7 @@ function renderAlertRules() {
     <div class="rule-item">
       <div class="rule-item-left">
         <label class="toggle-switch-sm" title="${r.enabled ? 'Rule enabled' : 'Rule disabled'}">
-          <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="window.toggleRule('${escHtml(r.id)}', this.checked)">
+          <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="window.toggleRule('${escHtml(r.id)}', this.checked)" aria-label="Enable rule ${escHtml(r.name)}">
           <span class="toggle-knob-sm"></span>
         </label>
         <div>
@@ -3216,7 +3216,7 @@ function renderScheduleList() {
     const nextRun = s.nextRun ? new Date(s.nextRun).toLocaleString() : '—';
     return `<div class="schedule-item">
       <label class="toggle-switch-sm">
-        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="window.toggleSchedule('${escHtml(s.id)}', this.checked)">
+        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="window.toggleSchedule('${escHtml(s.id)}', this.checked)" aria-label="Enable schedule ${escHtml(s.name)}">
         <span class="toggle-knob-sm"></span>
       </label>
       <div class="schedule-item-info">
@@ -3283,7 +3283,7 @@ function renderHookList() {
   list.innerHTML = scriptHooks.map(h => `
     <div class="hook-item">
       <label class="toggle-switch-sm">
-        <input type="checkbox" ${h.enabled ? 'checked' : ''} onchange="window.toggleHook('${escHtml(h.id)}', this.checked)">
+        <input type="checkbox" ${h.enabled ? 'checked' : ''} onchange="window.toggleHook('${escHtml(h.id)}', this.checked)" aria-label="Enable script hook">
         <span class="toggle-knob-sm"></span>
       </label>
       <div class="hook-item-body">

@@ -113,7 +113,7 @@
           <span class="monitor-pulse"></span>
           <span>MONITORING ACTIVE</span>
         </div>
-        <select class="adapter-selector hidden" id="adapterSelector">
+        <select class="adapter-selector hidden" id="adapterSelector" aria-label="Network adapter selector">
           <option value="default">Default Adapter</option>
         </select>
       </div>
@@ -171,11 +171,11 @@
               <span id="scanBtnModeLabel">Scan</span>
             </button>
             <!-- Hidden aliases for renderer.js compat -->
-            <button class="btn btn-primary hidden" id="quickScanBtnMain"></button>
+            <button class="btn btn-primary hidden" id="quickScanBtnMain" aria-label="Main quick scan"></button>
             <span id="scanDropdownToggle" class="hidden"></span>
             <div id="scanDropdownMenu" class="hidden"></div>
             <span id="scanDropdownBtn" class="hidden"></span>
-            <input type="checkbox" id="monitorToggleSwitch" class="hidden">
+            <input type="checkbox" id="monitorToggleSwitch" class="hidden" aria-label="Toggle continuous monitoring">
             <button class="btn btn-secondary" id="btnMonitorToggle" onclick="window.toggleMonitoring()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span id="monitorBtnLabel">Start Monitor</span>
@@ -579,7 +579,7 @@
             <div class="tool-card-body">
               <div class="tool-input-row">
                 <input type="text" class="tool-input" id="dnsTarget" aria-label="DNS lookup target hostname or IP" placeholder="Hostname or IP">
-                <select class="tool-select" id="dnsType">
+                <select class="tool-select" id="dnsType" aria-label="DNS record type">
                   <option value="A">A</option>
                   <option value="AAAA">AAAA</option>
                   <option value="MX">MX</option>
@@ -689,17 +689,17 @@
 
         <!-- Ledger filters -->
         <div class="ledger-filters" style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center">
-          <input type="date" class="tool-input tool-input-sm" id="ledgerDateFrom" title="From date">
+          <input type="date" class="tool-input tool-input-sm" id="ledgerDateFrom" title="From date" aria-label="From date">
           <span style="color:var(--text-muted);font-size:0.8rem">to</span>
-          <input type="date" class="tool-input tool-input-sm" id="ledgerDateTo" title="To date">
-          <select class="tool-select" id="ledgerEventFilter" style="min-width:120px">
+          <input type="date" class="tool-input tool-input-sm" id="ledgerDateTo" title="To date" aria-label="To date">
+          <select class="tool-select" id="ledgerEventFilter" style="min-width:120px" aria-label="Ledger event filter">
             <option value="">All Events</option>
             <option value="SEND">Transmissions</option>
             <option value="DELETE">Deletions</option>
             <option value="SCAN">Scans</option>
             <option value="ALERT">Alerts</option>
           </select>
-          <select class="sel-input" id="ledgerDeviceSelect" style="min-width:160px">
+          <select class="sel-input" id="ledgerDeviceSelect" style="min-width:160px" aria-label="Ledger device selector">
             <option value="">All devices</option>
           </select>
           <button class="btn btn-secondary btn-xs" onclick="window.refreshLedger()">Filter</button>
@@ -815,7 +815,7 @@
               <p>Automatically purge device history older than a specified number of days.</p>
             </div>
             <div class="del-controls">
-              <select class="sel-input" id="retentionSelect">
+              <select class="sel-input" id="retentionSelect" aria-label="Data retention period">
                 <option value="0">Never (keep all)</option>
                 <option value="7">7 days</option>
                 <option value="30" selected>30 days</option>
@@ -832,7 +832,7 @@
               <p>Remove a specific device from your local inventory and optionally delete cloud records.</p>
             </div>
             <div class="del-controls">
-              <select class="sel-input" id="deviceSelect"><option value="">Select a device…</option></select>
+              <select class="sel-input" id="deviceSelect" aria-label="Select device to forget"><option value="">Select a device…</option></select>
               <div id="delDeviceOptions" class="hidden" style="display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem">
                 <label for="delDeviceHistory"><input type="checkbox" id="delDeviceHistory"> Delete history</label>
                 <label for="delDeviceCloud"><input type="checkbox" id="delDeviceCloud"> Delete cloud records</label>
@@ -858,7 +858,7 @@
               <p>Restore or compare against a previously exported snapshot.</p>
             </div>
             <div class="del-controls">
-              <input type="file" class="hidden" id="importSnapshotFile" accept=".json">
+              <input type="file" class="hidden" id="importSnapshotFile" accept=".json" aria-label="Import snapshot JSON file">
               <button class="btn btn-secondary btn-sm" onclick="document.getElementById('importSnapshotFile').click()">Import JSON</button>
             </div>
           </div>
@@ -1112,7 +1112,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
   <div class="modal" style="width:min(400px,90vw)">
     <div class="modal-header"><h2>Add Tags</h2></div>
     <div class="modal-body">
-      <input type="text" class="tool-input" id="bulkTagInput" placeholder="Tag names, comma separated">
+      <input type="text" class="tool-input" id="bulkTagInput" placeholder="Tag names, comma separated" aria-label="Bulk tag input">
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" id="bulkTagConfirm">Apply Tags</button>
