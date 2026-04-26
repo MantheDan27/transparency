@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearLocalSnapshot: ()         => ipcRenderer.invoke('clear-local-snapshot'),
   getLocalDevices:    ()         => ipcRenderer.invoke('get-local-devices'),
   deleteLocalDevice:  (ip)       => ipcRenderer.invoke('delete-local-device', ip),
+  bulkDeleteLocalDevices: (ips)  => ipcRenderer.invoke('bulk-delete-local-devices', ips),
 
   // ── Data management ──────────────────────────────────────────────────────────
   getDataStats:       ()         => ipcRenderer.invoke('get-data-stats'),

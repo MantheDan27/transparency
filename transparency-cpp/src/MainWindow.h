@@ -21,6 +21,7 @@ class TabTools;
 class TabLedger;
 class TabPrivacy;
 class TabSmartHome;
+class TabHistory;
 
 enum class Tab {
     Overview,
@@ -30,6 +31,7 @@ enum class Tab {
     Ledger,
     Privacy,
     SmartHome,
+    History,
     COUNT
 };
 
@@ -51,6 +53,8 @@ public:
     void SwitchTab(Tab tab);
 
     ScanResult GetLastResult() const;
+    std::vector<HistoryEvent> GetDeviceHistory() const;
+    void ClearDeviceHistory();
     void AddLedgerEntry(const std::wstring& action, const std::wstring& details);
     void SaveSnapshot();
     void StartLocalApi();
@@ -65,6 +69,7 @@ public:
     ScanResult              _previousResult;
     std::vector<AlertRule>  _alertRules;
     std::vector<LedgerEntry> _ledger;
+    std::vector<HistoryEvent> _deviceHistory;
     std::vector<ScanResult> _snapshots;
     std::vector<PluginHook> _pluginHooks;
     ScheduledScan           _scheduledScan;
@@ -84,6 +89,14 @@ public:
     bool _sidebarExpanded = true;
     bool _monitorActive   = false;
 
+    // Notifications
+    std::vector<std::wstring> _notifications;
+    bool _notifPanelOpen = false;
+    HWND _hNotifWnd = nullptr;
+    void AddNotification(const std::wstring& msg);
+    void ShowNotifPanel(bool show);
+    static LRESULT CALLBACK NotifWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
 private:
     HWND _hwnd = nullptr;
     HINSTANCE _hInstance = nullptr;
@@ -96,6 +109,7 @@ private:
     std::unique_ptr<TabLedger>   _tabLedger;
     std::unique_ptr<TabPrivacy>  _tabPrivacy;
     std::unique_ptr<TabSmartHome> _tabSmartHome;
+    std::unique_ptr<TabHistory>  _tabHistory;
 
     // Hover tracking
     int  _hoverNav       = -1;

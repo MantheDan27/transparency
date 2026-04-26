@@ -312,6 +312,7 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     _hDetailVendor    = makeSmLbl  (L"", dy, 18); dy += 22;
     _hDetailMac       = makeMonoLbl(L"", dy, 18); dy += 22;
     _hDetailSubnet    = makeMonoLbl(L"", dy, 18); dy += 22;
+    _hDetailIpDesc    = makeSmLbl  (L"", dy, 52); dy += 56;  // IP range explanation (2 sentences)
     _hDetailIpHistory = makeSmLbl  (L"", dy, 18); dy += 22;
 
     // ── Timing ───────────────────────────────────────────────────────────────
@@ -451,15 +452,17 @@ LRESULT TabDevices::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
             static const wchar_t* trustOpts[] = { L"unknown", L"owned", L"watchlist", L"guest", L"blocked" };
             wstring trust = (trustSel >= 0 && trustSel < 5) ? trustOpts[trustSel] : L"unknown";
 
-            std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
-            for (auto& d : _mainWnd->_lastResult.devices) {
-                if (d.ip == _detailDeviceIp) {
-                    d.customName = nameBuf;
-                    d.notes = notesBuf;
-                    d.trustState = trust;
-                    break;
+            {
+                std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
+                for (auto& d : _mainWnd->_lastResult.devices) {
+                    if (d.ip == _detailDeviceIp) {
+                        d.customName = nameBuf;
+                        d.notes = notesBuf;
+                        d.trustState = trust;
+                        break;
+                    }
                 }
-            }
+            } // release lock before calling ApplyFilter/HideDetailPanel
             ApplyFilter();
             HideDetailPanel();
         }
@@ -819,6 +822,29 @@ void TabDevices::HideDetailPanel() {
     InvalidateRect(_hwnd, nullptr, FALSE);
 }
 
+static wstring GetIpDescription(const wstring& ip) {
+    int o1 = 0, o2 = 0, o3 = 0, o4 = 0;
+    swscanf_s(ip.c_str(), L"%d.%d.%d.%d", &o1, &o2, &o3, &o4);
+
+    if (o1 == 10)
+        return L"This is an RFC 1918 private address in the 10.0.0.0/8 range, commonly used in home and enterprise networks. It is not routable on the public internet and can only be reached within its local network.";
+    if (o1 == 172 && o2 >= 16 && o2 <= 31)
+        return L"This is an RFC 1918 private address in the 172.16.0.0/12 range, often assigned in corporate or cloud virtual networks. It cannot be reached from the public internet and is confined to its local subnet.";
+    if (o1 == 192 && o2 == 168)
+        return L"This is an RFC 1918 private address in the 192.168.0.0/16 range, the most common choice for home and small-office networks. It is not reachable from the public internet and requires NAT to access external services.";
+    if (o1 == 169 && o2 == 254)
+        return L"This is an APIPA link-local address, self-assigned by the device when no DHCP server responded to its request. It typically indicates a network misconfiguration and the device may be unable to reach other subnets.";
+    if (o1 == 127)
+        return L"This is a loopback address in the 127.0.0.0/8 range that always refers to the local device itself. Seeing this appear on a network scan is unusual and may indicate a software or configuration anomaly.";
+    if (o1 == 100 && o2 >= 64 && o2 <= 127)
+        return L"This address falls in the RFC 6598 shared address space (100.64.0.0/10), used by ISPs for carrier-grade NAT between the provider and customer. You may be behind a double NAT, which can affect port forwarding and peer-to-peer connectivity.";
+    if (o1 >= 224 && o1 <= 239)
+        return L"This is a multicast address used for group communication protocols such as mDNS and UPnP discovery. It does not correspond to a single physical device and cannot be directly addressed with unicast traffic.";
+    if (o1 >= 240)
+        return L"This address falls in the reserved Class E range (240.0.0.0/4), set aside by IANA and not used in normal network operations. Seeing this on a scan is highly unusual and may suggest a spoofed or misconfigured packet.";
+    return L"This appears to be a public IP address, meaning the device may be directly reachable from the internet without NAT. Verify your firewall rules and ensure this device is intentionally exposed if it appears on your local network.";
+}
+
 void TabDevices::UpdateDetailPanel(const Device& dev) {
     if (!_hDetailPanel) return;
 
@@ -874,6 +900,12 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
     if (_hDetailSubnet) {
         wstring sub = dev.subnet.empty() ? L"Subnet: unknown" : L"Subnet: " + dev.subnet;
         SetWindowText(_hDetailSubnet, sub.c_str());
+    }
+
+    // IP address description
+    if (_hDetailIpDesc) {
+        wstring desc = GetIpDescription(dev.ip);
+        SetWindowText(_hDetailIpDesc, desc.c_str());
     }
 
     // First seen / Last seen / Sightings

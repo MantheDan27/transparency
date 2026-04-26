@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <winhttp.h>
 #include <commctrl.h>
 #include <string>
 #include <vector>
@@ -34,125 +35,93 @@ private:
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
     void UpdateScrollBar(HWND hwnd);
+
     void PopulateSmartDevices();
+    void PopulateSecurityLog();
 
-    // Alexa token retrieval
-    void AlexaOpenAuth();
-    void AlexaExchangeToken();
-    void AlexaRefreshToken();
-    static std::string WideToUtf8(const std::wstring& w);
+    // Home Assistant (local REST API — URL + long-lived token)
+    void HaConnect();
+    void HaSync();
+    void HaAppendLog(const std::wstring& text);
+
+    // Philips Hue (local bridge — discover, pair, sync)
+    void HueDiscover();
+    void HuePair();
+    void HueSync();
+    void HueAppendLog(const std::wstring& text);
+
+    // HTTP helpers
+    static std::string  WideToUtf8(const std::wstring& w);
     static std::wstring Utf8ToWide(const std::string& s);
-    static std::string HttpPost(const std::wstring& host, const std::wstring& path,
-                                const std::string& body);
-    static std::string HttpPostJson(const std::wstring& host, const std::wstring& path,
-                                    const std::string& json, const std::wstring& bearerToken);
-    void AppendTokenLog(const std::wstring& text);
+    static std::string  HttpGetJson(const std::wstring& fullUrl,
+                                    const std::wstring& bearerToken = L"");
+    static std::string  HttpPostLocal(const std::wstring& host, INTERNET_PORT port,
+                                      const std::wstring& path, const std::string& json);
+    static std::string  HttpPostJson(const std::wstring& host, const std::wstring& path,
+                                     const std::string& json, const std::wstring& bearerToken);
+    static std::string  JsonExtract(const std::string& json, const std::string& key);
 
-    // Alexa Smart Home Skill API
-    void AlexaSHSendDiscovery();
-    void AlexaSHSendStateReport();
-    void AlexaSHSendChangeReport();
-    void AppendSHLog(const std::wstring& text);
-    std::wstring GetAlexaEventGatewayHost() const;
-    std::string BuildDiscoveryPayload();
-    std::string BuildStateReportPayload(const std::wstring& endpointId,
-                                        const std::wstring& ip, bool online);
-    std::string BuildChangeReportPayload(const std::wstring& endpointId,
-                                         const std::wstring& ip, bool online);
-    static std::string GenerateMessageId();
+    // Amazon Alexa (local — no cloud account)
+    void AlexaRefresh();
 
-    // Google Home OAuth & Home Graph API
-    void GoogleOpenAuth();
-    void GoogleExchangeToken();
-    void GoogleRefreshToken();
-    void AppendGoogleTokenLog(const std::wstring& text);
-    void GoogleHGRequestSync();
-    void GoogleHGQueryDevices();
-    void GoogleHGDisconnect();
-    void AppendGoogleHGLog(const std::wstring& text);
-    std::string BuildHomeGraphSyncPayload();
-    std::string BuildHomeGraphQueryPayload(const std::wstring& endpointId);
+    // Google Home / Cast (local — no cloud account)
+    void GoogleSync();
+    void GoogleAppendLog(const std::wstring& text);
 
-    HWND _hwnd = nullptr;
+    // Smart device helpers
+    static std::wstring SmartPlatform(const Device& d);
+    static std::wstring SecurityNote(const Device& d);
+    static bool         IsSmartDevice(const Device& d);
+    static bool         IsAlexaDevice(const Device& d);
+    static bool         IsGoogleDevice(const Device& d);
+
+    HWND _hwnd    = nullptr;
     MainWindow* _mainWnd = nullptr;
 
-    // Scrolling state
-    int _scrollY = 0;
+    // Scroll
+    int _scrollY      = 0;
     int _contentHeight = 0;
-    int _viewHeight = 0;
+    int _viewHeight   = 0;
 
     // Smart device list
     HWND _hDeviceList = nullptr;
 
-    // Integration status
-    HWND _hAlexaStatus = nullptr;
-    HWND _hGoogleStatus = nullptr;
+    // Home Assistant
+    HWND _hHaStatus      = nullptr;
+    HWND _hHaUrl         = nullptr;
+    HWND _hHaToken       = nullptr;
+    HWND _hBtnHaConnect  = nullptr;
+    HWND _hBtnHaSync     = nullptr;
+    HWND _hHaLog         = nullptr;
+    std::wstring _haBaseUrl;
+    std::wstring _haToken;
 
-    // Alexa controls
-    HWND _hBtnAlexaLink = nullptr;
-    HWND _hBtnAlexaDiscover = nullptr;
-    HWND _hAlexaOut = nullptr;
+    // Philips Hue
+    HWND _hHueStatus       = nullptr;
+    HWND _hHueBridgeIp     = nullptr;
+    HWND _hBtnHueDiscover  = nullptr;
+    HWND _hBtnHuePair      = nullptr;
+    HWND _hBtnHueSync      = nullptr;
+    HWND _hHueLog          = nullptr;
+    std::wstring _hueBridgeIp;
+    std::wstring _hueUsername;
 
-    // Alexa Access Token Retrieval
-    HWND _hAlexaClientId = nullptr;
-    HWND _hAlexaClientSecret = nullptr;
-    HWND _hAlexaAuthCode = nullptr;
-    HWND _hAlexaRedirectUri = nullptr;
-    HWND _hBtnAlexaOpenAuth = nullptr;
-    HWND _hBtnAlexaGetToken = nullptr;
-    HWND _hBtnAlexaRefresh = nullptr;
-    HWND _hAlexaTokenOut = nullptr;
+    // Amazon Alexa
+    HWND _hAlexaList    = nullptr;
 
-    // Stored tokens
-    std::wstring _alexaAccessToken;
-    std::wstring _alexaRefreshToken;
+    // Google Home
+    HWND _hGoogleList   = nullptr;
+    HWND _hGoogleLog    = nullptr;
 
-    // Alexa Smart Home Skill API controls
-    HWND _hAlexaSHRegion = nullptr;
-    HWND _hBtnAlexaSHDiscover = nullptr;
-    HWND _hBtnAlexaSHState = nullptr;
-    HWND _hBtnAlexaSHChange = nullptr;
-    HWND _hAlexaSHLog = nullptr;
+    // Device security log
+    HWND _hSecurityLog = nullptr;
 
-    // Google Home controls
-    HWND _hBtnGoogleLink = nullptr;
-    HWND _hBtnGoogleDiscover = nullptr;
-    HWND _hGoogleOut = nullptr;
-
-    // Google Home OAuth & Home Graph API
-    HWND _hGoogleClientId = nullptr;
-    HWND _hGoogleClientSecret = nullptr;
-    HWND _hGoogleAuthCode = nullptr;
-    HWND _hGoogleRedirectUri = nullptr;
-    HWND _hBtnGoogleOpenAuth = nullptr;
-    HWND _hBtnGoogleGetToken = nullptr;
-    HWND _hBtnGoogleRefresh = nullptr;
-    HWND _hGoogleTokenOut = nullptr;
-
-    // Google Home Graph API controls
-    HWND _hGoogleProjectId = nullptr;
-    HWND _hBtnGoogleHGSync = nullptr;
-    HWND _hBtnGoogleHGQuery = nullptr;
-    HWND _hBtnGoogleHGDisconnect = nullptr;
-    HWND _hGoogleHGLog = nullptr;
-
-    // Stored Google tokens
-    std::wstring _googleAccessToken;
-    std::wstring _googleRefreshToken;
-
-    // Automation / triggers
-    HWND _hTriggerList = nullptr;
-    HWND _hBtnAddTrigger = nullptr;
-    HWND _hBtnDelTrigger = nullptr;
-    HWND _hComboTriggerEvent = nullptr;
+    // Automation triggers
+    HWND _hTriggerList        = nullptr;
+    HWND _hBtnAddTrigger      = nullptr;
+    HWND _hBtnDelTrigger      = nullptr;
+    HWND _hComboTriggerEvent  = nullptr;
     HWND _hComboTriggerAction = nullptr;
-    HWND _hComboTriggerDevice = nullptr;
-
-    // Scene controls
-    HWND _hSceneList = nullptr;
-    HWND _hBtnAddScene = nullptr;
-    HWND _hBtnRunScene = nullptr;
-    HWND _hEditSceneName = nullptr;
 
     static const wchar_t* s_className;
 };

@@ -135,6 +135,16 @@ struct PluginHook {
     bool    enabled = true;
 };
 
+// Device connection / disconnection event
+struct HistoryEvent {
+    wstring timestamp;
+    wstring eventType;   // L"joined", L"left", L"reconnected"
+    wstring deviceIp;
+    wstring deviceMac;
+    wstring deviceName;
+    wstring vendor;
+};
+
 // Scheduled scan entry
 struct ScheduledScan {
     bool    enabled = false;
