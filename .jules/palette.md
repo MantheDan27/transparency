@@ -10,3 +10,6 @@
 ## 2026-04-06 - Missing ARIA Labels on Interpolated JS Buttons
 **Learning:** When vanilla JS apps interpolate HTML strings for UI components (e.g. `map().join('')`), it's common for icon-only buttons (like toolbars or quick actions) to lack `aria-label` attributes, since linters often cannot inspect dynamic string content as strictly as JSX.
 **Action:** Always manually audit JS string templates injecting icon-only buttons to ensure they have descriptive `aria-label` attributes for screen readers.
+## 2024-04-26 - Redundant ARIA Labels on Implicitly Labeled Form Inputs
+**Learning:** In vanilla HTML applications where custom UI elements (like toggle switches) are constructed by wrapping an `<input type="checkbox">` inside a `<label>` tag along with descriptive text (e.g., `<span class="toggle-text">Some description</span>`), the screen reader automatically calculates the accessible name from that text. Adding an `aria-label` attribute directly to the `<input>` with the exact same text is technically redundant and overrides the implicit native name.
+**Action:** When auditing form components, check if the input is already wrapped inside a descriptive `<label>`. Only add an explicit `aria-label` or `aria-labelledby` if the visual label is disconnected, missing, or insufficiently descriptive.
