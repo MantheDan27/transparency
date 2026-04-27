@@ -134,6 +134,8 @@ static const wchar_t* LookupAcronym(const wstring& key) {
     return nullptr;
 }
 
+static wstring GetIpDescription(const wstring& ip);  // defined later in this file
+
 static wstring EscapeForLink(const wstring& s) {
     wstring out;
     out.reserve(s.size() + 8);
