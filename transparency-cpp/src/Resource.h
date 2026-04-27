@@ -182,6 +182,13 @@
 #define IDC_NAV_HISTORY     2008
 #define IDC_PANEL_HISTORY   3008
 
+// Glossary link control IDs (device detail panel)
+#define IDC_LINK_VENDOR_SRC     13001
+#define IDC_LINK_IP_ADDR        13002
+#define IDC_LINK_MDNS_SRC       13003
+#define IDC_LINK_MAC_LABEL      13004
+#define IDC_LINK_NAME_SRC       13005
+
 // WM_USER custom messages
 #define WM_SCAN_COMPLETE        (WM_USER + 1)
 #define WM_SCAN_PROGRESS        (WM_USER + 2)

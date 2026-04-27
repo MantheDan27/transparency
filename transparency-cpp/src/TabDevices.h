@@ -77,7 +77,7 @@ private:
     HWND _hDetailIotRisk    = nullptr;  // IoT risk panel
     HWND _hDetailEvidence   = nullptr;  // classification evidence
     HWND _hDetailSubnet     = nullptr;  // subnet label
-    HWND _hDetailIpDesc     = nullptr;  // IP address range explanation
+    HWND _hDetailIp         = nullptr;  // IP address (clickable link)
     HWND _hDetailFirstSeen  = nullptr;  // first seen timestamp
     HWND _hDetailSightings  = nullptr;  // sighting count
     HWND _hDetailIpHistory  = nullptr;  // IP history
