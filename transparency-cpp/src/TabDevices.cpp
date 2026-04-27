@@ -15,12 +15,11 @@
 #include "Theme.h"
 #include "Resource.h"
 #include "Scanner.h"
+#include "GlossaryPopup.h"
 #include <shellapi.h>
 #include <ws2tcpip.h>
 
 using std::wstring;
-
-
 
 const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
 
@@ -28,242 +27,7 @@ static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
 };
 
-// ── Glossary popup ────────────────────────────────────────────────────────────
-
-static HWND s_glossaryPopup = nullptr;
-
-struct PopupData { wstring title; wstring body; };
-
-struct AcronymEntry { const wchar_t* key; const wchar_t* explanation; };
-static const AcronymEntry ACRONYM_DB[] = {
-    { L"ARP",
-      L"Address Resolution Protocol — How your network maps IP addresses to physical device addresses. "
-      L"When your router needs to reach 192.168.1.5, it broadcasts 'Who has this IP?' and the device "
-      L"replies with its hardware (MAC) address." },
-    { L"MAC",
-      L"Media Access Control Address — A unique 12-character identifier (e.g. AA:BB:CC:DD:EE:FF) permanently "
-      L"burned into every network adapter by its manufacturer. The first 6 characters identify the maker (OUI); "
-      L"the last 6 are unique to the device. Unlike an IP address, a MAC address does not change between networks." },
-    { L"mDNS",
-      L"Multicast DNS — Lets devices on your local network announce and find each other by name without a "
-      L"central server. Your Mac broadcasts '_http._tcp.local' so other devices can discover its web service "
-      L"automatically. Commonly used by Apple, Chromecast, and smart home devices." },
-    { L"MDNS", L"See mDNS — Multicast DNS. Lets devices discover each other by name on a local network without a central server." },
-    { L"DHCP",
-      L"Dynamic Host Configuration Protocol — The service (usually on your router) that automatically hands out "
-      L"IP addresses when devices join your network. Without DHCP you would need to set a unique IP on every device "
-      L"manually. If DHCP fails, a device may fall back to a self-assigned 169.254.x.x (APIPA) address." },
-    { L"DNS",
-      L"Domain Name System — The internet's address book. Translates human-readable names like 'google.com' "
-      L"into numeric IP addresses like '142.250.80.78' that computers use for routing. Your DNS server is "
-      L"usually your router or a public resolver such as 8.8.8.8 (Google) or 1.1.1.1 (Cloudflare)." },
-    { L"TCP",
-      L"Transmission Control Protocol — The reliable delivery layer used by most internet services (web, email, SSH). "
-      L"It guarantees data arrives complete and in order by re-sending lost packets. Slower than UDP, "
-      L"but essential when accuracy matters." },
-    { L"UDP",
-      L"User Datagram Protocol — A faster but 'fire-and-forget' alternative to TCP. Used for video streaming, "
-      L"online games, and DNS lookups where speed matters more than guaranteed delivery. "
-      L"Lost UDP packets are not re-sent." },
-    { L"OUI",
-      L"Organizationally Unique Identifier — The first three bytes of a MAC address, assigned by the IEEE to "
-      L"identify the chip manufacturer. For example, 'B8:27:EB' is a Raspberry Pi, 'A4:CF:12' is a Nest device. "
-      L"This is how Transparency identifies vendors without actively scanning the device." },
-    { L"APIPA",
-      L"Automatic Private IP Addressing — When a device cannot reach a DHCP server it assigns itself a "
-      L"169.254.x.x address. The device can still talk to other APIPA devices on the same cable/Wi-Fi, "
-      L"but cannot access the internet or other subnets. Usually signals a network configuration problem." },
-    { L"NAT",
-      L"Network Address Translation — How your router lets many private-network devices share a single public "
-      L"internet IP address. Outgoing traffic gets its source IP rewritten to your router's public IP; "
-      L"replies are rewritten back. This is why all home devices appear to have the same internet-facing IP." },
-    { L"ICMP",
-      L"Internet Control Message Protocol — The protocol behind 'ping'. Used to test whether a device is "
-      L"reachable and measure round-trip time. It also carries error messages like 'Destination Unreachable'. "
-      L"ICMP does not carry application data — only control and diagnostic information." },
-    { L"NDP",
-      L"Neighbor Discovery Protocol — The IPv6 replacement for ARP. Allows IPv6 devices to discover each "
-      L"other's MAC addresses, find routers, and detect duplicate addresses, all via multicast messages "
-      L"rather than the broadcast packets ARP uses in IPv4." },
-    { L"NetBIOS",
-      L"Network Basic Input/Output System — An older Microsoft protocol for local network name resolution "
-      L"and file/printer sharing, common before DNS was widely used in LANs. Still present in Windows as "
-      L"part of SMB (file sharing). Devices respond to NetBIOS queries with their computer name." },
-    { L"SSDP",
-      L"Simple Service Discovery Protocol — The announcement layer used by UPnP devices (smart TVs, "
-      L"game consoles, printers). Devices send periodic SSDP multicast messages to advertise their services. "
-      L"This is how Windows automatically finds your network printer or TV." },
-    { L"UPnP",
-      L"Universal Plug and Play — Protocols that let devices configure themselves and discover each other "
-      L"automatically. Commonly used by game consoles, streaming sticks, and smart home gear. "
-      L"Can be a security risk if your router allows UPnP to open ports exposed to the internet." },
-    { L"WOL",
-      L"Wake-on-LAN — A feature that lets you remotely power on a computer by sending a 'magic packet' "
-      L"containing the target's MAC address over the network. The target must support WOL and have it "
-      L"enabled in its BIOS/UEFI settings." },
-    { L"IPv6",
-      L"Internet Protocol version 6 — The modern addressing system replacing IPv4. Uses 128-bit addresses "
-      L"(e.g. 2001:db8::1) to support the enormous number of internet-connected devices. "
-      L"A device often has both an IPv4 and an IPv6 address at the same time." },
-    { L"BSSID",
-      L"Basic Service Set Identifier — The MAC address of the specific Wi-Fi access point you are connected to. "
-      L"If your router broadcasts on both 2.4 GHz and 5 GHz, each radio has a different BSSID "
-      L"even though they share the same SSID (network name)." },
-    { L"SSID",
-      L"Service Set Identifier — The human-readable name of a Wi-Fi network (what you see when scanning "
-      L"for Wi-Fi on your phone). Multiple access points can share the same SSID to form a seamless "
-      L"roaming network while each has a unique BSSID." },
-    { L"RFC",
-      L"Request for Comments — Official internet standards documents published by the IETF. "
-      L"Despite the name, most RFCs are finalized standards. 'RFC 1918' defines the private IP ranges "
-      L"(10.x.x.x, 172.16-31.x.x, 192.168.x.x) reserved for local networks and not routable on the internet." },
-    { L"IANA",
-      L"Internet Assigned Numbers Authority — The global body that coordinates IP address allocation, "
-      L"DNS root zones, and protocol registries. IANA allocates large address blocks to regional bodies "
-      L"(like ARIN for North America) which then distribute them to ISPs and organizations." },
-    { L"ISP",
-      L"Internet Service Provider — The company that sells you internet access (e.g. Comcast, AT&T, BT). "
-      L"Your ISP assigns your router a public IP address and connects your network to the broader internet. "
-      L"Some ISPs use carrier-grade NAT to share one public IP among many customers." },
-};
-
-static const wchar_t* LookupAcronym(const wstring& key) {
-    for (auto& e : ACRONYM_DB) {
-        if (key == e.key) return e.explanation;
-    }
-    return nullptr;
-}
-
 static wstring GetIpDescription(const wstring& ip);  // defined later in this file
-
-static wstring EscapeForLink(const wstring& s) {
-    wstring out;
-    out.reserve(s.size() + 8);
-    for (wchar_t c : s) {
-        if      (c == L'&') out += L"&amp;";
-        else if (c == L'<') out += L"&lt;";
-        else if (c == L'>') out += L"&gt;";
-        else                out += c;
-    }
-    return out;
-}
-
-static LRESULT CALLBACK GlossaryPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    auto* data = reinterpret_cast<PopupData*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-    switch (msg) {
-    case WM_CREATE: {
-        auto* cs = reinterpret_cast<CREATESTRUCT*>(lp);
-        auto* d  = reinterpret_cast<PopupData*>(cs->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(d));
-
-        HINSTANCE hInst = GetModuleHandle(nullptr);
-
-        // Body text static (multi-line, word-wrap)
-        HWND hBody = CreateWindowEx(0, L"STATIC", d->body.c_str(),
-            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
-            12, 44, 336, 138, hwnd, nullptr, hInst, nullptr);
-        SendMessage(hBody, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
-
-        // Close button
-        HWND hClose = CreateWindowEx(0, L"BUTTON", L"Close",
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            130, 190, 100, 26, hwnd, (HMENU)IDCANCEL, hInst, nullptr);
-        SendMessage(hClose, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
-
-        // × button in header
-        HWND hX = CreateWindowEx(0, L"BUTTON", L"\xD7",
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            330, 7, 22, 22, hwnd, (HMENU)IDCANCEL, hInst, nullptr);
-        SendMessage(hX, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
-        return 0;
-    }
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-        RECT rc; GetClientRect(hwnd, &rc);
-
-        FillRect(hdc, &rc, Theme::BrushElevated());
-
-        RECT hdr = { 0, 0, rc.right, 36 };
-        FillRect(hdc, &hdr, Theme::BrushOverlay());
-
-        if (data) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, Theme::ACCENT_BLUE);
-            HFONT oldFont = (HFONT)SelectObject(hdc, Theme::FontBold());
-            RECT titleRc = { 12, 6, rc.right - 32, 30 };
-            DrawText(hdc, data->title.c_str(), -1, &titleRc,
-                     DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
-            SelectObject(hdc, oldFont);
-        }
-
-        RECT sep = { 0, 36, rc.right, 37 };
-        FillRect(hdc, &sep, Theme::BrushBorderDefault());
-
-        EndPaint(hwnd, &ps);
-        return 0;
-    }
-    case WM_CTLCOLORSTATIC: {
-        HDC hdc = (HDC)wp;
-        SetTextColor(hdc, Theme::TEXT_SECONDARY);
-        SetBkColor(hdc, Theme::BG_ELEVATED);
-        return (LRESULT)Theme::BrushElevated();
-    }
-    case WM_COMMAND:
-        if (LOWORD(wp) == IDCANCEL) DestroyWindow(hwnd);
-        return 0;
-    case WM_KEYDOWN:
-        if (wp == VK_ESCAPE) DestroyWindow(hwnd);
-        return 0;
-    case WM_DESTROY:
-        delete data;
-        if (s_glossaryPopup == hwnd) s_glossaryPopup = nullptr;
-        return 0;
-    }
-    return DefWindowProc(hwnd, msg, wp, lp);
-}
-
-static void ShowGlossaryPopup(HWND rootWnd, const wstring& title, const wstring& body) {
-    if (s_glossaryPopup) {
-        DestroyWindow(s_glossaryPopup);
-        s_glossaryPopup = nullptr;
-    }
-    auto* data = new PopupData{ title, body };
-
-    POINT pt; GetCursorPos(&pt);
-    const int PW = 360, PH = 224;
-    HMONITOR hMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi = {}; mi.cbSize = sizeof(mi);
-    GetMonitorInfo(hMon, &mi);
-    int x = pt.x + 12;
-    int y = pt.y + 12;
-    if (x + PW > mi.rcWork.right)  x = mi.rcWork.right  - PW - 4;
-    if (y + PH > mi.rcWork.bottom) y = mi.rcWork.bottom - PH - 4;
-    if (x < mi.rcWork.left) x = mi.rcWork.left + 4;
-    if (y < mi.rcWork.top)  y = mi.rcWork.top  + 4;
-
-    s_glossaryPopup = CreateWindowEx(
-        WS_EX_TOPMOST,
-        L"TranspGlossaryPopup", nullptr,
-        WS_POPUP | WS_BORDER,
-        x, y, PW, PH,
-        rootWnd, nullptr, GetModuleHandle(nullptr), data);
-
-    if (s_glossaryPopup) ShowWindow(s_glossaryPopup, SW_SHOWNOACTIVATE);
-    else delete data;
-}
-
-// Subclass proc that fills WC_LINK background with the panel's beige surface color
-static LRESULT CALLBACK LinkSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
-                                          UINT_PTR uid, DWORD_PTR) {
-    if (msg == WM_ERASEBKGND) {
-        HDC hdc = (HDC)wp;
-        RECT rc; GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, Theme::BrushSurface());
-        return 1;
-    }
-    return DefSubclassProc(hwnd, msg, wp, lp);
-}
 
 // Subclass proc for detail scroll panel
 static LRESULT CALLBACK DetailPanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR dwData) {
@@ -309,15 +73,6 @@ bool TabDevices::Create(HWND parent, int x, int y, int w, int h, MainWindow* mai
         wc2.hbrBackground = Theme::BrushSurface();
         wc2.lpszClassName = L"TranspDetailScroll";
         RegisterClassEx(&wc2);
-
-        // Glossary popup window class
-        WNDCLASSEX wc3 = {};
-        wc3.cbSize        = sizeof(wc3);
-        wc3.lpfnWndProc   = GlossaryPopupProc;
-        wc3.hInstance     = GetModuleHandle(nullptr);
-        wc3.hbrBackground = Theme::BrushElevated();
-        wc3.lpszClassName = L"TranspGlossaryPopup";
-        RegisterClassEx(&wc3);
 
         s_classesRegistered = true;
     }
@@ -543,7 +298,7 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
             WS_CHILD | WS_VISIBLE | WS_TABSTOP,
             PAD, y, LW, h, _hDetailPanel, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)(font ? font : Theme::FontBodySm()), TRUE);
-        SetWindowSubclass(hw, LinkSubclassProc, 0, 0);
+        SubclassLinkCtrl(hw);
         return hw;
     };
 

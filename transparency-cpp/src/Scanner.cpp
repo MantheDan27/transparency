@@ -1764,6 +1764,34 @@ ScanResult ScanEngine::BuildResult(
         result.devices.push_back(f.get());
     }
 
+    // Tag any discovered device whose IP matches a local network adapter on this machine.
+    // Prevents virtual adapters (VirtualBox, VMware, Hyper-V, VPN) from appearing as
+    // unknown foreign devices in the scan results.
+    {
+        auto localNets = GetLocalNetworks();
+        for (auto& dev : result.devices) {
+            for (auto& ni : localNets) {
+                if (dev.ip != ni.localIp) continue;
+                wstring nameLower = ni.name;
+                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+                bool isVirtual = nameLower.find(L"virtual")   != wstring::npos ||
+                                 nameLower.find(L"vmware")    != wstring::npos ||
+                                 nameLower.find(L"vethernet") != wstring::npos ||
+                                 nameLower.find(L"hyper-v")   != wstring::npos ||
+                                 nameLower.find(L"vpn")       != wstring::npos ||
+                                 nameLower.find(L"tap")       != wstring::npos;
+                dev.trustState  = L"owned";
+                dev.vendor      = L"(This Machine)";
+                dev.deviceType  = isVirtual ? L"Virtual Adapter" : L"This Computer";
+                dev.confidence  = 100;
+                dev.classificationReason = (isVirtual
+                    ? L"virtual network adapter on this PC: "
+                    : L"physical network adapter on this PC: ") + ni.name;
+                break;
+            }
+        }
+    }
+
     if (progressCb) progressCb(100, L"Scan complete");
     return result;
 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparency VERSION 4.24.0 LANGUAGES CXX)
+project(Transparency VERSION 4.25.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,7 @@ set(SOURCES
     src/TabHistory.cpp
     src/Scanner.cpp
     src/Monitor.cpp
+    src/GlossaryPopup.cpp
     resources/app.rc
 )
 
@@ -45,6 +46,7 @@ set(HEADERS
     src/TabLedger.h
     src/TabSmartHome.h
     src/TabHistory.h
+    src/GlossaryPopup.h
 )
 
 add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})

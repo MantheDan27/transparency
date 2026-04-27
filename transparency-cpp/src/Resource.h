@@ -189,6 +189,10 @@
 #define IDC_LINK_MAC_LABEL      13004
 #define IDC_LINK_NAME_SRC       13005
 
+// Glossary link control IDs (overview panel)
+#define IDC_LINK_GENTLE_INFO    13006
+#define IDC_STATIC_MODE_DESC    13007
+
 // WM_USER custom messages
 #define WM_SCAN_COMPLETE        (WM_USER + 1)
 #define WM_SCAN_PROGRESS        (WM_USER + 2)

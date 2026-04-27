@@ -21,6 +21,7 @@
 #include <gdiplus.h>
 
 #include "MainWindow.h"
+#include "GlossaryPopup.h"
 #include "TabOverview.h"
 #include "TabDevices.h"
 #include "TabAlerts.h"
@@ -79,6 +80,8 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     wc.hIconSm       = LoadIcon(nullptr, IDI_APPLICATION);
 
     if (!RegisterClassEx(&wc)) return false;
+
+    RegisterGlossaryPopupClass(hInstance);
 
     int sw = GetSystemMetrics(SM_CXSCREEN);
     int sh = GetSystemMetrics(SM_CYSCREEN);

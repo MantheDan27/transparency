@@ -19,6 +19,7 @@
 #include "Theme.h"
 #include "Resource.h"
 #include "Scanner.h"
+#include "GlossaryPopup.h"
 
 using std::wstring;
 
@@ -93,6 +94,18 @@ LRESULT CALLBACK TabOverview::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 1;  // Suppress — OnPaint handles all drawing via double buffer
     case WM_COMMAND:
         return self->OnCommand(hwnd, wp, lp);
+    case WM_NOTIFY: {
+        auto* hdr = reinterpret_cast<NMHDR*>(lp);
+        if (hdr && (hdr->code == NM_CLICK || hdr->code == NM_RETURN) &&
+            hdr->idFrom == IDC_LINK_GENTLE_INFO) {
+            auto* nmLink = reinterpret_cast<NMLINK*>(hdr);
+            wstring href(nmLink->item.szUrl);
+            HWND rootWnd = GetAncestor(hwnd, GA_ROOT);
+            const wchar_t* exp = LookupAcronym(href);
+            if (exp) ShowGlossaryPopup(rootWnd, href, exp);
+        }
+        return 0;
+    }
     case WM_DRAWITEM:
         return self->OnDrawItem(hwnd, reinterpret_cast<DRAWITEMSTRUCT*>(lp));
     case WM_CTLCOLORSTATIC:
@@ -167,24 +180,39 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
     // Scan mode pills
     _hModeQuick = CreateWindowEx(0, L"BUTTON", L"Quick",
         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
-        16, pillY, 80, 24, hwnd, (HMENU)9200, hInst, nullptr);
+        16, pillY, 72, 24, hwnd, (HMENU)9200, hInst, nullptr);
     SendMessage(_hModeQuick, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-    SendMessage(_hModeQuick, BM_SETCHECK, BST_CHECKED, 0);
 
-    _hModeStandard = CreateWindowEx(0, L"BUTTON", L"Standard",
+    // Standard is the recommended default — marked with a star
+    _hModeStandard = CreateWindowEx(0, L"BUTTON", L"Standard ★",
         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-        102, pillY, 90, 24, hwnd, (HMENU)9201, hInst, nullptr);
+        94, pillY, 110, 24, hwnd, (HMENU)9201, hInst, nullptr);
     SendMessage(_hModeStandard, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+    SendMessage(_hModeStandard, BM_SETCHECK, BST_CHECKED, 0);  // recommended default
 
     _hModeDeep = CreateWindowEx(0, L"BUTTON", L"Deep",
         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-        198, pillY, 75, 24, hwnd, (HMENU)9202, hInst, nullptr);
+        210, pillY, 68, 24, hwnd, (HMENU)9202, hInst, nullptr);
     SendMessage(_hModeDeep, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
 
     _hCheckGentle = CreateWindowEx(0, L"BUTTON", L"Gentle Mode",
         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-        290, pillY, 110, 24, hwnd, (HMENU)IDC_CHECK_GENTLE, hInst, nullptr);
+        290, pillY, 108, 24, hwnd, (HMENU)IDC_CHECK_GENTLE, hInst, nullptr);
     SendMessage(_hCheckGentle, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
+
+    // [?] info link next to Gentle Mode
+    _hLinkGentleInfo = CreateWindowEx(0, WC_LINK, L"<a href=\"GENTLE\">[?]</a>",
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+        402, pillY + 2, 24, 20, hwnd, (HMENU)IDC_LINK_GENTLE_INFO, hInst, nullptr);
+    SendMessage(_hLinkGentleInfo, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
+    SubclassLinkCtrl(_hLinkGentleInfo);
+
+    // Mode description label — shows a one-liner about the selected scan mode
+    _hModeDesc = CreateWindowEx(0, L"STATIC",
+        L"Recommended ★ — balanced discovery, finishes in about 60 seconds",
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+        16, pillY + 28, 500, 18, hwnd, (HMENU)IDC_STATIC_MODE_DESC, hInst, nullptr);
+    SendMessage(_hModeDesc, WM_SETFONT, (WPARAM)Theme::FontBodySm(), TRUE);
 
     // Action buttons — owner-drawn for design system styling
     _hBtnQuickScan = CreateWindowEx(0, L"BUTTON", L"Quick Scan",
@@ -301,10 +329,12 @@ void TabOverview::LayoutControls(int cx, int cy) {
         deferMove(_hKpi[i], x, TILE_Y + sOff, tileW, TILE_H);
     }
 
-    deferMove(_hModeQuick, 16, pillY + sOff, 80, 24);
-    deferMove(_hModeStandard, 102, pillY + sOff, 90, 24);
-    deferMove(_hModeDeep, 198, pillY + sOff, 75, 24);
-    deferMove(_hCheckGentle, 290, pillY + sOff, 110, 24);
+    deferMove(_hModeQuick,      16,  pillY + sOff, 72,  24);
+    deferMove(_hModeStandard,   94,  pillY + sOff, 110, 24);
+    deferMove(_hModeDeep,       210, pillY + sOff, 68,  24);
+    deferMove(_hCheckGentle,    290, pillY + sOff, 108, 24);
+    deferMove(_hLinkGentleInfo, 402, pillY + sOff + 2, 24, 20);
+    deferMove(_hModeDesc,       16,  pillY + sOff + 28, std::max(cx - 32, 300), 18);
 
     deferMove(_hBtnQuickScan, Theme::SP4, btnY + sOff, 120, BTN_H);
     deferMove(_hBtnDeepScan, Theme::SP4 + 128, btnY + sOff, 120, BTN_H);
@@ -882,8 +912,27 @@ LRESULT TabOverview::OnPaint(HWND hwnd) {
     return 0;
 }
 
+static void UpdateModeDesc(HWND hDesc, bool isQuick, bool isStandard, bool isDeep) {
+    if (!hDesc) return;
+    if (isQuick)
+        SetWindowText(hDesc,
+            L"Quick — rapid device count, under 30 seconds, may miss some devices");
+    else if (isDeep)
+        SetWindowText(hDesc,
+            L"Deep — port scan + banner grab, full detail, takes 2–5 minutes");
+    else
+        SetWindowText(hDesc,
+            L"Standard ★ — Recommended: balanced discovery, finishes in about 60 seconds");
+}
+
 LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     int id = LOWORD(wp);
+
+    // Update mode description whenever a pill is clicked
+    if ((id == 9200 || id == 9201 || id == 9202) && HIWORD(wp) == BN_CLICKED) {
+        UpdateModeDesc(_hModeDesc, id == 9200, id == 9201, id == 9202);
+        return 0;
+    }
 
     switch (id) {
     case IDC_BTN_SCAN_QUICK:
@@ -896,10 +945,10 @@ LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         if (_mainWnd) {
             if (SendMessage(_hModeDeep, BM_GETCHECK, 0, 0) == BST_CHECKED)
                 _mainWnd->StartDeepScan();
-            else if (SendMessage(_hModeStandard, BM_GETCHECK, 0, 0) == BST_CHECKED)
-                _mainWnd->StartStandardScan();
-            else
+            else if (SendMessage(_hModeQuick, BM_GETCHECK, 0, 0) == BST_CHECKED)
                 _mainWnd->StartQuickScan();
+            else
+                _mainWnd->StartStandardScan();  // Standard (★ Recommended) is default
         }
         if (_hStatusText) SetWindowText(_hStatusText, L"Scan started...");
         break;

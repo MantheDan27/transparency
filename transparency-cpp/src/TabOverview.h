@@ -54,7 +54,9 @@ private:
 
     // Scan mode pills
     HWND _hModeQuick = nullptr, _hModeStandard = nullptr, _hModeDeep = nullptr;
+    HWND _hModeDesc    = nullptr;  // one-line description of the selected mode
     HWND _hCheckGentle = nullptr;
+    HWND _hLinkGentleInfo = nullptr;  // [?] link next to Gentle Mode
 
     // Action buttons
     HWND _hBtnQuickScan = nullptr;
