@@ -69,6 +69,7 @@ private:
     // Cache of filtered anomalies — populated by PopulateAlerts(), read by LVN_GETDISPINFO
     // and NM_CUSTOMDRAW. Avoids per-row GetLastResult() calls.
     std::vector<Anomaly> _alertCache;
+    std::wstring _alertCacheTime;  // scannedAt from the last PopulateAlerts() call
 
     // Scroll state
     int _scrollY      = 0;

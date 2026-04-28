@@ -574,7 +574,7 @@ LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
                     case 0: text = a.severity.c_str();    break;
                     case 1: text = a.description.c_str(); break;
                     case 2: text = a.deviceIp.c_str();    break;
-                    case 3: text = a.timestamp.empty() ? L"—" : a.timestamp.c_str(); break;
+                    case 3: text = _alertCacheTime.empty() ? L"—" : _alertCacheTime.c_str(); break;
                     case 4: text = L"New";                break;
                     }
                     lstrcpyn(di->item.pszText, text, di->item.cchTextMax);
@@ -621,6 +621,7 @@ void TabAlerts::PopulateAlerts() {
 
     ScanResult r = _mainWnd->GetLastResult();
     _alertCache.clear();
+    _alertCacheTime = r.scannedAt;
     for (auto& a : r.anomalies) {
         if (_alertFilter == 1 && a.severity != L"high" && a.severity != L"critical") continue;
         if (_alertFilter == 2 && a.severity != L"medium") continue;
