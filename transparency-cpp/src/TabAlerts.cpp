@@ -105,7 +105,7 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             wchar_t text[32] = {};
             GetWindowText(dis->hwndItem, text, 32);
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, Theme::ACCENT_RED);
+            SetTextColor(hdc, RGB(255, 255, 255));
             HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
             DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(hdc, old);
@@ -346,48 +346,62 @@ void TabAlerts::UpdateScrollBar(HWND hwnd) {
     SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
 }
 
+// Incremental scroll: bitblts existing content and only repaints the exposed strip.
+// Far cheaper than full LayoutControls + InvalidateRect on every wheel tick.
+void TabAlerts::ApplyScrollDelta(HWND hwnd, int dy) {
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    int newScrollY = std::max(0, std::min(_scrollY + dy, maxScroll));
+    int actualDy = _scrollY - newScrollY;   // child-window movement (+ = down, - = up)
+    if (actualDy == 0) return;
+
+    _scrollY = newScrollY;
+
+    RECT rc; GetClientRect(hwnd, &rc);
+    // SW_SCROLLCHILDREN moves all direct children by actualDy in one pass.
+    // SW_INVALIDATE marks only the newly-exposed strip for repaint.
+    ScrollWindowEx(hwnd, 0, actualDy, nullptr, &rc, nullptr, nullptr,
+                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+    UpdateScrollBar(hwnd);
+}
+
+// Absolute jump (thumb drag, page up/down): full layout recalc then single InvalidateRect.
+void TabAlerts::ApplyScrollAbsolute(HWND hwnd, int newScrollY) {
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    newScrollY = std::max(0, std::min(newScrollY, maxScroll));
+    if (newScrollY == _scrollY) return;
+
+    _scrollY = newScrollY;
+    RECT rc; GetClientRect(hwnd, &rc);
+    LayoutControls(rc.right, rc.bottom);
+    UpdateScrollBar(hwnd);
+    InvalidateRect(hwnd, nullptr, FALSE);
+}
+
 LRESULT TabAlerts::OnVScroll(HWND hwnd, WPARAM wp) {
     SCROLLINFO si = {};
-    si.cbSize = sizeof(si);
-    si.fMask  = SIF_ALL;
+    si.cbSize = sizeof(si); si.fMask = SIF_ALL;
     GetScrollInfo(hwnd, SB_VERT, &si);
 
-    int oldPos = _scrollY;
     switch (LOWORD(wp)) {
-    case SB_LINEUP:     _scrollY -= 30;         break;
-    case SB_LINEDOWN:   _scrollY += 30;         break;
-    case SB_PAGEUP:     _scrollY -= si.nPage;   break;
-    case SB_PAGEDOWN:   _scrollY += si.nPage;   break;
-    case SB_THUMBTRACK: _scrollY = si.nTrackPos; break;
-    }
-
-    int maxScroll = std::max(0, _contentHeight - _viewHeight);
-    if (_scrollY < 0)          _scrollY = 0;
-    if (_scrollY > maxScroll)  _scrollY = maxScroll;
-
-    if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        UpdateScrollBar(hwnd);
-        InvalidateRect(hwnd, nullptr, FALSE);
+    case SB_LINEUP:        ApplyScrollDelta(hwnd, -20);              break;
+    case SB_LINEDOWN:      ApplyScrollDelta(hwnd, +20);              break;
+    case SB_PAGEUP:        ApplyScrollDelta(hwnd, -_viewHeight);     break;
+    case SB_PAGEDOWN:      ApplyScrollDelta(hwnd, +_viewHeight);     break;
+    case SB_THUMBTRACK:
+    case SB_THUMBPOSITION: ApplyScrollAbsolute(hwnd, si.nTrackPos);  break;
     }
     return 0;
 }
 
-LRESULT TabAlerts::OnMouseWheel(HWND hwnd, int delta) {
-    int oldPos = _scrollY;
-    _scrollY -= delta / 2;
+LRESULT TabAlerts::OnMouseWheel(HWND hwnd, int rawDelta) {
+    UINT scrollLines = 3;
+    SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &scrollLines, 0);
+    if (scrollLines == WHEEL_PAGESCROLL)
+        scrollLines = std::max(1u, (UINT)(_viewHeight / 20));
 
-    int maxScroll = std::max(0, _contentHeight - _viewHeight);
-    if (_scrollY < 0)         _scrollY = 0;
-    if (_scrollY > maxScroll) _scrollY = maxScroll;
-
-    if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        UpdateScrollBar(hwnd);
-        InvalidateRect(hwnd, nullptr, FALSE);
-    }
+    // rawDelta > 0 → wheel forward → scroll up → _scrollY decreases
+    int dy = -(rawDelta * (int)scrollLines * 20) / WHEEL_DELTA;
+    ApplyScrollDelta(hwnd, dy);
     return 0;
 }
 
@@ -411,10 +425,6 @@ LRESULT TabAlerts::OnPaint(HWND hwnd) {
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
     HFONT old = (HFONT)SelectObject(hdc, Theme::FontCaption());
-
-    // "ACTIVE ALERTS" — just above the alert list
-    RECT hdr1 = { 16, ALERT_LIST_Y - 16 + sOff, 200, ALERT_LIST_Y - 2 + sOff };
-    DrawText(hdc, L"ACTIVE ALERTS", -1, &hdr1, DT_LEFT | DT_SINGLELINE);
 
     // separator + "RISK CONTEXT" between list and risk labels
     RECT sep2 = { 16, RISK_PREV_Y - 16 + sOff, rc.right - 16, RISK_PREV_Y - 15 + sOff };

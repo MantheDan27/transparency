@@ -34,8 +34,10 @@ private:
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
     void UpdateScrollBar(HWND hwnd);
+    void ApplyScrollDelta(HWND hwnd, int dy);
+    void ApplyScrollAbsolute(HWND hwnd, int newScrollY);
     LRESULT OnVScroll(HWND hwnd, WPARAM wp);
-    LRESULT OnMouseWheel(HWND hwnd, int delta);
+    LRESULT OnMouseWheel(HWND hwnd, int rawDelta);
     void ShowRuleDialog(const AlertRule* existing = nullptr);
     void PopulateAlerts();
     void PopulateRules();
