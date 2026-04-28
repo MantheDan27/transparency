@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <mutex>
+#include <algorithm>
 
 #include "TabPrivacy.h"
 #include "MainWindow.h"
@@ -37,6 +38,8 @@ enum {
     ID_SCHED_INTERVAL = 9952,
     ID_SCHED_TIME     = 9953,
     ID_BTN_SCHED_SAVE = 9954,
+    ID_PPLX_KEY_EDIT  = 9960,
+    ID_BTN_PPLX_SAVE  = 9961,
 };
 
 bool TabPrivacy::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -52,7 +55,7 @@ bool TabPrivacy::Create(HWND parent, int x, int y, int w, int h, MainWindow* mai
     RegisterClassEx(&wc);
 
     _hwnd = CreateWindowEx(0, s_className, nullptr,
-        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+        WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL,
         x, y, w, h, parent, nullptr, GetModuleHandle(nullptr), this);
 
     return _hwnd != nullptr;
@@ -76,10 +79,12 @@ LRESULT CALLBACK TabPrivacy::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_CREATE:     return self->OnCreate(hwnd, reinterpret_cast<LPCREATESTRUCT>(lp));
     case WM_SIZE:       self->OnSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_PAINT:      return self->OnPaint(hwnd);
-    case WM_ERASEBKGND: return 1;  // Suppress — OnPaint handles all drawing
+    case WM_ERASEBKGND: return 1;
     case WM_COMMAND:    return self->OnCommand(hwnd, wp, lp);
     case WM_DRAWITEM:
         return self->OnDrawItem(hwnd, reinterpret_cast<DRAWITEMSTRUCT*>(lp));
+    case WM_VSCROLL:    return self->OnVScroll(hwnd, wp);
+    case WM_MOUSEWHEEL: return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
@@ -100,18 +105,25 @@ LRESULT TabPrivacy::OnCreate(HWND hwnd, LPCREATESTRUCT cs) {
 
 void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
     HINSTANCE hInst = GetModuleHandle(nullptr);
+    _allControls.clear();
+
+    // Helpers that track every created window for scroll layout
+    auto track = [&](HWND hw, int x, int y, int w, int h) -> HWND {
+        if (hw) _allControls.push_back({hw, x, y, w, h});
+        return hw;
+    };
 
     auto mkLbl = [&](const wchar_t* t, int x, int y, int w, int h = 20) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", t, WS_CHILD | WS_VISIBLE | SS_LEFT,
             x, y, w, h, hwnd, nullptr, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-        return hw;
+        return track(hw, x, y, w, h);
     };
-    auto mkHdr = [&](const wchar_t* t, int y) {
+    auto mkHdr = [&](const wchar_t* t, int y) -> HWND {
         HWND hw = CreateWindowEx(0, L"STATIC", t, WS_CHILD | WS_VISIBLE | SS_LEFT,
             16, y, cx - 32, 20, hwnd, nullptr, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBold(), TRUE);
-        return hw;
+        return track(hw, 16, y, cx - 32, 20);
     };
     auto mkEdit = [&](const wchar_t* def, int id, int x, int y, int w, int h = 24,
                       DWORD xStyle = 0) -> HWND {
@@ -120,19 +132,19 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
             x, y, w, h, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
         Theme::ApplyDarkEdit(hw);
-        return hw;
+        return track(hw, x, y, w, h);
     };
     auto mkBtn = [&](const wchar_t* t, int id, int x, int y, int w, int h = 26) -> HWND {
         HWND hw = CreateWindowEx(0, L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
             x, y, w, h, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-        return hw;
+        return track(hw, x, y, w, h);
     };
     auto mkChk = [&](const wchar_t* t, int id, int x, int y, int w) -> HWND {
         HWND hw = CreateWindowEx(0, L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
             x, y, w, 22, hwnd, (HMENU)(INT_PTR)id, hInst, nullptr);
         SendMessage(hw, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
-        return hw;
+        return track(hw, x, y, w, 22);
     };
 
     int y = 12;
@@ -146,6 +158,7 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
         16, y, cx - 32, 44, hwnd, nullptr, hInst, nullptr);
     SendMessage(hExplain, WM_SETFONT, (WPARAM)Theme::FontBody(), TRUE);
     Theme::ApplyDarkEdit(hExplain);
+    track(hExplain, 16, y, cx - 32, 44);
     y += 52;
 
     // ── Data Statistics ───────────────────────────────────────────────────────
@@ -229,6 +242,7 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
         col.cx = 60;  col.pszText = (LPWSTR)L"Enabled";
         ListView_InsertColumn(_hHookList, 3, &col);
     }
+    track(_hHookList, 16, y, cx - 32, 100);
     y += 108;
 
     _hBtnHookAdd = mkBtn(L"Add Hook…",  ID_BTN_HOOK_ADD, 16,  y, 90);
@@ -248,6 +262,7 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
     SendMessage(_hComboSchedMode, CB_ADDSTRING, 0, (LPARAM)L"Standard");
     SendMessage(_hComboSchedMode, CB_ADDSTRING, 0, (LPARAM)L"Deep");
     SendMessage(_hComboSchedMode, CB_SETCURSEL, 0, 0);
+    track(_hComboSchedMode, 70, y, 110, 24);
 
     mkLbl(L"Every (hours):", 192, y + 4, 110);
     _hEditSchedInterval = mkEdit(L"24", ID_SCHED_INTERVAL, 306, y, 60);
@@ -256,13 +271,96 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
     y += 32;
     _hBtnSchedSave = mkBtn(L"Save Schedule", ID_BTN_SCHED_SAVE, 16, y, 130);
     y += 36;
+
+    // ── AI Explanations (Perplexity) ─────────────────────────────────────────
+    mkHdr(L"AI Explanations (Perplexity)", y); y += 24;
+    mkLbl(L"When set, alert \"Why it matters\" uses Perplexity AI for live explanations.", 16, y, cx - 32);
+    y += 22;
+    mkLbl(L"Perplexity API Key:", 16, y + 4, 150);
+    _hEditPplxKey = mkEdit(L"", ID_PPLX_KEY_EDIT, 170, y, cx - 270, 24, ES_PASSWORD);
+    _hBtnPplxSave = mkBtn(L"Save Key", ID_BTN_PPLX_SAVE, cx - 94, y, 78);
+    y += 36;
+
+    _contentHeight = y + 20;
 }
 
 void TabPrivacy::LayoutControls(int cx, int cy) {
-    // Static layout — no dynamic repositioning needed
+    _viewHeight    = cy;
+    int maxScroll  = std::max(0, _contentHeight - _viewHeight);
+    if (_scrollY > maxScroll) _scrollY = maxScroll;
+
+    int sOff = -_scrollY;
+
+    HDWP hdwp = BeginDeferWindowPos((int)_allControls.size());
+    for (auto& e : _allControls) {
+        if (e.hwnd && hdwp)
+            hdwp = DeferWindowPos(hdwp, e.hwnd, nullptr,
+                e.x, e.y + sOff, e.w, e.h,
+                SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (hdwp) EndDeferWindowPos(hdwp);
+
+    UpdateScrollBar(_hwnd);
+}
+
+void TabPrivacy::UpdateScrollBar(HWND hwnd) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    si.nMin   = 0;
+    si.nMax   = _contentHeight;
+    si.nPage  = _viewHeight;
+    si.nPos   = _scrollY;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+}
+
+LRESULT TabPrivacy::OnVScroll(HWND hwnd, WPARAM wp) {
+    SCROLLINFO si = {};
+    si.cbSize = sizeof(si);
+    si.fMask  = SIF_ALL;
+    GetScrollInfo(hwnd, SB_VERT, &si);
+
+    int oldPos = _scrollY;
+    switch (LOWORD(wp)) {
+    case SB_LINEUP:     _scrollY -= 30;          break;
+    case SB_LINEDOWN:   _scrollY += 30;          break;
+    case SB_PAGEUP:     _scrollY -= si.nPage;    break;
+    case SB_PAGEDOWN:   _scrollY += si.nPage;    break;
+    case SB_THUMBTRACK: _scrollY = si.nTrackPos; break;
+    }
+
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    if (_scrollY < 0)          _scrollY = 0;
+    if (_scrollY > maxScroll)  _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        UpdateScrollBar(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
+    return 0;
+}
+
+LRESULT TabPrivacy::OnMouseWheel(HWND hwnd, int delta) {
+    int oldPos = _scrollY;
+    _scrollY -= delta / 2;
+
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    if (_scrollY < 0)          _scrollY = 0;
+    if (_scrollY > maxScroll)  _scrollY = maxScroll;
+
+    if (_scrollY != oldPos) {
+        RECT rc; GetClientRect(hwnd, &rc);
+        LayoutControls(rc.right, rc.bottom);
+        UpdateScrollBar(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
+    return 0;
 }
 
 LRESULT TabPrivacy::OnSize(HWND hwnd, int cx, int cy) {
+    LayoutControls(cx, cy);
     return 0;
 }
 
@@ -323,7 +421,6 @@ LRESULT TabPrivacy::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
             if (enable) {
                 _mainWnd->StartLocalApi();
                 if (_hApiStatusLbl) SetWindowText(_hApiStatusLbl, L"Status: Running on :7722");
-                // Show current API key
                 if (_hEditApiKey) SetWindowText(_hEditApiKey, _mainWnd->_apiKey.c_str());
             } else {
                 _mainWnd->StopLocalApi();
@@ -335,7 +432,6 @@ LRESULT TabPrivacy::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     case ID_BTN_API_ROTATE:
         if (_mainWnd) {
             _mainWnd->StopLocalApi();
-            // Generate a pseudo-random API key from tick count + PID
             DWORD t1 = GetTickCount();
             DWORD t2 = GetCurrentProcessId() ^ (t1 >> 4);
             DWORD t3 = t1 ^ (t2 << 3);
@@ -354,7 +450,6 @@ LRESULT TabPrivacy::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         break;
 
     case ID_BTN_HOOK_ADD: {
-        // Simple input dialog for hook details
         wchar_t path[MAX_PATH] = {};
         OPENFILENAME ofn = {};
         ofn.lStructSize = sizeof(ofn);
@@ -409,6 +504,16 @@ LRESULT TabPrivacy::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
                        MB_OK | MB_ICONINFORMATION);
         }
         break;
+
+    case ID_BTN_PPLX_SAVE:
+        if (_mainWnd && _hEditPplxKey) {
+            wchar_t buf[512] = {};
+            GetWindowText(_hEditPplxKey, buf, 512);
+            _mainWnd->_perplexityApiKey = buf;
+            MessageBox(hwnd, L"Perplexity API key saved.",
+                       L"AI Explanations", MB_OK | MB_ICONINFORMATION);
+        }
+        break;
     }
 
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
@@ -422,7 +527,6 @@ LRESULT TabPrivacy::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     bool pressed = (dis->itemState & ODS_SELECTED) != 0;
     bool focused = (dis->itemState & ODS_FOCUS) != 0;
 
-    // Destructive buttons get red glass, others neutral
     int variant = (dis->CtlID == IDC_BTN_DELETE_ALL || dis->CtlID == ID_BTN_HOOK_DEL) ? 2 : 1;
     Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, variant, focused);
 
@@ -480,6 +584,10 @@ void TabPrivacy::LoadConfig() {
     if (_hChkAlertLatency) SendMessage(_hChkAlertLatency, BM_SETCHECK, cfg.alertOnHighLatency?BST_CHECKED:BST_UNCHECKED, 0);
     swprintf_s(buf, L"%d", cfg.highLatencyThresholdMs);
     if (_hLatencyThresh) SetWindowText(_hLatencyThresh, buf);
+
+    // Restore Perplexity key display (show placeholder asterisks if key is set)
+    if (_hEditPplxKey && _mainWnd && !_mainWnd->_perplexityApiKey.empty())
+        SetWindowText(_hEditPplxKey, _mainWnd->_perplexityApiKey.c_str());
 }
 
 void TabPrivacy::RefreshHooks() {
@@ -531,7 +639,6 @@ static void WToU8EscAppend(const std::wstring& w, std::string& out) {
         WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &heapBuf[0], n, nullptr, nullptr);
         pBuf = &heapBuf[0];
     }
-    // Escape and append UTF-8 chars
     for (const char* p = pBuf; *p; ++p) {
         unsigned char c = (unsigned char)*p;
         if      (c == '"')  out += "\\\"";
@@ -541,26 +648,6 @@ static void WToU8EscAppend(const std::wstring& w, std::string& out) {
         else if (c < 0x20)  out += ' ';
         else                out += (char)c;
     }
-}
-
-static std::string JEsc(const std::string& s) {
-    std::string o;
-    size_t expected_escapes = 0;
-    for (unsigned char c : s) {
-        if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c < 0x20) {
-            expected_escapes++;
-        }
-    }
-    o.reserve(s.length() + expected_escapes);
-    for (unsigned char c : s) {
-        if      (c == '"')  o += "\\\"";
-        else if (c == '\\') o += "\\\\";
-        else if (c == '\n') o += "\\n";
-        else if (c == '\r') o += "\\r";
-        else if (c < 0x20)  o += " ";
-        else                o += c;
-    }
-    return o;
 }
 
 void TabPrivacy::ExportFullJson(HWND hwnd) {
@@ -617,7 +704,6 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
         json += "      \"online\": ";       json += (d.online ? "true" : "false"); json += ",\n";
         json += "      \"iotRisk\": ";      json += (d.iotRisk ? "true" : "false"); json += ",\n";
         json += "      \"iotRiskDetail\": \""; WToU8EscAppend(d.iotRiskDetail, json); json += "\",\n";
-        // Open ports
         json += "      \"openPorts\": [";
         for (size_t j = 0; j < d.openPorts.size(); j++) {
             if (j) json += ",";
@@ -629,7 +715,6 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
     }
     json += "  ],\n";
 
-    // Anomalies
     json += "  \"anomalies\": [\n";
     for (size_t i = 0; i < r.anomalies.size(); i++) {
         auto& a = r.anomalies[i];
@@ -642,7 +727,6 @@ void TabPrivacy::ExportFullJson(HWND hwnd) {
     }
     json += "  ],\n";
 
-    // Ledger
     json += "  \"ledger\": [\n";
     for (size_t i = 0; i < ledger.size(); i++) {
         auto& e = ledger[i];
@@ -667,7 +751,6 @@ void TabPrivacy::Refresh() {
     LoadConfig();
     RefreshHooks();
     RefreshSchedScan();
-    // Sync API key display
     if (_hEditApiKey && _mainWnd && !_mainWnd->_apiKey.empty())
         SetWindowText(_hEditApiKey, _mainWnd->_apiKey.c_str());
 }

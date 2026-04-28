@@ -83,6 +83,9 @@ public:
     wstring  _apiKey;
     HANDLE   _apiThread   = nullptr;
 
+    // AI explanations
+    wstring  _perplexityApiKey;
+
     Tab _currentTab = Tab::Overview;
 
     // Layout state

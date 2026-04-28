@@ -3,15 +3,20 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <winhttp.h>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <mutex>
+#include <thread>
 
 #include "TabAlerts.h"
 #include "MainWindow.h"
 #include "Theme.h"
 #include "Resource.h"
+
+// Async Perplexity response: WPARAM = anomalyIdx, LPARAM = new wstring* (caller deletes)
+static const UINT WM_PPLX_RESULT = WM_APP + 130;
 
 using std::wstring;
 
@@ -141,6 +146,17 @@ LRESULT CALLBACK TabAlerts::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_VSCROLL:    return self->OnVScroll(hwnd, wp);
     case WM_MOUSEWHEEL: return self->OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
     case WM_SCAN_COMPLETE: return self->OnScanComplete(hwnd);
+    case WM_APP + 130: {
+        // Perplexity "why it matters" response
+        int idx = (int)(INT_PTR)wp;
+        wstring* pResult = reinterpret_cast<wstring*>(lp);
+        if (pResult) {
+            if (idx == self->_selectedAlert && self->_hExplainWhy)
+                SetWindowText(self->_hExplainWhy, pResult->c_str());
+            delete pResult;
+        }
+        return 0;
+    }
     default: return DefWindowProc(hwnd, msg, wp, lp);
     }
 }
@@ -500,6 +516,101 @@ static AlertRisk GetAlertRisk(const wstring& type) {
     return    {25, L"Uncommon",     L"Review Suggested",       Theme::ACCENT_CYAN,   L"Investigate to confirm this is expected behavior on your network"};
 }
 
+// Extract the content string from choices[0].message.content in a Perplexity response
+static std::string ExtractPerplexityContent(const std::string& json) {
+    auto choicesPos = json.find("\"choices\"");
+    if (choicesPos == std::string::npos) return "";
+    auto contentPos = json.find("\"content\"", choicesPos);
+    if (contentPos == std::string::npos) return "";
+    auto colon = json.find(':', contentPos + 9);
+    if (colon == std::string::npos) return "";
+    auto quote = json.find('"', colon + 1);
+    if (quote == std::string::npos) return "";
+    std::string result;
+    for (size_t i = quote + 1; i < json.size(); ++i) {
+        char c = json[i];
+        if (c == '\\' && i + 1 < json.size()) {
+            char next = json[++i];
+            if      (next == 'n') result += '\n';
+            else if (next == 'r') { /* skip \r */ }
+            else if (next == '"') result += '"';
+            else if (next == '\\') result += '\\';
+            else { result += '\\'; result += next; }
+        } else if (c == '"') {
+            break;
+        } else {
+            result += c;
+        }
+    }
+    return result;
+}
+
+static const wchar_t* AlertTypeReadable(const wstring& type) {
+    if (type == L"new_device")           return L"a new unknown device joining the network";
+    if (type == L"risky_port")           return L"a dangerous open port detected on a device";
+    if (type == L"port_changed")         return L"a device's open ports changing";
+    if (type == L"device_offline")       return L"a device going offline";
+    if (type == L"ip_changed")           return L"a device's IP address changing";
+    if (type == L"internet_outage")      return L"an internet outage";
+    if (type == L"gateway_mac_changed")  return L"the gateway MAC address changing (possible ARP spoofing)";
+    if (type == L"dns_changed")          return L"the DNS server changing (possible DNS hijacking)";
+    if (type == L"high_latency")         return L"high network latency";
+    if (type == L"hostname_changed")     return L"a device hostname changing";
+    return L"an unusual network security event";
+}
+
+static wstring Utf8ToWide(const std::string& s) {
+    if (s.empty()) return L"";
+    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+    if (n <= 0) return L"";
+    wstring w(n - 1, 0);
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], n);
+    return w;
+}
+
+static std::string WideToUtf8(const wstring& w) {
+    if (w.empty()) return "";
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (n <= 0) return "";
+    std::string s(n - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+// Send POST to Perplexity chat/completions, return response body
+static std::string PerplexityPost(const std::string& apiKey, const std::string& body) {
+    wstring wKey = Utf8ToWide(apiKey);
+
+    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSess) return "";
+    HINTERNET hConn = WinHttpConnect(hSess, L"api.perplexity.ai",
+        INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConn) { WinHttpCloseHandle(hSess); return ""; }
+    HINTERNET hReq = WinHttpOpenRequest(hConn, L"POST", L"/chat/completions",
+        nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    if (!hReq) { WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess); return ""; }
+
+    wstring hdrs = L"Content-Type: application/json\r\nAuthorization: Bearer " + wKey;
+    std::string result;
+    if (WinHttpSendRequest(hReq, hdrs.c_str(), (DWORD)-1,
+            (LPVOID)body.c_str(), (DWORD)body.size(), (DWORD)body.size(), 0) &&
+        WinHttpReceiveResponse(hReq, nullptr)) {
+        DWORD avail = 0;
+        do {
+            WinHttpQueryDataAvailable(hReq, &avail);
+            if (avail > 0) {
+                std::vector<char> buf(avail + 1, 0);
+                DWORD read = 0;
+                WinHttpReadData(hReq, buf.data(), avail, &read);
+                result.append(buf.data(), read);
+            }
+        } while (avail > 0);
+    }
+    WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
+    return result;
+}
+
 void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
     if (!_mainWnd) return;
     ScanResult r = _mainWnd->GetLastResult();
@@ -548,9 +659,40 @@ void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
         L"1. Investigate the device.\r\n2. Check your router's logs.\r\n3. Run a Deep scan for more detail." :
         a.remediation;
 
+    _selectedAlert = anomalyIdx;
+
     if (_hExplainWhat) SetWindowText(_hExplainWhat, what.c_str());
-    if (_hExplainWhy)  SetWindowText(_hExplainWhy, why.c_str());
     if (_hExplainDo)   SetWindowText(_hExplainDo, whatToDo.c_str());
+
+    if (!_mainWnd->_perplexityApiKey.empty()) {
+        if (_hExplainWhy) SetWindowText(_hExplainWhy, L"Getting AI explanation…");
+
+        std::string apiKey      = WideToUtf8(_mainWnd->_perplexityApiKey);
+        std::string eventStr    = WideToUtf8(AlertTypeReadable(a.type));
+        std::string devDesc     = WideToUtf8(a.description);
+        HWND        hwndCapture = _hwnd;
+        int         idxCapture  = anomalyIdx;
+
+        std::thread([apiKey, eventStr, devDesc, hwndCapture, idxCapture]() {
+            std::string body =
+                "{\"model\":\"sonar\",\"messages\":[{\"role\":\"user\",\"content\":"
+                "\"In 2-3 sentences, explain why ";
+            body += eventStr;
+            body += " is a security concern on a home network";
+            if (!devDesc.empty()) { body += " (context: "; body += devDesc; body += ")"; }
+            body += ". Be concise and practical for a non-technical home user.\"}]}";
+
+            std::string  resp    = PerplexityPost(apiKey, body);
+            std::string  content = ExtractPerplexityContent(resp);
+            wstring*     result  = new wstring(content.empty()
+                ? L"AI explanation unavailable."
+                : Utf8ToWide(content));
+            PostMessage(hwndCapture, WM_PPLX_RESULT,
+                        (WPARAM)(INT_PTR)idxCapture, (LPARAM)result);
+        }).detach();
+    } else {
+        if (_hExplainWhy) SetWindowText(_hExplainWhy, why.c_str());
+    }
 }
 
 LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {

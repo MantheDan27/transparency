@@ -28,9 +28,12 @@ private:
     LRESULT OnPaint(HWND hwnd);
     LRESULT OnCommand(HWND hwnd, WPARAM wp, LPARAM lp);
     LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
+    LRESULT OnVScroll(HWND hwnd, WPARAM wp);
+    LRESULT OnMouseWheel(HWND hwnd, int delta);
 
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
+    void UpdateScrollBar(HWND hwnd);
     void RefreshStats();
     void SaveConfig();
     void LoadConfig();
@@ -40,6 +43,15 @@ private:
 
     HWND _hwnd    = nullptr;
     MainWindow* _mainWnd = nullptr;
+
+    // All child controls for scroll layout
+    struct ControlEntry { HWND hwnd; int x, y, w, h; };
+    std::vector<ControlEntry> _allControls;
+
+    // Scroll state
+    int _scrollY       = 0;
+    int _contentHeight = 0;
+    int _viewHeight    = 0;
 
     // Stats
     HWND _hStatsDevice = nullptr;
@@ -84,8 +96,9 @@ private:
     HWND _hEditSchedTime   = nullptr;
     HWND _hBtnSchedSave    = nullptr;
 
-    // Scrollable container HWND for all controls
-    HWND _hScroll = nullptr;
+    // Perplexity API key
+    HWND _hEditPplxKey   = nullptr;
+    HWND _hBtnPplxSave   = nullptr;
 
     static const wchar_t* s_className;
 };
