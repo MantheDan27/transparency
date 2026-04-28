@@ -76,8 +76,8 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     wc.hbrBackground = Theme::BrushApp();
     wc.lpszClassName = L"TransparencyMainWnd";
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wc.hIcon         = LoadIcon(nullptr, IDI_APPLICATION);
-    wc.hIconSm       = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MAIN));
+    wc.hIconSm       = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_MAIN), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
 
     if (!RegisterClassEx(&wc)) return false;
 
