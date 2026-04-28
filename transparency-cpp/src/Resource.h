@@ -181,6 +181,11 @@
 #define IDC_PANEL_SMARTHOME 3007
 #define IDC_NAV_HISTORY     2008
 #define IDC_PANEL_HISTORY   3008
+#define IDC_NAV_GLOSSARY    2009
+#define IDC_PANEL_GLOSSARY  3009
+
+// Glossary tab
+#define IDC_LIST_GLOSSARY   4006
 
 // Glossary link control IDs (device detail panel)
 #define IDC_LINK_VENDOR_SRC     13001

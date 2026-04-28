@@ -30,6 +30,7 @@
 #include "TabPrivacy.h"
 #include "TabSmartHome.h"
 #include "TabHistory.h"
+#include "TabGlossary.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -48,8 +49,9 @@ static const NavItem NAV_ITEMS[] = {
     { L"\u25CE", L"Topology",     Tab::SmartHome },
     { L"\u25B3", L"Diagnostics",  Tab::Tools     },
     { L"\u2630", L"Scan History", Tab::Ledger    },
+    { L"\u2139", L"Glossary",    Tab::Glossary  },
 };
-static const int NAV_ITEM_COUNT = 7;
+static const int NAV_ITEM_COUNT = 8;
 
 // Bottom nav items (pinned)
 static const NavItem NAV_BOTTOM[] = {
@@ -269,6 +271,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     _tabPrivacy   = std::make_unique<TabPrivacy>();
     _tabSmartHome = std::make_unique<TabSmartHome>();
     _tabHistory   = std::make_unique<TabHistory>();
+    _tabGlossary  = std::make_unique<TabGlossary>();
 
     _tabOverview ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabDevices  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
@@ -278,6 +281,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     _tabPrivacy  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabSmartHome->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabHistory  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabGlossary ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
 
     // Notification panel (floating child)
     WNDCLASSEX ncwc = {};
@@ -424,6 +428,7 @@ void MainWindow::LayoutChildren(int cx, int cy) {
     resize(_tabPrivacy);
     resize(_tabSmartHome);
     resize(_tabHistory);
+    resize(_tabGlossary);
 
     // Keep notification panel anchored to top-right
     if (_hNotifWnd) {
@@ -896,6 +901,7 @@ void MainWindow::ShowActivePanel() {
     show(_tabPrivacy,   _currentTab == Tab::Privacy);
     show(_tabSmartHome, _currentTab == Tab::SmartHome);
     show(_tabHistory,   _currentTab == Tab::History);
+    show(_tabGlossary,  _currentTab == Tab::Glossary);
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
