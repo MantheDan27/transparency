@@ -66,6 +66,10 @@ private:
 
     int _alertFilter   = 0; // 0=All, 1=High, 2=Medium, 3=Low, 4=Unack
 
+    // Cache of filtered anomalies — populated by PopulateAlerts(), read by LVN_GETDISPINFO
+    // and NM_CUSTOMDRAW. Avoids per-row GetLastResult() calls.
+    std::vector<Anomaly> _alertCache;
+
     // Scroll state
     int _scrollY      = 0;
     int _contentHeight = 0;

@@ -214,7 +214,7 @@ void TabDevices::CreateControls(HWND hwnd, int cx, int cy) {
     _hList = CreateWindowEx(
         WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS |
-        LVS_SINGLESEL | LVS_NOSORTHEADER | WS_VSCROLL | WS_HSCROLL,
+        LVS_SINGLESEL | LVS_NOSORTHEADER | LVS_OWNERDATA | WS_VSCROLL | WS_HSCROLL,
         16, 48, listW, cy - 64,
         hwnd, (HMENU)IDC_LIST_DEVICES, hInst, nullptr);
 
@@ -538,6 +538,42 @@ LRESULT TabDevices::OnNotify(HWND hwnd, NMHDR* hdr) {
         }
     }
 
+    // Supply cell text on demand for the virtual (LVS_OWNERDATA) device list
+    if (hdr->idFrom == IDC_LIST_DEVICES && hdr->code == LVN_GETDISPINFO) {
+        auto* di = reinterpret_cast<NMLVDISPINFO*>(hdr);
+        if (di->item.mask & LVIF_TEXT) {
+            int row = di->item.iItem;
+            int col = di->item.iSubItem;
+            if (row >= 0 && row < (int)_filteredIndices.size()) {
+                int idx = _filteredIndices[row];
+                if (idx < (int)_paintCache.devices.size()) {
+                    const Device& d = _paintCache.devices[idx];
+                    wstring tmp;
+                    const wchar_t* text = L"";
+                    switch (col) {
+                    case 0: text = d.online ? L"●" : L"○"; break;
+                    case 1: tmp = d.customName.empty() ? d.hostname : d.customName;
+                            if (tmp.empty()) tmp = d.ip;
+                            text = tmp.c_str(); break;
+                    case 2: tmp = d.ip;
+                            if (!d.ipv6Address.empty()) tmp += L" [v6]";
+                            text = tmp.c_str(); break;
+                    case 3: text = d.mac.c_str(); break;
+                    case 4: text = d.vendor.c_str(); break;
+                    case 5: tmp = d.deviceType + L" (" + std::to_wstring(d.confidence) + L"%)";
+                            text = tmp.c_str(); break;
+                    case 6: text = d.trustState.c_str(); break;
+                    case 7: tmp = GetPortSummary(d); text = tmp.c_str(); break;
+                    case 8: tmp = std::to_wstring(d.sightingCount); text = tmp.c_str(); break;
+                    case 9: text = d.lastSeen.c_str(); break;
+                    }
+                    lstrcpyn(di->item.pszText, text, di->item.cchTextMax);
+                }
+            }
+        }
+        return 0;
+    }
+
     if (hdr->idFrom == IDC_LIST_DEVICES) {
         switch (hdr->code) {
         case NM_RCLICK: {
@@ -687,54 +723,11 @@ void TabDevices::ApplyFilter() {
 
 void TabDevices::PopulateList() {
     if (!_hList || !_mainWnd) return;
-
-    // _paintCache was set by ApplyFilter() before this call — no extra lock needed.
-    const ScanResult& r = _paintCache;
-
-    ListView_DeleteAllItems(_hList);
-
-    for (int row = 0; row < (int)_filteredIndices.size(); row++) {
-        int idx = _filteredIndices[row];
-        if (idx >= (int)r.devices.size()) continue;
-        const Device& d = r.devices[idx];
-
-        LVITEM item = {};
-        item.mask = LVIF_TEXT;
-        item.iItem = row;
-        item.iSubItem = 0;
-        item.pszText = (LPWSTR)(d.online ? L"\u25CF" : L"\u25CB"); // filled/empty circle
-        ListView_InsertItem(_hList, &item);
-
-        // Name
-        wstring name = d.customName.empty() ? d.hostname : d.customName;
-        if (name.empty()) name = d.ip;
-        ListView_SetItemText(_hList, row, 1, (LPWSTR)name.c_str());
-
-        // IP (+ IPv6 badge)
-        wstring ip = d.ip;
-        if (!d.ipv6Address.empty()) ip += L" [v6]";
-        ListView_SetItemText(_hList, row, 2, (LPWSTR)ip.c_str());
-
-        ListView_SetItemText(_hList, row, 3, (LPWSTR)d.mac.c_str());
-        ListView_SetItemText(_hList, row, 4, (LPWSTR)d.vendor.c_str());
-
-        // Type + confidence in one column
-        wstring typeConf = d.deviceType + L" (" + std::to_wstring(d.confidence) + L"%)";
-        ListView_SetItemText(_hList, row, 5, (LPWSTR)typeConf.c_str());
-
-        ListView_SetItemText(_hList, row, 6, (LPWSTR)d.trustState.c_str());
-
-        // Ports
-        wstring ports = GetPortSummary(d);
-        ListView_SetItemText(_hList, row, 7, (LPWSTR)ports.c_str());
-
-        // Sighting count
-        wstring seen = std::to_wstring(d.sightingCount);
-        ListView_SetItemText(_hList, row, 8, (LPWSTR)seen.c_str());
-
-        ListView_SetItemText(_hList, row, 9, (LPWSTR)d.lastSeen.c_str());
-    }
+    // Virtual listview: just tell the control how many rows exist.
+    // Text is supplied on demand via LVN_GETDISPINFO.
+    ListView_SetItemCount(_hList, (int)_filteredIndices.size());
 }
+
 
 wstring TabDevices::GetPortSummary(const Device& dev) {
     if (dev.openPorts.empty()) return L"None";

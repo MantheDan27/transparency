@@ -137,7 +137,7 @@ void TabLedger::CreateControls(HWND hwnd, int cx, int cy) {
     if (ledgerH < 80) ledgerH = 80;
 
     _hList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | WS_VSCROLL,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_OWNERDATA | WS_VSCROLL,
         16, 68, cx - 32, ledgerH,
         hwnd, (HMENU)IDC_LIST_LEDGER, hInst, nullptr);
     SendMessage(_hList, WM_SETFONT, (WPARAM)Theme::FontMono(), TRUE);
@@ -325,6 +325,26 @@ LRESULT TabLedger::OnScanComplete(HWND hwnd) {
 LRESULT TabLedger::OnNotify(HWND hwnd, NMHDR* hdr) {
     if (!hdr) return 0;
 
+    // Newest entry first: row 0 = _ledgerCache.back()
+    if (hdr->idFrom == IDC_LIST_LEDGER && hdr->code == LVN_GETDISPINFO) {
+        auto* di = reinterpret_cast<NMLVDISPINFO*>(hdr);
+        if (di->item.mask & LVIF_TEXT) {
+            int row = di->item.iItem;
+            int src = (int)_ledgerCache.size() - 1 - row;
+            if (src >= 0 && src < (int)_ledgerCache.size()) {
+                const LedgerEntry& e = _ledgerCache[src];
+                const wchar_t* text = L"";
+                switch (di->item.iSubItem) {
+                case 0: text = e.timestamp.c_str(); break;
+                case 1: text = e.action.c_str();    break;
+                case 2: text = e.details.c_str();   break;
+                }
+                lstrcpyn(di->item.pszText, text, di->item.cchTextMax);
+            }
+        }
+        return 0;
+    }
+
     if (hdr->idFrom == IDC_LIST_LEDGER && hdr->code == NM_CUSTOMDRAW) {
         NMLVCUSTOMDRAW* cd = (NMLVCUSTOMDRAW*)hdr;
         switch (cd->nmcd.dwDrawStage) {
@@ -362,30 +382,16 @@ LRESULT TabLedger::OnNotify(HWND hwnd, NMHDR* hdr) {
 
 void TabLedger::PopulateList() {
     if (!_hList || !_mainWnd) return;
-    ListView_DeleteAllItems(_hList);
-
-    std::vector<LedgerEntry> entries;
     {
         std::lock_guard<std::mutex> lk(_mainWnd->_dataMutex);
-        entries = _mainWnd->_ledger;
+        _ledgerCache = _mainWnd->_ledger;
     }
-
-    int row = 0;
-    for (int i = (int)entries.size() - 1; i >= 0; i--) {
-        auto& e = entries[i];
-        LVITEM item = {};
-        item.mask    = LVIF_TEXT;
-        item.iItem   = row;
-        item.pszText = (LPWSTR)e.timestamp.c_str();
-        ListView_InsertItem(_hList, &item);
-        ListView_SetItemText(_hList, row, 1, (LPWSTR)e.action.c_str());
-        ListView_SetItemText(_hList, row, 2, (LPWSTR)e.details.c_str());
-        row++;
-    }
+    // Virtual listview: set count; LVN_GETDISPINFO supplies text on demand.
+    ListView_SetItemCount(_hList, (int)_ledgerCache.size());
 
     if (_hEntryCount) {
         wchar_t buf[64];
-        swprintf_s(buf, L"%d entries", (int)entries.size());
+        swprintf_s(buf, L"%d entries", (int)_ledgerCache.size());
         SetWindowText(_hEntryCount, buf);
     }
 }

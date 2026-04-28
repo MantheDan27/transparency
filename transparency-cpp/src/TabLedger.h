@@ -39,8 +39,9 @@ private:
     HWND _hwnd     = nullptr;
     MainWindow* _mainWnd = nullptr;
 
-    // Ledger list
+    // Ledger list (virtual / LVS_OWNERDATA)
     HWND _hList       = nullptr;
+    std::vector<LedgerEntry> _ledgerCache;  // snapshot used by LVN_GETDISPINFO
     HWND _hBtnExport  = nullptr;
     HWND _hBtnClear   = nullptr;
     HWND _hEntryCount = nullptr;

@@ -169,7 +169,7 @@ void TabAlerts::CreateControls(HWND hwnd, int cx, int cy) {
 
     // Alert list — fixed height, scrollable tab compensates
     _hAlertList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | WS_VSCROLL,
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL | LVS_OWNERDATA | WS_VSCROLL,
         16, ALERT_LIST_Y, cx - 32, ALERT_LIST_H,
         hwnd, (HMENU)IDC_LIST_ALERTS, hInst, nullptr);
 
@@ -513,18 +513,8 @@ static AlertRisk GetAlertRisk(const wstring& type) {
 
 void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
     if (!_mainWnd) return;
-    ScanResult r = _mainWnd->GetLastResult();
 
-    // Build visible anomaly list (respecting current filter)
-    std::vector<const Anomaly*> visible;
-    for (auto& a : r.anomalies) {
-        if (_alertFilter == 1 && a.severity != L"high" && a.severity != L"critical") continue;
-        if (_alertFilter == 2 && a.severity != L"medium") continue;
-        if (_alertFilter == 3 && a.severity != L"low") continue;
-        visible.push_back(&a);
-    }
-
-    if (anomalyIdx < 0 || anomalyIdx >= (int)visible.size()) {
+    if (anomalyIdx < 0 || anomalyIdx >= (int)_alertCache.size()) {
         if (_hExplainWhat)    SetWindowText(_hExplainWhat, L"Select an alert above to see details.");
         if (_hExplainWhy)     SetWindowText(_hExplainWhy, L"");
         if (_hExplainDo)      SetWindowText(_hExplainDo, L"");
@@ -534,7 +524,7 @@ void TabAlerts::ShowAlertExplanation(int anomalyIdx) {
         return;
     }
 
-    const Anomaly& a = *visible[anomalyIdx];
+    const Anomaly& a = _alertCache[anomalyIdx];
 
     // Risk context
     AlertRisk risk = GetAlertRisk(a.type);
@@ -572,6 +562,26 @@ LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
             NMITEMACTIVATE* nm = (NMITEMACTIVATE*)hdr;
             if (nm->iItem >= 0) ShowAlertExplanation(nm->iItem);
         }
+
+        if (hdr->code == LVN_GETDISPINFO) {
+            auto* di = reinterpret_cast<NMLVDISPINFO*>(hdr);
+            if (di->item.mask & LVIF_TEXT) {
+                int row = di->item.iItem;
+                if (row >= 0 && row < (int)_alertCache.size()) {
+                    const Anomaly& a = _alertCache[row];
+                    const wchar_t* text = L"";
+                    switch (di->item.iSubItem) {
+                    case 0: text = a.severity.c_str();    break;
+                    case 1: text = a.description.c_str(); break;
+                    case 2: text = a.deviceIp.c_str();    break;
+                    case 3: text = a.timestamp.empty() ? L"—" : a.timestamp.c_str(); break;
+                    case 4: text = L"New";                break;
+                    }
+                    lstrcpyn(di->item.pszText, text, di->item.cchTextMax);
+                }
+            }
+            return 0;
+        }
     }
 
     if (hdr->idFrom == IDC_LIST_ALERTS && hdr->code == NM_CUSTOMDRAW) {
@@ -581,23 +591,15 @@ LRESULT TabAlerts::OnNotify(HWND hwnd, NMHDR* hdr) {
             return CDRF_NOTIFYITEMDRAW;
         case CDDS_ITEMPREPAINT: {
             int row = (int)cd->nmcd.dwItemSpec;
-            // Color by severity
             COLORREF bg = Theme::BG_SURFACE;
-            if (_mainWnd) {
-                ScanResult r = _mainWnd->GetLastResult();
-                int visible = 0;
-                for (auto& a : r.anomalies) {
-                    if (visible == row) {
-                        if (a.severity == L"critical" || a.severity == L"high")
-                            bg = Theme::AlphaBlend(Theme::ACCENT_RED, Theme::BG_SURFACE, 10);
-                        else if (a.severity == L"medium")
-                            bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 10);
-                        else
-                            bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 10);
-                        break;
-                    }
-                    visible++;
-                }
+            if (row >= 0 && row < (int)_alertCache.size()) {
+                const wstring& sev = _alertCache[row].severity;
+                if (sev == L"critical" || sev == L"high")
+                    bg = Theme::AlphaBlend(Theme::ACCENT_RED,   Theme::BG_SURFACE, 10);
+                else if (sev == L"medium")
+                    bg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 10);
+                else
+                    bg = Theme::AlphaBlend(Theme::ACCENT_GREEN, Theme::BG_SURFACE, 10);
             }
             cd->clrTextBk = bg;
             cd->clrText   = Theme::TEXT_PRIMARY;
@@ -618,27 +620,15 @@ void TabAlerts::PopulateAlerts() {
     if (!_hAlertList || !_mainWnd) return;
 
     ScanResult r = _mainWnd->GetLastResult();
-    ListView_DeleteAllItems(_hAlertList);
-
-    int row = 0;
+    _alertCache.clear();
     for (auto& a : r.anomalies) {
         if (_alertFilter == 1 && a.severity != L"high" && a.severity != L"critical") continue;
         if (_alertFilter == 2 && a.severity != L"medium") continue;
         if (_alertFilter == 3 && a.severity != L"low") continue;
-
-        LVITEM item = {};
-        item.mask = LVIF_TEXT;
-        item.iItem = row;
-        item.iSubItem = 0;
-        item.pszText = (LPWSTR)a.severity.c_str();
-        ListView_InsertItem(_hAlertList, &item);
-
-        ListView_SetItemText(_hAlertList, row, 1, (LPWSTR)a.description.c_str());
-        ListView_SetItemText(_hAlertList, row, 2, (LPWSTR)a.deviceIp.c_str());
-        ListView_SetItemText(_hAlertList, row, 3, (LPWSTR)r.scannedAt.c_str());
-        ListView_SetItemText(_hAlertList, row, 4, (LPWSTR)L"New");
-        row++;
+        _alertCache.push_back(a);
     }
+    // Virtual listview: set count; LVN_GETDISPINFO supplies text on demand.
+    ListView_SetItemCount(_hAlertList, (int)_alertCache.size());
 }
 
 void TabAlerts::PopulateRules() {
