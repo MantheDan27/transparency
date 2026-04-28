@@ -65,7 +65,6 @@ private:
     COLORREF _actionColor = RGB(136, 146, 168); // initialized to TEXT_SECONDARY
 
     int _alertFilter   = 0; // 0=All, 1=High, 2=Medium, 3=Low, 4=Unack
-    int _selectedAlert = -1;
 
     // Scroll state
     int _scrollY      = 0;

@@ -38,8 +38,7 @@ enum {
     ID_SCHED_INTERVAL = 9952,
     ID_SCHED_TIME     = 9953,
     ID_BTN_SCHED_SAVE = 9954,
-    ID_PPLX_KEY_EDIT  = 9960,
-    ID_BTN_PPLX_SAVE  = 9961,
+
 };
 
 bool TabPrivacy::Create(HWND parent, int x, int y, int w, int h, MainWindow* mainWnd) {
@@ -272,15 +271,6 @@ void TabPrivacy::CreateControls(HWND hwnd, int cx, int cy) {
     _hBtnSchedSave = mkBtn(L"Save Schedule", ID_BTN_SCHED_SAVE, 16, y, 130);
     y += 36;
 
-    // ── AI Explanations (Perplexity) ─────────────────────────────────────────
-    mkHdr(L"AI Explanations (Perplexity)", y); y += 24;
-    mkLbl(L"When set, alert \"Why it matters\" uses Perplexity AI for live explanations.", 16, y, cx - 32);
-    y += 22;
-    mkLbl(L"Perplexity API Key:", 16, y + 4, 150);
-    _hEditPplxKey = mkEdit(L"", ID_PPLX_KEY_EDIT, 170, y, cx - 270, 24, ES_PASSWORD);
-    _hBtnPplxSave = mkBtn(L"Save Key", ID_BTN_PPLX_SAVE, cx - 94, y, 78);
-    y += 36;
-
     _contentHeight = y + 20;
 }
 
@@ -505,15 +495,6 @@ LRESULT TabPrivacy::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         }
         break;
 
-    case ID_BTN_PPLX_SAVE:
-        if (_mainWnd && _hEditPplxKey) {
-            wchar_t buf[512] = {};
-            GetWindowText(_hEditPplxKey, buf, 512);
-            _mainWnd->_perplexityApiKey = buf;
-            MessageBox(hwnd, L"Perplexity API key saved.",
-                       L"AI Explanations", MB_OK | MB_ICONINFORMATION);
-        }
-        break;
     }
 
     return DefWindowProc(hwnd, WM_COMMAND, wp, lp);
@@ -585,9 +566,6 @@ void TabPrivacy::LoadConfig() {
     swprintf_s(buf, L"%d", cfg.highLatencyThresholdMs);
     if (_hLatencyThresh) SetWindowText(_hLatencyThresh, buf);
 
-    // Restore Perplexity key display (show placeholder asterisks if key is set)
-    if (_hEditPplxKey && _mainWnd && !_mainWnd->_perplexityApiKey.empty())
-        SetWindowText(_hEditPplxKey, _mainWnd->_perplexityApiKey.c_str());
 }
 
 void TabPrivacy::RefreshHooks() {

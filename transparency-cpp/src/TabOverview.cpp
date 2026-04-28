@@ -380,50 +380,63 @@ void TabOverview::UpdateScrollBar(HWND hwnd) {
     SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
 }
 
+// Incremental scroll: bitblts existing content, moves children and _mapRect by dy,
+// and only repaints the newly-exposed strip — no full LayoutControls recalc needed.
+void TabOverview::ApplyScrollDelta(HWND hwnd, int dy) {
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    int newScrollY = std::max(0, std::min(_scrollY + dy, maxScroll));
+    int actualDy = _scrollY - newScrollY;
+    if (actualDy == 0) return;
+
+    _scrollY = newScrollY;
+
+    // Keep _mapRect in sync so OnPaint draws the security dashboard at the right place.
+    _mapRect.top    += actualDy;
+    _mapRect.bottom += actualDy;
+
+    RECT rc; GetClientRect(hwnd, &rc);
+    ScrollWindowEx(hwnd, 0, actualDy, nullptr, &rc, nullptr, nullptr,
+                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+    UpdateScrollBar(hwnd);
+}
+
+// Absolute jump (thumb drag, page): full recalc so _mapRect is computed from scratch.
+void TabOverview::ApplyScrollAbsolute(HWND hwnd, int newScrollY) {
+    int maxScroll = std::max(0, _contentHeight - _viewHeight);
+    newScrollY = std::max(0, std::min(newScrollY, maxScroll));
+    if (newScrollY == _scrollY) return;
+
+    _scrollY = newScrollY;
+    RECT rc; GetClientRect(hwnd, &rc);
+    LayoutControls(rc.right, rc.bottom);
+    UpdateScrollBar(hwnd);
+    InvalidateRect(hwnd, nullptr, FALSE);
+}
+
 LRESULT TabOverview::OnVScroll(HWND hwnd, WPARAM wp) {
     SCROLLINFO si = {};
-    si.cbSize = sizeof(si);
-    si.fMask  = SIF_ALL;
+    si.cbSize = sizeof(si); si.fMask = SIF_ALL;
     GetScrollInfo(hwnd, SB_VERT, &si);
 
-    int oldPos = _scrollY;
     switch (LOWORD(wp)) {
-    case SB_LINEUP:        _scrollY -= 30; break;
-    case SB_LINEDOWN:      _scrollY += 30; break;
-    case SB_PAGEUP:        _scrollY -= si.nPage; break;
-    case SB_PAGEDOWN:      _scrollY += si.nPage; break;
-    case SB_THUMBTRACK:    _scrollY = si.nTrackPos; break;
-    }
-
-    int maxScroll = _contentHeight - _viewHeight;
-    if (maxScroll < 0) maxScroll = 0;
-    if (_scrollY < 0) _scrollY = 0;
-    if (_scrollY > maxScroll) _scrollY = maxScroll;
-
-    if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        UpdateScrollBar(hwnd);
-        InvalidateRect(hwnd, nullptr, FALSE);
+    case SB_LINEUP:        ApplyScrollDelta(hwnd, -20);             break;
+    case SB_LINEDOWN:      ApplyScrollDelta(hwnd, +20);             break;
+    case SB_PAGEUP:        ApplyScrollDelta(hwnd, -_viewHeight);    break;
+    case SB_PAGEDOWN:      ApplyScrollDelta(hwnd, +_viewHeight);    break;
+    case SB_THUMBTRACK:
+    case SB_THUMBPOSITION: ApplyScrollAbsolute(hwnd, si.nTrackPos); break;
     }
     return 0;
 }
 
-LRESULT TabOverview::OnMouseWheel(HWND hwnd, int delta) {
-    int oldPos = _scrollY;
-    _scrollY -= delta / 2;  // smooth scrolling
+LRESULT TabOverview::OnMouseWheel(HWND hwnd, int rawDelta) {
+    UINT scrollLines = 3;
+    SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &scrollLines, 0);
+    if (scrollLines == WHEEL_PAGESCROLL)
+        scrollLines = std::max(1u, (UINT)(_viewHeight / 20));
 
-    int maxScroll = _contentHeight - _viewHeight;
-    if (maxScroll < 0) maxScroll = 0;
-    if (_scrollY < 0) _scrollY = 0;
-    if (_scrollY > maxScroll) _scrollY = maxScroll;
-
-    if (_scrollY != oldPos) {
-        RECT rc; GetClientRect(hwnd, &rc);
-        LayoutControls(rc.right, rc.bottom);
-        UpdateScrollBar(hwnd);
-        InvalidateRect(hwnd, nullptr, FALSE);
-    }
+    int dy = -(rawDelta * (int)scrollLines * 20) / WHEEL_DELTA;
+    ApplyScrollDelta(hwnd, dy);
     return 0;
 }
 

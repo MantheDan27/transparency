@@ -96,9 +96,5 @@ private:
     HWND _hEditSchedTime   = nullptr;
     HWND _hBtnSchedSave    = nullptr;
 
-    // Perplexity API key
-    HWND _hEditPplxKey   = nullptr;
-    HWND _hBtnPplxSave   = nullptr;
-
     static const wchar_t* s_className;
 };

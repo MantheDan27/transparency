@@ -1348,13 +1348,13 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
             a.deviceIp = dev.ip;
             a.description = L"New device detected: " + dev.ip +
                             (dev.hostname.empty() ? L"" : L" (" + dev.hostname + L")");
-            a.explanation = L"A device was found on your network that was not present in the previous scan. "
-                            L"This could be a new device you added, a guest, or an unauthorized device. "
+            a.explanation = L"A device that wasn't on your network before has appeared. It could be a phone you just connected, a smart home gadget, a guest's laptop — or a device that joined without your knowledge. "
+                            L"The manufacturer shown in the vendor field can help you identify what type of device it is. "
                             L"Vendor: " + (dev.vendor.empty() ? L"Unknown" : dev.vendor) + L".";
-            a.remediation = L"1. Identify the device by its MAC address and vendor. "
-                            L"2. If authorized, mark it as 'Known' in the device list. "
-                            L"3. If unrecognized, consider blocking it on your router's MAC filter. "
-                            L"4. Enable router logs to track when it connected.";
+            a.remediation = L"1. Check all your devices to see which one is new.\r\n"
+                            L"2. If you recognize it, mark it as 'Known' in the device list so future scans won't flag it.\r\n"
+                            L"3. If you don't recognize it, check your router's list of connected devices and block it by its hardware address (MAC address — the unique ID assigned to every network device).\r\n"
+                            L"4. If you're concerned, change your Wi-Fi password to prevent unauthorized devices from reconnecting.";
             a.traceSource = L"ArpTable+PingSweep";
             anomalies.push_back(a);
         }
@@ -1372,130 +1372,114 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
             case 21:
                 a.severity = L"high";
                 a.description = L"FTP (port 21) is open on " + dev.ip;
-                a.explanation = L"FTP transmits data and credentials in plaintext, making it vulnerable to "
-                                L"man-in-the-middle attacks and packet sniffing. Modern replacements (SFTP/FTPS) "
-                                L"should be used instead.";
-                a.remediation = L"1. Disable FTP if not actively used. "
-                                L"2. Replace with SFTP (port 22) or FTPS (port 990). "
-                                L"3. If FTP is required, restrict access with a firewall to known IPs only. "
-                                L"4. Enable FTP over TLS (FTPS) at minimum.";
+                a.explanation = L"FTP (File Transfer Protocol) is a way to send files over a network — but it sends everything, including your login name and password, as plain readable text, like writing a message on a postcard anyone can read. "
+                                L"Anyone monitoring the network can intercept and read all of it. Safer alternatives have existed for over 20 years.";
+                a.remediation = L"1. Turn off FTP on this device if you aren't actively using it.\r\n"
+                                L"2. Switch to SFTP (Secure File Transfer Protocol, port 22) or FTPS (FTP Secure, port 990) — both encrypt the connection so no one can eavesdrop.\r\n"
+                                L"3. If you must keep FTP, use your router's firewall to restrict which devices can connect to it.";
                 break;
             case 23:
                 a.severity = L"critical";
                 a.description = L"Telnet (port 23) is open on " + dev.ip;
-                a.explanation = L"Telnet transmits everything - including usernames and passwords - in plaintext. "
-                                L"It has been deprecated for decades and should never be used on a network. "
-                                L"This is a serious security risk as any attacker who can see network traffic "
-                                L"can capture credentials.";
-                a.remediation = L"1. Immediately disable Telnet on this device. "
-                                L"2. Enable SSH instead (port 22). "
-                                L"3. If the device is a router or switch, access it via the web interface or SSH. "
-                                L"4. If this is an IoT device, check for a firmware update that adds SSH.";
+                a.explanation = L"Telnet is an old tool for controlling a device remotely over a network. It sends everything — including your username and password — as plain, readable text that anyone on the network can see. "
+                                L"It was replaced by SSH (Secure Shell) decades ago because SSH encrypts all communication so no one can eavesdrop. Telnet should never be used on any network today.";
+                a.remediation = L"1. Disable Telnet on this device immediately — it is not safe to use.\r\n"
+                                L"2. Use SSH (Secure Shell, port 22) instead — it does the same job but encrypts everything.\r\n"
+                                L"3. If this is a router or network switch, log into its settings page and disable Telnet in the remote access section.\r\n"
+                                L"4. If this is a smart home device (IoT — Internet of Things), check the manufacturer's website for a firmware update.";
                 break;
             case 135:
                 a.severity = L"high";
                 a.description = L"MSRPC (port 135) exposed on " + dev.ip;
-                a.explanation = L"Windows Remote Procedure Call (MSRPC) on port 135 is used for DCOM and WMI. "
-                                L"This port has been exploited by numerous worms (MS03-026, Blaster) and should "
-                                L"not be accessible across network segments. Exposure increases lateral movement risk.";
-                a.remediation = L"1. Block port 135 at the firewall/router. "
-                                L"2. Ensure Windows Firewall is enabled on this device. "
-                                L"3. Apply all Windows security updates. "
-                                L"4. Consider network segmentation to isolate Windows hosts.";
+                a.explanation = L"MSRPC (Microsoft Remote Procedure Call, port 135) is a Windows system service that lets programs on different computers communicate with each other behind the scenes. "
+                                L"It has been the entry point for major internet worms in the past — the Blaster worm (2003) spread to millions of computers through this port. "
+                                L"Leaving it reachable on your network makes it easier for an attacker to take remote control of this Windows computer.";
+                a.remediation = L"1. Make sure Windows Firewall is turned on for this device — it should block this port from the outside by default.\r\n"
+                                L"2. Apply all Windows security updates (Start → Settings → Windows Update).\r\n"
+                                L"3. If you don't need remote access to this computer, restrict this port on your router's firewall settings.";
                 break;
             case 139:
                 a.severity = L"high";
                 a.description = L"NetBIOS Session Service (port 139) on " + dev.ip;
-                a.explanation = L"NetBIOS over TCP/IP (port 139) is an older Windows file sharing protocol. "
-                                L"Combined with SMB, it can expose file shares and be exploited for credential "
-                                L"attacks (Pass-the-Hash). EternalBlue/WannaCry also targeted this.";
-                a.remediation = L"1. Disable NetBIOS over TCP/IP if not needed. "
-                                L"2. Block ports 137-139 at the firewall. "
-                                L"3. Use SMB2/SMB3 (port 445) instead if file sharing is needed. "
-                                L"4. Ensure SMBv1 is disabled on all Windows hosts.";
+                a.explanation = L"NetBIOS (Network Basic Input/Output System, port 139) is an older Windows protocol originally used for sharing files and printers on small local networks. "
+                                L"It can expose the names of shared folders on your computer and has been used in attacks that steal login credentials without needing the actual password (a technique called 'Pass-the-Hash'). "
+                                L"The WannaCry ransomware (2017) used this port to spread rapidly across networks.";
+                a.remediation = L"1. Turn off NetBIOS over TCP/IP in your Windows network adapter settings if you don't use Windows file sharing — search 'Network Connections', right-click your adapter, choose Properties → Internet Protocol Version 4 → Advanced → WINS tab → Disable NetBIOS.\r\n"
+                                L"2. Block ports 137–139 on your router's firewall.\r\n"
+                                L"3. Keep Windows fully updated to stay protected against known exploits.";
                 break;
             case 445:
                 a.severity = L"high";
                 a.description = L"SMB (port 445) exposed on " + dev.ip;
-                a.explanation = L"Server Message Block (SMB) is used for Windows file sharing. "
-                                L"This port was targeted by EternalBlue (NSA exploit) used in the WannaCry "
-                                L"and NotPetya ransomware attacks. Exposure to the internet or untrusted "
-                                L"networks is extremely dangerous. Even on local networks, SMBv1 has severe vulnerabilities.";
-                a.remediation = L"1. Block SMB (445) at the network perimeter - NEVER expose to internet. "
-                                L"2. Disable SMBv1 on all Windows machines. "
-                                L"3. Apply MS17-010 patch if not already done. "
-                                L"4. Consider requiring authentication before accessing shares. "
-                                L"5. Use Windows Defender Firewall to restrict SMB to known hosts.";
+                a.explanation = L"SMB (Server Message Block, port 445) is the main Windows protocol for sharing files and printers across a network. "
+                                L"A security flaw called EternalBlue (originally discovered by the NSA and leaked in 2017) let the WannaCry and NotPetya ransomware silently spread from computer to computer through this port, causing billions of dollars in damage worldwide. "
+                                L"An older version called SMBv1 (version 1) still has critical security holes and should never be running.";
+                a.remediation = L"1. Block port 445 at your router — never expose this port to the internet.\r\n"
+                                L"2. Disable SMBv1 (the old, insecure version) on all Windows machines: search 'Windows Features' and uncheck 'SMB 1.0/CIFS File Sharing Support'.\r\n"
+                                L"3. Apply all Windows updates — the MS17-010 patch specifically addresses the EternalBlue vulnerability.\r\n"
+                                L"4. Use Windows Defender Firewall to limit which devices on your network can access shared folders.";
                 break;
             case 1433:
                 a.severity = L"high";
                 a.description = L"SQL Server (port 1433) exposed on " + dev.ip;
-                a.explanation = L"Microsoft SQL Server listening on port 1433 is a target for SQL injection, "
-                                L"brute force, and exploitation. Direct database access from the network "
-                                L"bypasses application-layer security controls and can lead to data theft.";
-                a.remediation = L"1. Restrict SQL Server access to the application server only via firewall. "
-                                L"2. Disable the SA account or ensure it has a strong password. "
-                                L"3. Enable SQL Server auditing. "
-                                L"4. Use Windows Authentication instead of SQL Authentication where possible. "
-                                L"5. Apply all SQL Server security updates.";
+                a.explanation = L"Microsoft SQL Server (a database program, port 1433) is visible directly on the network. "
+                                L"Databases store sensitive information — customer records, passwords, financial data. "
+                                L"Attackers routinely scan the internet for exposed databases and try to guess passwords or use known weaknesses to steal or delete everything stored inside. "
+                                L"A database should only be reachable by the specific computer that runs the application using it.";
+                a.remediation = L"1. Use your router or Windows Firewall to block port 1433 so only the specific computer that needs the database can reach it.\r\n"
+                                L"2. Make sure the built-in 'sa' (system administrator) account is disabled or has a very strong, unique password.\r\n"
+                                L"3. Apply all SQL Server security updates through Windows Update or the SQL Server update catalog.";
                 break;
             case 1723:
                 a.severity = L"medium";
                 a.description = L"PPTP VPN (port 1723) on " + dev.ip;
-                a.explanation = L"PPTP (Point-to-Point Tunneling Protocol) is a deprecated VPN protocol "
-                                L"with known cryptographic weaknesses. MS-CHAPv2, used by PPTP, can be "
-                                L"cracked in under a day with modern hardware. PPTP should be considered broken.";
-                a.remediation = L"1. Replace PPTP with OpenVPN, WireGuard, or IKEv2/IPSec. "
-                                L"2. If PPTP must be used temporarily, ensure strong passwords. "
-                                L"3. Consider limiting PPTP access to specific client IPs at the firewall.";
+                a.explanation = L"PPTP (Point-to-Point Tunneling Protocol, port 1723) is an old type of VPN (Virtual Private Network) — software that creates a secure tunnel for internet traffic. "
+                                L"However, PPTP's security was broken years ago. Its encryption can now be cracked in less than a day using common tools available to attackers. "
+                                L"Using PPTP gives a false sense of security — your traffic may appear protected but isn't.";
+                a.remediation = L"1. Switch to a modern VPN protocol: WireGuard is the fastest and most secure option, OpenVPN and IKEv2 (Internet Key Exchange version 2) are also good choices.\r\n"
+                                L"2. Most modern home routers support these better VPN options in their settings pages.";
                 break;
             case 3306:
                 a.severity = L"high";
                 a.description = L"MySQL (port 3306) exposed on " + dev.ip;
-                a.explanation = L"MySQL/MariaDB database server directly accessible on the network. "
-                                L"Databases should never be directly accessible across the network unless "
-                                L"absolutely necessary. Attackers can attempt brute force, exploit known "
-                                L"vulnerabilities, or steal data if they gain access.";
-                a.remediation = L"1. Bind MySQL to 127.0.0.1 if only local access is needed. "
-                                L"2. Use a firewall to restrict port 3306 to the application server IP only. "
-                                L"3. Disable the root user's remote login capability. "
-                                L"4. Use strong passwords for all database accounts. "
-                                L"5. Apply all MySQL/MariaDB security patches.";
+                a.explanation = L"MySQL (a popular database program, port 3306) is directly reachable on the network. "
+                                L"Like all databases, MySQL stores sensitive data. Attackers actively scan the internet for exposed MySQL servers and try to break in by guessing passwords or using known security holes. "
+                                L"Once inside, they can read, change, or delete everything in the database.";
+                a.remediation = L"1. Change MySQL's settings to only accept connections from the same computer ('binding to 127.0.0.1' — meaning 'this machine only').\r\n"
+                                L"2. Use your router or Windows Firewall to block port 3306 from all devices except the one that needs database access.\r\n"
+                                L"3. Use a strong, unique password for all database user accounts and apply all MySQL security updates.";
                 break;
             case 3389:
                 a.severity = L"high";
                 a.description = L"RDP (port 3389) exposed on " + dev.ip;
-                a.explanation = L"Remote Desktop Protocol (RDP) is a frequent target for ransomware groups. "
-                                L"BlueKeep (CVE-2019-0708) and DejaBlue are critical RDP vulnerabilities. "
-                                L"Brute force attacks against RDP are extremely common. Over 4 million "
-                                L"RDP servers are scanned daily by attackers on the internet.";
-                a.remediation = L"1. Do NOT expose RDP directly to the internet. "
-                                L"2. Use a VPN to access RDP internally. "
-                                L"3. Enable Network Level Authentication (NLA). "
-                                L"4. Change RDP port from 3389 to a non-standard port. "
-                                L"5. Enable account lockout policies. "
-                                L"6. Use RD Gateway if external access is required. "
-                                L"7. Apply all BlueKeep/DejaBlue patches.";
+                a.explanation = L"RDP (Remote Desktop Protocol, port 3389) lets you see and control a Windows computer's screen from another device. "
+                                L"It is one of the most heavily attacked services on the internet — security researchers count millions of automated scans for open RDP every single day. "
+                                L"Attackers try to guess passwords, and several severe security flaws (including BlueKeep and DejaBlue) have allowed attackers to take control of unpatched computers without even needing a password.";
+                a.remediation = L"1. Never expose Remote Desktop directly to the internet — this is the most important step.\r\n"
+                                L"2. If you need remote access from outside your home, use a VPN (Virtual Private Network) first, then connect via Remote Desktop through the VPN.\r\n"
+                                L"3. Turn on NLA (Network Level Authentication) — this requires a valid login before the remote desktop screen even appears, blocking most automated attacks.\r\n"
+                                L"4. Apply all Windows updates to stay protected against BlueKeep and similar flaws.";
                 break;
             case 5900:
                 a.severity = L"high";
                 a.description = L"VNC (port 5900) exposed on " + dev.ip;
-                a.explanation = L"VNC (Virtual Network Computing) provides remote desktop access. "
-                                L"VNC often uses weak authentication (just a password, no username) "
-                                L"and many implementations have been found to have critical vulnerabilities. "
-                                L"If exposed to the internet, VNC servers are quickly found and attacked.";
-                a.remediation = L"1. Never expose VNC directly to the internet. "
-                                L"2. Tunnel VNC over SSH (ssh -L 5900:localhost:5900). "
-                                L"3. Use a firewall to restrict port 5900 to trusted IPs only. "
-                                L"4. Use a strong VNC password (8+ chars). "
-                                L"5. Consider replacing VNC with RDP or a commercial solution with MFA.";
+                a.explanation = L"VNC (Virtual Network Computing, port 5900) is a remote desktop tool that shows another computer's screen and lets you control it. "
+                                L"VNC typically uses only a single password (no username), making it easier for attackers to break in by trying many passwords quickly. "
+                                L"Multiple serious security vulnerabilities have been found in VNC software over the years, and if this port is visible from the internet, automated attack tools will find and target it within minutes.";
+                a.remediation = L"1. Never expose VNC directly to the internet.\r\n"
+                                L"2. The safest approach is to tunnel VNC through SSH (Secure Shell) — this encrypts the connection and requires SSH authentication before VNC is even reachable.\r\n"
+                                L"3. Use your router's firewall to limit access to port 5900 to only your specific trusted devices.\r\n"
+                                L"4. Set a strong VNC password (at least 8 characters).\r\n"
+                                L"5. Consider switching to a modern remote desktop solution that supports two-factor authentication (2FA — requiring a second confirmation like a phone code in addition to a password).";
                 break;
             default:
                 a.severity = L"medium";
                 a.description = L"Potentially risky port " + std::to_wstring(port) + L" open on " + dev.ip;
-                a.explanation = L"Port " + std::to_wstring(port) + L" is flagged as potentially risky.";
-                a.remediation = L"Review whether this service needs to be accessible from the network. "
-                                L"If not, disable the service or firewall the port.";
+                a.explanation = L"Port " + std::to_wstring(port) + L" is open on this device and is flagged as potentially risky. "
+                                L"A 'port' is like a numbered door on a device — each one corresponds to a service or program that is listening for connections. "
+                                L"Having unknown or unnecessary ports open can give attackers a way in if that service has a security weakness.";
+                a.remediation = L"Check whether any program on this device is intentionally using this port.\r\n"
+                                L"If you don't know what it is, close it by disabling the service or blocking it in your firewall settings.";
             }
 
             a.traceSource = L"PortScan";
@@ -1531,13 +1515,12 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
                 if (!portList.empty()) portList.pop_back(), portList.pop_back();
 
                 a.description = L"New ports opened on " + dev.ip + L": " + portList;
-                a.explanation = L"Services that were not running in the previous scan are now active. "
-                                L"This could indicate new software was installed, a service was started, "
-                                L"or a potential compromise installing a backdoor.";
-                a.remediation = L"1. Verify the new service is intentional. "
-                                L"2. Check which process is listening on these ports (netstat -ano). "
-                                L"3. If unexpected, investigate for signs of compromise. "
-                                L"4. Review installed software and startup items.";
+                a.explanation = L"A service (a program that listens for connections on the network) that wasn't running before has started up on this device. "
+                                L"New open ports can mean new software was installed or a service was turned on — which is often harmless. "
+                                L"However, in concerning cases, malicious software can open a 'backdoor' (a hidden entry point) to give an attacker remote access to your device without your knowledge.";
+                a.remediation = L"1. Check whether you recently installed new software or enabled a service on this device.\r\n"
+                                L"2. To see which program is using the new port, open Command Prompt (search 'cmd') and type: netstat -ano — this lists all active network connections and the program behind each one.\r\n"
+                                L"3. If the new port is unexpected, run an antivirus (Anti-Virus — software that detects and removes malicious programs) scan and check recently installed programs.";
                 a.traceSource = L"PortScan+Comparison";
                 anomalies.push_back(a);
             }
@@ -1554,12 +1537,10 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
                     a.deviceIp = dev.ip;
                     a.description = L"IP address changed for " + dev.mac +
                                     L": was " + it->second->ip + L", now " + dev.ip;
-                    a.explanation = L"A device's IP address changed between scans. This is common when DHCP "
-                                    L"leases expire and the device gets a new address. However, it can also "
-                                    L"indicate IP spoofing or ARP poisoning in rare cases.";
-                    a.remediation = L"1. If this is unexpected, verify the device's MAC address physically. "
-                                    L"2. Consider assigning a static IP or DHCP reservation to this device. "
-                                    L"3. Monitor for further IP changes.";
+                    a.explanation = L"This device's IP address (the number that identifies it on your network, like 192.168.1.15) changed since the last scan. "
+                                    L"IP addresses on home networks are automatically handed out by your router using a system called DHCP (Dynamic Host Configuration Protocol). Address changes are common and usually harmless when a device reconnects after being off for a while.";
+                    a.remediation = L"1. If you recognize the device and it changed addresses after reconnecting, this is normal — no action needed.\r\n"
+                                    L"2. To stop this device from getting a different address each time, set a 'DHCP reservation' (also called a 'static IP assignment') in your router settings — this locks the device to the same address permanently.";
                     a.traceSource = L"ArpTable+Comparison";
                     anomalies.push_back(a);
                 }
@@ -1573,11 +1554,10 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
                     a.deviceIp = dev.ip;
                     a.description = L"Hostname changed on " + dev.ip + L": was \"" +
                                     it->second->hostname + L"\", now \"" + dev.hostname + L"\"";
-                    a.explanation = L"A device's hostname changed between scans. This could indicate a device "
-                                    L"reconfiguration, OS reinstall, or a different device using the same MAC. "
-                                    L"On Wi-Fi with MAC randomization, this may indicate a reconnecting device.";
-                    a.remediation = L"1. Verify the device identity if the hostname change is unexpected. "
-                                    L"2. If this is a known device, update its custom name for clarity.";
+                    a.explanation = L"A 'hostname' is the name a device announces to the network — like 'Johns-MacBook' or 'LIVING-ROOM-TV'. This device's hostname changed since the last scan. "
+                                    L"This usually happens after a software update, a name change in the device's settings, or when a completely different device takes over the same network address. On phones, a privacy feature called MAC randomization can also cause this.";
+                    a.remediation = L"1. If you recently renamed this device or updated its software, this is expected — no action needed.\r\n"
+                                    L"2. If you don't recognize the new name, physically locate the device and verify it belongs to you.";
                     a.traceSource = L"DNS+Comparison";
                     anomalies.push_back(a);
                 }
@@ -1596,12 +1576,11 @@ std::vector<Anomaly> ScanEngine::AnalyzeAnomalies(
             a.description = L"Device " + prev.ip +
                             (prev.hostname.empty() ? L"" : L" (" + prev.hostname + L")") +
                             L" is no longer reachable";
-            a.explanation = L"A device that was present in the previous scan is no longer responding. "
-                            L"This could mean the device was turned off, unplugged, or left the network. "
-                            L"It could also indicate a connectivity issue.";
-            a.remediation = L"1. Check if the device was intentionally disconnected. "
-                            L"2. Verify the device is powered on. "
-                            L"3. Check for network issues if multiple devices are offline.";
+            a.explanation = L"A device that was visible on your network during the last scan is no longer responding. "
+                            L"This usually just means it was turned off, put to sleep, disconnected from Wi-Fi, or moved out of range. It can also happen if a device loses its network connection temporarily.";
+            a.remediation = L"1. Check whether the device was intentionally turned off or disconnected — this is the most likely explanation.\r\n"
+                            L"2. If the device should be online, check that it's powered on and connected to Wi-Fi or a network cable.\r\n"
+                            L"3. If several devices went offline at the same time, there may be a broader network issue — check your router's status lights.";
             a.traceSource = L"PingSweep+Comparison";
             anomalies.push_back(a);
         }

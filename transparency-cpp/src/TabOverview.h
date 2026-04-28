@@ -33,7 +33,9 @@ private:
     LRESULT OnMonitorTick(HWND hwnd);
     LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
     LRESULT OnVScroll(HWND hwnd, WPARAM wp);
-    LRESULT OnMouseWheel(HWND hwnd, int delta);
+    LRESULT OnMouseWheel(HWND hwnd, int rawDelta);
+    void ApplyScrollDelta(HWND hwnd, int dy);
+    void ApplyScrollAbsolute(HWND hwnd, int newScrollY);
 
     void CreateControls(HWND hwnd, int cx, int cy);
     void LayoutControls(int cx, int cy);
