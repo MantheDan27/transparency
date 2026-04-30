@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparencii VERSION 4.34.1 LANGUAGES CXX)
+project(Transparencii VERSION 4.34.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -136,11 +136,11 @@ enable_testing()
 add_executable(TestTransparenciiAnomalies src/TestScannerAnomalies.cpp src/Scanner.cpp)
 if(MINGW OR CYGWIN)
     # Ensure tests run as console app so output is visible
-    set_target_properties(TestScannerAnomalies PROPERTIES LINK_FLAGS "-mconsole -municode -static-libgcc -static-libstdc++")
+    set_target_properties(TestTransparenciiAnomalies PROPERTIES LINK_FLAGS "-mconsole -municode -static-libgcc -static-libstdc++")
 elseif(MSVC)
-    set_target_properties(TestScannerAnomalies PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+    set_target_properties(TestTransparenciiAnomalies PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 endif()
-target_compile_definitions(TestScannerAnomalies PRIVATE
+target_compile_definitions(TestTransparenciiAnomalies PRIVATE
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
@@ -150,14 +150,14 @@ target_compile_definitions(TestScannerAnomalies PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 if(MSVC)
-    target_compile_options(TestScannerAnomalies PRIVATE
+    target_compile_options(TestTransparenciiAnomalies PRIVATE
         /W3
         /MP
         /utf-8
         /Zc:__cplusplus
     )
 endif()
-target_link_libraries(TestScannerAnomalies PRIVATE
+target_link_libraries(TestTransparenciiAnomalies PRIVATE
     ws2_32
     iphlpapi
     comctl32
@@ -172,16 +172,16 @@ target_link_libraries(TestScannerAnomalies PRIVATE
     ntdll
     comdlg32
 )
-target_include_directories(TestScannerAnomalies PRIVATE src)
+target_include_directories(TestTransparenciiAnomalies PRIVATE src)
 if(MSVC)
-    target_compile_options(TestScannerAnomalies PRIVATE
+    target_compile_options(TestTransparenciiAnomalies PRIVATE
         /wd4100
         /wd4189
     )
-    set_property(TARGET TestScannerAnomalies PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET TestTransparenciiAnomalies PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-add_test(NAME TestScannerAnomalies COMMAND TestScannerAnomalies)
+add_test(NAME TestTransparenciiAnomalies COMMAND TestTransparenciiAnomalies)
 
 # MSVC specific settings
 if(MSVC)
