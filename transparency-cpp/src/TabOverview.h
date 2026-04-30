@@ -66,6 +66,7 @@ private:
     HWND _hBtnMonStart  = nullptr;
     HWND _hBtnMonStop   = nullptr;
     HWND _hBtnExport    = nullptr;
+    HWND _hBtnNotif     = nullptr;
 
     // Status text / progress
     HWND _hStatusText  = nullptr;

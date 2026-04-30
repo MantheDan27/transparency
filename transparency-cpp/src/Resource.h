@@ -105,6 +105,7 @@
 #define IDC_BTN_HOOK_DEL        6072
 #define IDC_BTN_SCHED_SAVE      6073
 #define IDC_BTN_NIC_PIN         6080
+#define IDC_BTN_NOTIFICATIONS   6090
 
 // Combo box IDs
 #define IDC_COMBO_DNS_TYPE      7001

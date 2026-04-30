@@ -236,6 +236,10 @@ void TabOverview::CreateControls(HWND hwnd, int cx, int cy) {
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         Theme::SP4 + 532, btnY, 130, BTN_H, hwnd, (HMENU)IDC_BTN_EXPORT, hInst, nullptr);
 
+    _hBtnNotif = CreateWindowEx(0, L"BUTTON", L"Notifications",
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        Theme::SP4 + 670, btnY, 130, BTN_H, hwnd, (HMENU)IDC_BTN_NOTIFICATIONS, hInst, nullptr);
+
     // Progress / status
     _hStatusText = CreateWindowEx(0, L"STATIC", L"Ready. Run a scan to discover devices.",
         WS_CHILD | WS_VISIBLE | SS_LEFT,
@@ -341,6 +345,7 @@ void TabOverview::LayoutControls(int cx, int cy) {
     deferMove(_hBtnMonStart, Theme::SP4 + 256, btnY + sOff, 130, BTN_H);
     deferMove(_hBtnMonStop, Theme::SP4 + 394, btnY + sOff, 130, BTN_H);
     deferMove(_hBtnExport, Theme::SP4 + 532, btnY + sOff, 130, BTN_H);
+    deferMove(_hBtnNotif,  Theme::SP4 + 670, btnY + sOff, 130, BTN_H);
 
     deferMove(_hStatusText, 16, btnY + BTN_H + 8 + sOff, cx - 32, 20);
     deferMove(_hProgressBar, 16, btnY + BTN_H + 32 + sOff, cx - 32, 8);
@@ -476,6 +481,40 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
                           isPrimary ? RGB(255,255,255) : Theme::TEXT_PRIMARY);
         HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive()); // 13px SemiBold
         DrawText(hdc, text, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, old);
+
+        return TRUE;
+    }
+
+    // Notification button — amber tint when there are unread notifications
+    if (dis->CtlID == IDC_BTN_NOTIFICATIONS) {
+        HDC hdc = dis->hDC;
+        RECT rc = dis->rcItem;
+        bool pressed = (dis->itemState & ODS_SELECTED) != 0;
+        bool focused = (dis->itemState & ODS_FOCUS) != 0;
+
+        int count = _mainWnd ? (int)_mainWnd->_notifications.size() : 0;
+        bool hasNotifs = count > 0;
+
+        if (hasNotifs) {
+            // Amber-tinted glass to signal pending notifications
+            COLORREF amberBg = Theme::AlphaBlend(Theme::ACCENT_AMBER, Theme::BG_SURFACE, 18);
+            Theme::DrawRoundedCard(hdc, rc, Theme::RADIUS_MD, amberBg, Theme::ACCENT_AMBER);
+        } else {
+            Theme::DrawGlassButton(hdc, rc, Theme::RADIUS_MD, pressed, 1, focused);
+        }
+
+        // Label: "Notifications" or "Notifications (N)"
+        wchar_t label[48];
+        if (hasNotifs)
+            swprintf_s(label, L"Notifications (%d)", count);
+        else
+            wcscpy_s(label, L"Notifications");
+
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, hasNotifs ? Theme::ACCENT_AMBER : Theme::TEXT_PRIMARY);
+        HFONT old = (HFONT)SelectObject(hdc, Theme::FontNavActive());
+        DrawText(hdc, label, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(hdc, old);
 
         return TRUE;
@@ -1003,6 +1042,13 @@ LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
         }
         break;
 
+    case IDC_BTN_NOTIFICATIONS:
+        if (_mainWnd) {
+            _mainWnd->ShowNotifPanel(!_mainWnd->_notifPanelOpen);
+            if (_hBtnNotif) InvalidateRect(_hBtnNotif, nullptr, FALSE);
+        }
+        break;
+
     case IDC_BTN_EXPORT:
         if (_mainWnd) {
             wchar_t path[MAX_PATH] = {};
@@ -1064,6 +1110,7 @@ LRESULT TabOverview::OnScanComplete(HWND hwnd) {
     RefreshKPIs();
     if (_hStatusText)  SetWindowText(_hStatusText, L"Scan complete.");
     if (_hProgressBar) SendMessage(_hProgressBar, PBM_SETPOS, 100, 0);
+    if (_hBtnNotif) InvalidateRect(_hBtnNotif, nullptr, FALSE);
 
     // Invalidate security dashboard area to repaint
     if (_mapRect.right > _mapRect.left)
@@ -1122,6 +1169,7 @@ LRESULT TabOverview::OnScanComplete(HWND hwnd) {
 
 LRESULT TabOverview::OnMonitorTick(HWND hwnd) {
     RefreshKPIs();
+    if (_hBtnNotif) InvalidateRect(_hBtnNotif, nullptr, FALSE);
     return 0;
 }
 
