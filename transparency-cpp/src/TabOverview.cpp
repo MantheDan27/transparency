@@ -14,6 +14,9 @@
 
 #pragma comment(lib, "iphlpapi.lib")
 
+#include <winhttp.h>
+#include <thread>
+
 #include "TabOverview.h"
 #include "MainWindow.h"
 #include "Theme.h"
@@ -126,6 +129,8 @@ LRESULT CALLBACK TabOverview::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return self->OnScanProgress(hwnd, wp, lp);
     case WM_MONITOR_TICK:
         return self->OnMonitorTick(hwnd);
+    case WM_SPEEDTEST_RESULT:
+        return self->OnSpeedTestResult(hwnd, wp);
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -526,19 +531,24 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     HDC   hdc = dis->hDC;
     RECT  rc  = dis->rcItem;
     COLORREF accent = KPI_ACCENTS[idx];
+    bool pressed = (dis->itemState & ODS_SELECTED) != 0;
 
-    // Card shadow (subtle depth)
-    Theme::DrawCardShadow(hdc, rc, Theme::RADIUS_MD);
+    // Card shadow (subtle depth) — suppress when pressed
+    if (!pressed) Theme::DrawCardShadow(hdc, rc, Theme::RADIUS_MD);
 
-    // Rounded card with top accent bar — design system radius_md
-    Theme::DrawAccentCard(hdc, rc, Theme::RADIUS_MD, Theme::BG_ELEVATED,
+    // Rounded card with top accent bar; brighten slightly on press
+    COLORREF cardBg = pressed ? Theme::AlphaBlend(accent, Theme::BG_ELEVATED, 12)
+                               : Theme::BG_ELEVATED;
+    Theme::DrawAccentCard(hdc, rc, Theme::RADIUS_MD, cardBg,
                          Theme::BORDER_DEFAULT, accent);
 
     // Hero number — Display font (48px Bold) per design system
     wchar_t valStr[32];
     if (idx == 3) {
-        if (_kpiVal[3] >= 0) swprintf_s(valStr, L"%dms", _kpiVal[3]);
-        else                 wcscpy_s(valStr, L"--");
+        if (_speedTestRunning)       wcscpy_s(valStr, L"...");
+        else if (_speedTestMbps >= 0) swprintf_s(valStr, L"%d", _speedTestMbps);
+        else if (_kpiVal[3] >= 0)    swprintf_s(valStr, L"%dms", _kpiVal[3]);
+        else                         wcscpy_s(valStr, L"--");
     } else {
         swprintf_s(valStr, L"%d", _kpiVal[idx]);
     }
@@ -550,10 +560,16 @@ LRESULT TabOverview::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis) {
     DrawText(hdc, valStr, -1, &numRc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     // Label — Caption style (11px, uppercase, wide tracking)
+    const wchar_t* label = KPI_LABELS[idx];
+    wchar_t dynLabel[32];
+    if (idx == 3) {
+        if (_speedTestRunning)        label = L"TESTING SPEED...";
+        else if (_speedTestMbps >= 0) { swprintf_s(dynLabel, L"DOWNLOAD  %d MBPS", _speedTestMbps); label = dynLabel; }
+    }
     SelectObject(hdc, Theme::FontCaption());
     SetTextColor(hdc, Theme::TEXT_TERTIARY);
     RECT lblRc = { rc.left + Theme::SP4, rc.top + 60, rc.right - Theme::SP4, rc.top + 76 };
-    DrawText(hdc, KPI_LABELS[idx], -1, &lblRc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    DrawText(hdc, label, -1, &lblRc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
 
     SelectObject(hdc, oldFont);
 
@@ -980,6 +996,25 @@ static void UpdateModeDesc(HWND hDesc, bool isQuick, bool isStandard, bool isDee
 LRESULT TabOverview::OnCommand(HWND hwnd, WPARAM wp, LPARAM lp) {
     int id = LOWORD(wp);
 
+    // KPI tile clicks — navigate to relevant tab or run speed test
+    if (HIWORD(wp) == BN_CLICKED) {
+        if (id == IDC_STATIC_KPI1 || id == IDC_STATIC_KPI2) {
+            // Devices Online / Unknown Devices → open Devices tab
+            if (_mainWnd) _mainWnd->SwitchTab(Tab::Devices);
+            return 0;
+        }
+        if (id == IDC_STATIC_KPI3) {
+            // Active Alerts → open Alerts tab
+            if (_mainWnd) _mainWnd->SwitchTab(Tab::Alerts);
+            return 0;
+        }
+        if (id == IDC_STATIC_KPI4) {
+            // Network speed tile → run speed test
+            RunSpeedTest();
+            return 0;
+        }
+    }
+
     // Update mode description whenever a pill is clicked
     if ((id == 9200 || id == 9201 || id == 9202) && HIWORD(wp) == BN_CLICKED) {
         UpdateModeDesc(_hModeDesc, id == 9200, id == 9201, id == 9202);
@@ -1171,6 +1206,80 @@ LRESULT TabOverview::OnMonitorTick(HWND hwnd) {
     RefreshKPIs();
     if (_hBtnNotif) InvalidateRect(_hBtnNotif, nullptr, FALSE);
     return 0;
+}
+
+LRESULT TabOverview::OnSpeedTestResult(HWND hwnd, WPARAM mbps) {
+    _speedTestRunning = false;
+    _speedTestMbps    = (int)(UINT_PTR)mbps;  // -1 means test failed
+
+    if (_hKpi[3]) InvalidateRect(_hKpi[3], nullptr, FALSE);
+
+    if (_speedTestMbps < 0) {
+        if (_hStatusText) SetWindowText(_hStatusText, L"Speed test failed — check internet connection.");
+    } else {
+        wchar_t buf[64];
+        swprintf_s(buf, L"Speed test complete: %d Mbps download.", _speedTestMbps);
+        if (_hStatusText) SetWindowText(_hStatusText, buf);
+    }
+    return 0;
+}
+
+void TabOverview::RunSpeedTest() {
+    if (_speedTestRunning) return;
+    _speedTestRunning = true;
+    _speedTestMbps    = -1;
+    if (_hKpi[3])    InvalidateRect(_hKpi[3], nullptr, FALSE);
+    if (_hStatusText) SetWindowText(_hStatusText, L"Speed test running — downloading test file...");
+
+    HWND targetHwnd = _hwnd;
+
+    std::thread([targetHwnd]() {
+        // Download ~10 MB from Cloudflare's speed test endpoint and measure throughput
+        HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        if (!hSess) { PostMessage(targetHwnd, WM_SPEEDTEST_RESULT, (WPARAM)(UINT_PTR)-1, 0); return; }
+
+        HINTERNET hConn = WinHttpConnect(hSess, L"speed.cloudflare.com",
+            INTERNET_DEFAULT_HTTPS_PORT, 0);
+        if (!hConn) {
+            WinHttpCloseHandle(hSess);
+            PostMessage(targetHwnd, WM_SPEEDTEST_RESULT, (WPARAM)(UINT_PTR)-1, 0); return;
+        }
+
+        HINTERNET hReq = WinHttpOpenRequest(hConn, L"GET",
+            L"/__down?bytes=10485760",
+            nullptr, WINHTTP_NO_REFERER,
+            WINHTTP_DEFAULT_ACCEPT_TYPES,
+            WINHTTP_FLAG_SECURE);
+        if (!hReq) {
+            WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
+            PostMessage(targetHwnd, WM_SPEEDTEST_RESULT, (WPARAM)(UINT_PTR)-1, 0); return;
+        }
+
+        if (!WinHttpSendRequest(hReq, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+                WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+            !WinHttpReceiveResponse(hReq, nullptr)) {
+            WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
+            PostMessage(targetHwnd, WM_SPEEDTEST_RESULT, (WPARAM)(UINT_PTR)-1, 0); return;
+        }
+
+        ULONGLONG t0 = GetTickCount64();
+        ULONGLONG totalBytes = 0;
+        char buf[65536];
+        DWORD read = 0;
+        while (WinHttpReadData(hReq, buf, sizeof(buf), &read) && read > 0)
+            totalBytes += read;
+        ULONGLONG elapsed = GetTickCount64() - t0;
+
+        WinHttpCloseHandle(hReq); WinHttpCloseHandle(hConn); WinHttpCloseHandle(hSess);
+
+        // Mbps = (bytes * 8 bits) / (elapsed ms / 1000) / 1,000,000
+        int mbps = (elapsed > 0)
+            ? (int)((totalBytes * 8ULL) / (ULONGLONG)elapsed / 1000ULL)
+            : 0;
+        PostMessage(targetHwnd, WM_SPEEDTEST_RESULT, (WPARAM)(UINT_PTR)mbps, 0);
+    }).detach();
 }
 
 // ── KPI refresh ───────────────────────────────────────────────────────────────

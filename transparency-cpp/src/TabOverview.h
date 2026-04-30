@@ -34,6 +34,7 @@ private:
     LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* dis);
     LRESULT OnVScroll(HWND hwnd, WPARAM wp);
     LRESULT OnMouseWheel(HWND hwnd, int rawDelta);
+    LRESULT OnSpeedTestResult(HWND hwnd, WPARAM mbps);
     void ApplyScrollDelta(HWND hwnd, int dy);
     void ApplyScrollAbsolute(HWND hwnd, int newScrollY);
 
@@ -46,6 +47,7 @@ private:
     void DrawSparkline(HDC hdc, const RECT& rc,
                        const std::vector<int>& vals, COLORREF col);
     void RebuildSecurityData(const ScanResult& r);
+    void RunSpeedTest();
 
     HWND _hwnd = nullptr;
     MainWindow* _mainWnd = nullptr;
@@ -118,6 +120,10 @@ private:
     // Cached internet status from monitor (more accurate than gateway latency alone)
     bool _internetOnline  = false;
     int  _internetLatency = -1;
+
+    // Speed test state
+    int  _speedTestMbps    = -1;
+    bool _speedTestRunning = false;
 
     static const wchar_t* s_className;
 };
