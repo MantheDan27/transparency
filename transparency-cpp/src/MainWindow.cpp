@@ -507,23 +507,6 @@ void MainWindow::DrawTitleBar(HDC hdc, int cx) {
 
     drawToolBtn(L"\u25A0", L"Stop", Theme::ACCENT_RED, 56);
 
-    // Command palette trigger (center-right area)
-    int cpX = cx - 280;
-    if (cpX > tbX + 40) {
-        RECT cpRc = { cpX, 8, cpX + 200, TITLEBAR_H - 8 };
-        Theme::DrawRoundedCard(hdc, cpRc, 6, Theme::BG_ELEVATED, Theme::BORDER_DEFAULT);
-        SetTextColor(hdc, Theme::TEXT_TERTIARY);
-        SelectObject(hdc, Theme::FontCaption());
-        RECT cpText = { cpX + 10, 8, cpX + 180, TITLEBAR_H - 8 };
-        DrawText(hdc, L"Search devices, commands...", -1, &cpText, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-        // Ctrl+K badge
-        RECT badge = { cpX + 152, 12, cpX + 194, TITLEBAR_H - 12 };
-        Theme::DrawRoundedCard(hdc, badge, 3, Theme::BG_ROOT, Theme::BORDER_DEFAULT);
-        RECT badgeText = { cpX + 152, 12, cpX + 194, TITLEBAR_H - 12 };
-        DrawText(hdc, L"Ctrl+K", -1, &badgeText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
-
     // Notification bell button — right side of title bar (before system controls)
     int bellX = cx - 174;   // ~3 × 46px system buttons + 12px margin
     int bellY = 5;
