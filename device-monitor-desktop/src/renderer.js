@@ -1214,22 +1214,24 @@ function openDetailPanel(dev, tab) {
   const policyContent = `<div class="policy-section">
     <div class="detail-section-title" style="margin-bottom:1rem">Device Policy</div>
     <div class="policy-field">
-      <label>Monitoring Level</label>
+      <fieldset style="border:none;padding:0;margin:0;">
+      <legend style="margin-bottom:0.25rem;">Monitoring Level</legend>
       <div class="policy-level-btns" id="policyLevelBtns">${levels.map(l=>`<button class="policy-level-btn${monitorLevel===l?' active':''}" data-level="${l}">${levelLabels[l]}</button>`).join('')}</div>
       <div class="policy-hint">Controls scan depth for this device.</div>
+      </fieldset>
     </div>
     <div class="policy-field">
       <label for="policyExpectedPorts">Expected Open Ports</label>
       <input type="text" class="policy-ports-input" id="policyExpectedPorts" placeholder="e.g. 80, 443, 22" value="${escHtml((policy.expectedPorts||[]).join(', '))}">
       <div class="policy-hint">Alert if ports differ from this profile.</div>
     </div>
-    <div class="policy-field" style="display:flex;flex-direction:column;gap:0.5rem">
-      <label>Alert If…</label>
+    <fieldset class="policy-field" style="display:flex;flex-direction:column;gap:0.5rem;border:none;padding:0;margin:0;">
+      <legend style="margin-bottom:0.25rem;">Alert If…</legend>
       <label class="checkbox-label" for="policyAlertNewPorts"><input type="checkbox" id="policyAlertNewPorts" ${policy.alertNewPorts?'checked':''}>New unexpected ports appear</label>
       <label class="checkbox-label" for="policyAlertIpChange"><input type="checkbox" id="policyAlertIpChange" ${policy.alertIpChange?'checked':''}>IP address changes</label>
       <label class="checkbox-label" for="policyAlertHostChange"><input type="checkbox" id="policyAlertHostChange" ${policy.alertHostChange?'checked':''}>Hostname changes</label>
       <label class="checkbox-label" for="policyMuteAlerts"><input type="checkbox" id="policyMuteAlerts" ${muteAlerts?'checked':''}>Mute all alerts for this device</label>
-    </div>
+    </fieldset>
     <button class="btn btn-primary btn-sm" id="savePolicyBtn" style="margin-top:0.75rem">Save Policy</button>
   </div>`;
 
@@ -1948,8 +1950,8 @@ function renderAlertRules() {
   list.innerHTML = allAlertRules.map(r => `
     <div class="rule-item">
       <div class="rule-item-left">
-        <label class="toggle-switch-sm" title="${r.enabled ? 'Rule enabled' : 'Rule disabled'}">
-          <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="window.toggleRule('${escHtml(r.id)}', this.checked)" aria-label="Enable rule ${escHtml(r.name)}">
+        <label class="toggle-switch-sm" title="${r.enabled ? \'Rule enabled\' : \'Rule disabled\'}" for="toggle-rule-${escHtml(r.id)}">
+          <input type="checkbox" id="toggle-rule-${escHtml(r.id)}" ${r.enabled ? \'checked\' : \'\'} onchange="window.toggleRule(\'${escHtml(r.id)}\', this.checked)" aria-label="Enable rule ${escHtml(r.name)}">
           <span class="toggle-knob-sm"></span>
         </label>
         <div>
@@ -3215,8 +3217,8 @@ function renderScheduleList() {
   list.innerHTML = schedules.map(s => {
     const nextRun = s.nextRun ? new Date(s.nextRun).toLocaleString() : '—';
     return `<div class="schedule-item">
-      <label class="toggle-switch-sm">
-        <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="window.toggleSchedule('${escHtml(s.id)}', this.checked)" aria-label="Enable schedule ${escHtml(s.name)}">
+      <label class="toggle-switch-sm" for="toggle-schedule-${escHtml(s.id)}">
+        <input type="checkbox" id="toggle-schedule-${escHtml(s.id)}" ${s.enabled ? \'checked\' : \'\'} onchange="window.toggleSchedule(\'${escHtml(s.id)}\', this.checked)" aria-label="Enable schedule ${escHtml(s.name)}">
         <span class="toggle-knob-sm"></span>
       </label>
       <div class="schedule-item-info">
@@ -3282,8 +3284,8 @@ function renderHookList() {
   }
   list.innerHTML = scriptHooks.map(h => `
     <div class="hook-item">
-      <label class="toggle-switch-sm">
-        <input type="checkbox" ${h.enabled ? 'checked' : ''} onchange="window.toggleHook('${escHtml(h.id)}', this.checked)" aria-label="Enable script hook">
+      <label class="toggle-switch-sm" for="toggle-hook-${escHtml(h.id)}">
+        <input type="checkbox" id="toggle-hook-${escHtml(h.id)}" ${h.enabled ? \'checked\' : \'\'} onchange="window.toggleHook(\'${escHtml(h.id)}\', this.checked)" aria-label="Enable script hook">
         <span class="toggle-knob-sm"></span>
       </label>
       <div class="hook-item-body">
