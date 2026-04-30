@@ -57,7 +57,7 @@ static const AcronymEntry ACRONYM_DB[] = {
     { L"OUI",
       L"Organizationally Unique Identifier — The first three bytes of a MAC address, assigned by the "
       L"IEEE to identify the chip manufacturer. For example, 'B8:27:EB' is a Raspberry Pi and "
-      L"'A4:CF:12' is a Nest device. This is how Transparency identifies vendors without scanning." },
+      L"'A4:CF:12' is a Nest device. This is how Transparencii identifies vendors without scanning." },
 
     { L"APIPA",
       L"Automatic Private IP Addressing — When a device cannot reach a DHCP server it assigns itself "
@@ -134,7 +134,7 @@ static const AcronymEntry ACRONYM_DB[] = {
     { L"NIC",
       L"Network Interface Card — The hardware (or virtual) adapter your computer uses to connect to "
       L"a network. You may have several: one for Wi-Fi, one for Ethernet, and additional virtual ones "
-      L"created by software like VirtualBox, VMware, or VPN clients. Transparency scans from the "
+      L"created by software like VirtualBox, VMware, or VPN clients. Transparencii scans from the "
       L"highest-ranked physical adapter by default." },
 
     { L"GATEWAY",

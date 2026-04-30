@@ -103,7 +103,7 @@ string TabSmartHome::HttpGetJson(const wstring& fullUrl, const wstring& bearerTo
     ParsedUrl u = ParseUrl(fullUrl);
     if (!u.valid) return "Error: invalid URL";
 
-    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+    HINTERNET hSess = WinHttpOpen(L"Transparencii/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSess) return "Error: WinHttpOpen failed";
 
@@ -145,7 +145,7 @@ string TabSmartHome::HttpGetJson(const wstring& fullUrl, const wstring& bearerTo
 
 string TabSmartHome::HttpPostLocal(const wstring& host, INTERNET_PORT port,
                                     const wstring& path, const string& json) {
-    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+    HINTERNET hSess = WinHttpOpen(L"Transparencii/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSess) return "Error: WinHttpOpen failed";
 
@@ -180,7 +180,7 @@ string TabSmartHome::HttpPostLocal(const wstring& host, INTERNET_PORT port,
 
 string TabSmartHome::HttpPostJson(const wstring& host, const wstring& path,
                                    const string& json, const wstring& bearerToken) {
-    HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+    HINTERNET hSess = WinHttpOpen(L"Transparencii/1.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSess) return "Error: WinHttpOpen failed";
     HINTERNET hConn = WinHttpConnect(hSess, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);

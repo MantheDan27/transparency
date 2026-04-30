@@ -76,7 +76,7 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
     wc.hbrBackground = Theme::BrushApp();
-    wc.lpszClassName = L"TransparencyMainWnd";
+    wc.lpszClassName = L"TransparenciiMainWnd";
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MAIN));
     wc.hIconSm       = (HICON)LoadImage(hInstance, MAKEINTRESOURCE(IDI_MAIN), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
@@ -95,8 +95,8 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     s_instance = self;
 
     HWND hwnd = CreateWindowEx(
-        0, L"TransparencyMainWnd",
-        L"Transparency - Network Monitor",
+        0, L"TransparenciiMainWnd",
+        L"Transparencii - Network Monitor",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
         wx, wy, ww, wh,
         nullptr, nullptr, hInstance, self);
@@ -289,10 +289,10 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     ncwc.lpfnWndProc   = NotifWndProc;
     ncwc.hInstance     = _hInstance;
     ncwc.hbrBackground = Theme::BrushElevated();
-    ncwc.lpszClassName = L"TransparencyNotifPanel";
+    ncwc.lpszClassName = L"TransparenciiNotifPanel";
     ncwc.style         = CS_HREDRAW | CS_VREDRAW;
     RegisterClassEx(&ncwc);
-    _hNotifWnd = CreateWindowEx(0, L"TransparencyNotifPanel", nullptr,
+    _hNotifWnd = CreateWindowEx(0, L"TransparenciiNotifPanel", nullptr,
         WS_CHILD | WS_CLIPCHILDREN,
         cx - 356, TITLEBAR_H + 2, 340, 80,
         hwnd, nullptr, _hInstance, nullptr);
@@ -300,7 +300,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparency v4.1.0 initialized");
+    AddLedgerEntry(L"App Started", L"Transparencii v4.1.0 initialized");
     SetTimer(hwnd, 1, 60000, nullptr);
 
     // Refresh status bar every 5 seconds (avoid excessive repaints)
@@ -474,7 +474,7 @@ void MainWindow::DrawTitleBar(HDC hdc, int cx) {
     SetTextColor(hdc, Theme::TEXT_SECONDARY);
     SelectObject(hdc, Theme::FontNavActive());
     RECT nameRc = { 40, 0, 160, TITLEBAR_H };
-    DrawText(hdc, L"Transparency", -1, &nameRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    DrawText(hdc, L"Transparencii", -1, &nameRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
     // Toolbar actions — centered after sidebar
     int tbX = sw + 20;

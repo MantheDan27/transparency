@@ -15,7 +15,7 @@
 
 using std::wstring;
 
-const wchar_t* TabAlerts::s_className = L"TransparencyTabAlerts";
+const wchar_t* TabAlerts::s_className = L"TransparenciiTabAlerts";
 
 static const wchar_t* ALERT_FILTER_LABELS[] = { L"All", L"High", L"Medium", L"Low", L"Unack'd" };
 

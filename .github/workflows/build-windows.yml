@@ -51,9 +51,9 @@ jobs:
         elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
           VER="${GITHUB_REF#refs/tags/v}"
         elif [ -f transparency-linux/CMakeLists.txt ]; then
-          VER=$(grep 'project(Transparency VERSION' transparency-linux/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+          VER=$(grep 'project(Transparencii VERSION' transparency-linux/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
         elif [ -f transparency-cpp/CMakeLists.txt ]; then
-          VER=$(grep 'project(Transparency VERSION' transparency-cpp/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+          VER=$(grep 'project(Transparencii VERSION' transparency-cpp/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
         else
           VER="0.0.0"
         fi
@@ -98,7 +98,7 @@ jobs:
     - name: Configure CMake
       run: cmake -B build -S transparency-cpp -DCMAKE_BUILD_TYPE=Release
 
-    - name: Build Transparency C++ App
+    - name: Build Transparencii C++ App
       run: cmake --build build --config Release
 
     - name: Upload to release
@@ -106,7 +106,7 @@ jobs:
       with:
         tag_name: ${{ needs.resolve-version.outputs.release_tag }}
         name: "${{ needs.resolve-version.outputs.release_tag }} (C++ Windows)"
-        files: build/Release/Transparency.exe
+        files: build/Release/Transparencii.exe
         draft: false
         prerelease: false
         generate_release_notes: true

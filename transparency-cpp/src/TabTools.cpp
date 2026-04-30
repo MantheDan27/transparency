@@ -33,7 +33,7 @@ using std::wstring;
 
 using std::wstring;
 
-const wchar_t* TabTools::s_className = L"TransparencyTabTools";
+const wchar_t* TabTools::s_className = L"TransparenciiTabTools";
 
 static wstring ToWide(const std::string& s) {
     if (s.empty()) return L"";
@@ -608,7 +608,7 @@ void TabTools::RunPing(const wstring& target, int count) {
             return;
         }
 
-        char sendData[32] = "TransparencyPing";
+        char sendData[32] = "TransparenciiPing";
         DWORD repBufSz = sizeof(ICMP_ECHO_REPLY) + sizeof(sendData) + 8;
         auto repBuf = std::make_unique<BYTE[]>(repBufSz);
 
@@ -957,7 +957,7 @@ void TabTools::RunHttpTest(const wstring& url) {
         DWORD recvTo = 5000;
         setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char*)&recvTo, sizeof(recvTo));
 
-        std::string req = "GET " + pathNarrow + " HTTP/1.0\r\nHost: " + hostNarrow + "\r\nUser-Agent: Transparency/2.1\r\n\r\n";
+        std::string req = "GET " + pathNarrow + " HTTP/1.0\r\nHost: " + hostNarrow + "\r\nUser-Agent: Transparencii/2.1\r\n\r\n";
         send(s, req.c_str(), (int)req.size(), 0);
 
         char buf[4096] = {};

@@ -16,7 +16,7 @@
 
 using std::wstring;
 
-const wchar_t* TabPrivacy::s_className = L"TransparencyTabPrivacy";
+const wchar_t* TabPrivacy::s_className = L"TransparenciiTabPrivacy";
 
 // ─── Control IDs ─────────────────────────────────────────────────────────────
 enum {

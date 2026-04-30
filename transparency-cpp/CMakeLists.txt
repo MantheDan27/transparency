@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparency VERSION 4.33.1 LANGUAGES CXX)
+project(Transparencii VERSION 4.34.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,17 +51,17 @@ set(HEADERS
     src/GlossaryPopup.h
 )
 
-add_executable(Transparency WIN32 ${SOURCES} ${HEADERS})
+add_executable(Transparencii WIN32 ${SOURCES} ${HEADERS})
 
 # Add test executable
-add_executable(TransparencyTests src/Scanner_test.cpp src/Scanner.cpp)
+add_executable(TransparenciiTests src/Scanner_test.cpp src/Scanner.cpp)
 if(MSVC)
-    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+    set_target_properties(TransparenciiTests PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
 elseif(MINGW OR CYGWIN)
-    set_target_properties(TransparencyTests PROPERTIES LINK_FLAGS "-mconsole -municode -static-libgcc -static-libstdc++")
+    set_target_properties(TransparenciiTests PROPERTIES LINK_FLAGS "-mconsole -municode -static-libgcc -static-libstdc++")
 endif()
-target_include_directories(TransparencyTests PRIVATE src)
-target_compile_definitions(TransparencyTests PRIVATE
+target_include_directories(TransparenciiTests PRIVATE src)
+target_compile_definitions(TransparenciiTests PRIVATE
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
@@ -71,20 +71,20 @@ target_compile_definitions(TransparencyTests PRIVATE
     _CRT_SECURE_NO_WARNINGS
 )
 if(MSVC)
-    target_compile_options(TransparencyTests PRIVATE
+    target_compile_options(TransparenciiTests PRIVATE
         /W3
         /MP
         /utf-8
         /Zc:__cplusplus
     )
 endif()
-target_link_libraries(TransparencyTests PRIVATE
+target_link_libraries(TransparenciiTests PRIVATE
     ws2_32
     iphlpapi
     dnsapi
 )
 
-target_compile_definitions(Transparency PRIVATE
+target_compile_definitions(Transparencii PRIVATE
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
@@ -95,7 +95,7 @@ target_compile_definitions(Transparency PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(Transparency PRIVATE
+    target_compile_options(Transparencii PRIVATE
         /W3
         /MP
         /utf-8
@@ -103,7 +103,7 @@ if(MSVC)
     )
 endif()
 
-target_link_libraries(Transparency PRIVATE
+target_link_libraries(Transparencii PRIVATE
     ws2_32
     iphlpapi
     comctl32
@@ -122,18 +122,18 @@ target_link_libraries(Transparency PRIVATE
     crypt32
 )
 
-set_target_properties(Transparency PROPERTIES
-    OUTPUT_NAME "Transparency"
+set_target_properties(Transparencii PROPERTIES
+    OUTPUT_NAME "Transparencii"
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
 
-target_include_directories(Transparency PRIVATE src)
+target_include_directories(Transparencii PRIVATE src)
 
 # Enable testing
 enable_testing()
 
 # Test executable for ScanEngine::AnalyzeAnomalies (we use console subsystem for tests)
-add_executable(TestScannerAnomalies src/TestScannerAnomalies.cpp src/Scanner.cpp)
+add_executable(TestTransparenciiAnomalies src/TestScannerAnomalies.cpp src/Scanner.cpp)
 if(MINGW OR CYGWIN)
     # Ensure tests run as console app so output is visible
     set_target_properties(TestScannerAnomalies PROPERTIES LINK_FLAGS "-mconsole -municode -static-libgcc -static-libstdc++")
@@ -185,11 +185,11 @@ add_test(NAME TestScannerAnomalies COMMAND TestScannerAnomalies)
 
 # MSVC specific settings
 if(MSVC)
-    target_compile_options(Transparency PRIVATE
+    target_compile_options(Transparencii PRIVATE
         /wd4100  # unreferenced formal parameter
         /wd4189  # local variable initialized but not referenced
     )
-    set_property(TARGET Transparency PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET Transparencii PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 # Additional scanner test

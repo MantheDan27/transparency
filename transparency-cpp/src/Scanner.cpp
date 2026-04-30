@@ -346,7 +346,7 @@ int ScanEngine::PingSingle(const wstring& ip, int timeoutMs) {
     struct in_addr addr;
     inet_pton(AF_INET, ipNarrow.c_str(), &addr);
 
-    char sendData[32] = "TransparencyPing";
+    char sendData[32] = "TransparenciiPing";
     DWORD repBufSize = sizeof(ICMP_ECHO_REPLY) + sizeof(sendData) + 8;
     auto repBuf = std::make_unique<BYTE[]>(repBufSize);
 

@@ -21,7 +21,7 @@
 
 using std::wstring;
 
-const wchar_t* TabDevices::s_className = L"TransparencyTabDevices";
+const wchar_t* TabDevices::s_className = L"TransparenciiTabDevices";
 
 static const wchar_t* FILTER_LABELS[] = {
     L"All", L"Online", L"Unknown", L"Watchlist", L"Owned", L"Changed"
@@ -1041,7 +1041,7 @@ void TabDevices::UpdateDetailPanel(const Device& dev) {
 void TabDevices::PauseDevice(const wstring& ip, bool pause) {
     if (!ScanEngine::IsSafeIP(ip)) return;
 
-    wstring ruleName = L"Transparency_Block_" + ip;
+    wstring ruleName = L"Transparencii_Block_" + ip;
     wstring args;
     if (pause) {
         args = L"/c netsh advfirewall firewall add rule name=\"" + ruleName +

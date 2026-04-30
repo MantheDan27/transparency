@@ -26,7 +26,7 @@
 
 using std::wstring;
 
-const wchar_t* TabOverview::s_className = L"TransparencyTabOverview";
+const wchar_t* TabOverview::s_className = L"TransparenciiTabOverview";
 
 static wstring ToWide(const std::string& s) {
     if (s.empty()) return L"";
@@ -1235,7 +1235,7 @@ void TabOverview::RunSpeedTest() {
 
     std::thread([targetHwnd]() {
         // Download ~10 MB from Cloudflare's speed test endpoint and measure throughput
-        HINTERNET hSess = WinHttpOpen(L"Transparency/1.0",
+        HINTERNET hSess = WinHttpOpen(L"Transparencii/1.0",
             WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
             WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (!hSess) { PostMessage(targetHwnd, WM_SPEEDTEST_RESULT, (WPARAM)(UINT_PTR)-1, 0); return; }

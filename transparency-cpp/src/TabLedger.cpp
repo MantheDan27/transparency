@@ -16,7 +16,7 @@
 
 using std::wstring;
 
-const wchar_t* TabLedger::s_className = L"TransparencyTabLedger";
+const wchar_t* TabLedger::s_className = L"TransparenciiTabLedger";
 
 enum {
     ID_COMBO_SNAP1 = 9700,
