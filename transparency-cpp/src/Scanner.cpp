@@ -1090,7 +1090,16 @@ wstring ScanEngine::FingerprintDeviceType(const Device& d) {
     if (vendorContains(L"apple") && (hasMdns(L"_workstation") || hasPort(548)))
         return L"Mac";
 
-    // Mobile/Phone — vendor OUI match or mDNS device-info (iPhone/iPad)
+    // Tablet — hostname or mDNS name contains known tablet keywords
+    if (hostContains(L"ipad") ||
+        hostContains(L"tablet") ||
+        (vendorContains(L"samsung") && (hostContains(L"tab") || hostContains(L"galaxy tab"))) ||
+        (vendorContains(L"lenovo") && hostContains(L"tab")) ||
+        (vendorContains(L"amazon") && (hostContains(L"kindle") || hostContains(L"fire"))) ||
+        (vendorContains(L"apple") && hasMdns(L"_device-info") && hostContains(L"ipad")))
+        return L"Tablet";
+
+    // Mobile/Phone — vendor OUI match or mDNS device-info
     if (vendorContains(L"apple") || vendorContains(L"samsung") ||
         vendorContains(L"xiaomi") || vendorContains(L"huawei") ||
         vendorContains(L"motorola") || vendorContains(L"oneplus") ||
@@ -1292,6 +1301,10 @@ void ScanEngine::FillConfidenceAlternatives(Device& d) {
     add(L"Windows PC",         (hasPort(3389)||hasPort(445)||(hasPort(139)&&hasPort(135))) ? 80 : 5);
     add(L"Linux Server",       (hasPort(22)&&(hasPort(80)||hasPort(443)||hasPort(8080))) ? 75 : 5);
     add(L"Mac",                (vendorHas(L"apple")&&(hasMdns(L"_workstation")||hasPort(548))) ? 80 : 5);
+    add(L"Tablet",             (hostHas(L"ipad")||hostHas(L"tablet")||
+                                (vendorHas(L"samsung")&&(hostHas(L"tab")||hostHas(L"galaxy tab")))||
+                                (vendorHas(L"lenovo")&&hostHas(L"tab"))||
+                                (vendorHas(L"amazon")&&(hostHas(L"kindle")||hostHas(L"fire")))) ? 80 : 5);
     add(L"Mobile Device",      (vendorHas(L"apple")||vendorHas(L"samsung")||vendorHas(L"xiaomi")||
                                 vendorHas(L"motorola")||vendorHas(L"oneplus")||vendorHas(L"sony mobile")||
                                 vendorHas(L"lg elec")||(vendorHas(L"google")&&!hasPort(8008))||
