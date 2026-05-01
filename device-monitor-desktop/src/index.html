@@ -191,7 +191,7 @@
           </div>
           <div class="scan-toggles">
             <label class="toggle-switch" title="Gentle Mode — throttles packet rate" for="gentleToggle">
-              <input type="checkbox" id="gentleToggle">
+              <input type="checkbox" id="gentleToggle" aria-label="Toggle Gentle Mode">
               <span class="toggle-knob"></span>
               <span class="toggle-text">Gentle</span>
             </label>
@@ -347,7 +347,7 @@
           </div>
           <div class="toggle-wrap">
             <span class="toggle-label" id="cloudToggleLabel">Enabled</span>
-            <label class="toggle-switch" for="cloudEnrichToggle"><input type="checkbox" id="cloudEnrichToggle" checked><span class="toggle-knob"></span></label>
+            <label class="toggle-switch" for="cloudEnrichToggle"><input type="checkbox" id="cloudEnrichToggle" aria-label="Toggle Cloud Enrichment" checked><span class="toggle-knob"></span></label>
           </div>
         </div>
 
@@ -1094,7 +1094,7 @@ curl -H "X-API-Key: YOUR_KEY" http://localhost:7722/api/network</pre>
           <input type="text" class="tool-input" id="rbWebhook" placeholder="https://...">
         </div>
         <label class="toggle-switch" style="margin-top:0.5rem" for="rbEnabled">
-          <input type="checkbox" id="rbEnabled" checked>
+          <input type="checkbox" id="rbEnabled" aria-label="Toggle Rule Enabled" checked>
           <span class="toggle-knob"></span>
           <span class="toggle-text">Rule Enabled</span>
         </label>
