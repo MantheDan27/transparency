@@ -1,4 +1,4 @@
-# EXE Return Codes
+h# EXE Return Codes
 
 This document catalogs miscellaneous EXE return (exit) codes emitted by the Transparency suite of executables. Use this page as the canonical reference URL when surfacing exit codes from logs, CI pipelines, or installer telemetry.
 
@@ -31,6 +31,7 @@ This document catalogs miscellaneous EXE return (exit) codes emitted by the Tran
 | 2    | `EXIT_BAD_ARGS` | Invalid or missing command-line arguments. | CLI |
 | 3    | `EXIT_CONFIG_ERROR` | Configuration file missing or malformed. | All |
 | 4    | `EXIT_PERMISSION_DENIED` | Insufficient privileges (run as admin/root). | All |
+| 110  | `EXIT_DISK_FULL` | Insufficient disk space to complete the operation. Maps to Win32 `ERROR_DISK_FULL` (112) and POSIX `ENOSPC` (28). | Installer, Scanner cache, Report exporter |
 | _TBD_ | _TBD_ | _Add additional miscellaneous codes here._ | _TBD_ |
 
 > Fill in the rows above as new exit codes are introduced. Keep the list alphabetized by code.
