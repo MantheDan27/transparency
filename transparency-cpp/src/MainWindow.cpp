@@ -31,6 +31,7 @@
 #include "TabSmartHome.h"
 #include "TabHistory.h"
 #include "TabGlossary.h"
+#include "TabTopology.h"
 #include "Theme.h"
 #include "Resource.h"
 
@@ -46,12 +47,13 @@ static const NavItem NAV_ITEMS[] = {
     { L"\u229E", L"Devices",      Tab::Devices   },
     { L"\u2691", L"Alerts",       Tab::Alerts    },
     { L"\u23F3", L"History",      Tab::History   },
-    { L"\u25CE", L"Topology",     Tab::SmartHome },
+    { L"\u25CE", L"Smart Home",   Tab::SmartHome },
     { L"\u25B3", L"Diagnostics",  Tab::Tools     },
     { L"\u2630", L"Scan History", Tab::Ledger    },
     { L"\u2139", L"Glossary",    Tab::Glossary  },
+    { L"\u2b21", L"Topology",    Tab::Topology  },
 };
-static const int NAV_ITEM_COUNT = 8;
+static const int NAV_ITEM_COUNT = 9;
 
 // Bottom nav items (pinned)
 static const NavItem NAV_BOTTOM[] = {
@@ -272,6 +274,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     _tabSmartHome = std::make_unique<TabSmartHome>();
     _tabHistory   = std::make_unique<TabHistory>();
     _tabGlossary  = std::make_unique<TabGlossary>();
+    _tabTopology  = std::make_unique<TabTopology>();
 
     _tabOverview ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabDevices  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
@@ -282,6 +285,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
     _tabSmartHome->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabHistory  ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
     _tabGlossary ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
+    _tabTopology ->Create(hwnd, panelX, contentTop, panelW, panelH, this);
 
     // Notification panel (floating child)
     WNDCLASSEX ncwc = {};
@@ -300,7 +304,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparencii v4.1.0 initialized");
+    AddLedgerEntry(L"App Started", L"Transparencii v4.35.0 initialized");
     SetTimer(hwnd, 1, 60000, nullptr);
 
     // Refresh status bar every 5 seconds (avoid excessive repaints)
@@ -646,8 +650,9 @@ void MainWindow::DrawContentHeader(HDC hdc, int cx, int cy) {
     case Tab::Tools:    viewTitle = L"Diagnostics";  break;
     case Tab::Ledger:   viewTitle = L"Scan History"; break;
     case Tab::Privacy:  viewTitle = L"Settings";     break;
-    case Tab::SmartHome:viewTitle = L"Topology";     break;
+    case Tab::SmartHome:viewTitle = L"Smart Home";   break;
     case Tab::History:  viewTitle = L"History";      break;
+    case Tab::Topology: viewTitle = L"Topology";     break;
     default: break;
     }
     RECT titleRc = { sw + 20, hdrTop, sw + 200, hdrTop + CONTENT_HDR_H };
@@ -885,6 +890,7 @@ void MainWindow::ShowActivePanel() {
     show(_tabSmartHome, _currentTab == Tab::SmartHome);
     show(_tabHistory,   _currentTab == Tab::History);
     show(_tabGlossary,  _currentTab == Tab::Glossary);
+    show(_tabTopology,  _currentTab == Tab::Topology);
 }
 
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
@@ -1570,6 +1576,8 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
         SendMessage(_tabSmartHome->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
     if (_tabHistory && _tabHistory->GetHwnd())
         SendMessage(_tabHistory->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
+    if (_tabTopology && _tabTopology->GetHwnd())
+        SendMessage(_tabTopology->GetHwnd(), WM_SCAN_COMPLETE, 0, 0);
 
     ScanResult r = GetLastResult();
     AddLedgerEntry(L"Scan Complete",
@@ -1593,6 +1601,8 @@ LRESULT MainWindow::OnScanProgress(HWND hwnd, WPARAM wp, LPARAM lp) {
 LRESULT MainWindow::OnMonitorTick(HWND, WPARAM, LPARAM) {
     if (_tabOverview && _tabOverview->GetHwnd())
         SendMessage(_tabOverview->GetHwnd(), WM_MONITOR_TICK, 0, 0);
+    if (_tabTopology && _tabTopology->GetHwnd())
+        SendMessage(_tabTopology->GetHwnd(), WM_MONITOR_TICK, 0, 0);
     return 0;
 }
 

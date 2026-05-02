@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparencii VERSION 4.34.2 LANGUAGES CXX)
+project(Transparencii VERSION 4.35.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,7 @@ set(SOURCES
     src/TabSmartHome.cpp
     src/TabHistory.cpp
     src/TabGlossary.cpp
+    src/TabTopology.cpp
     src/Scanner.cpp
     src/Monitor.cpp
     src/GlossaryPopup.cpp
@@ -48,6 +49,7 @@ set(HEADERS
     src/TabSmartHome.h
     src/TabHistory.h
     src/TabGlossary.h
+    src/TabTopology.h
     src/GlossaryPopup.h
 )
 

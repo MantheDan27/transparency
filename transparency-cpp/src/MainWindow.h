@@ -23,6 +23,7 @@ class TabPrivacy;
 class TabSmartHome;
 class TabHistory;
 class TabGlossary;
+class TabTopology;
 
 enum class Tab {
     Overview,
@@ -34,6 +35,7 @@ enum class Tab {
     SmartHome,
     History,
     Glossary,
+    Topology,
     COUNT
 };
 
@@ -113,6 +115,7 @@ private:
     std::unique_ptr<TabSmartHome> _tabSmartHome;
     std::unique_ptr<TabHistory>  _tabHistory;
     std::unique_ptr<TabGlossary> _tabGlossary;
+    std::unique_ptr<TabTopology> _tabTopology;
 
     // Hover tracking
     int  _hoverNav       = -1;
