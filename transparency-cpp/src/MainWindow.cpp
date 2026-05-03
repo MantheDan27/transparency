@@ -106,7 +106,7 @@ bool MainWindow::Create(HINSTANCE hInstance) {
     if (!hwnd) { delete self; s_instance = nullptr; return false; }
 
     Theme::SetDarkTitlebar(hwnd);
-    ShowWindow(hwnd, SW_SHOW);
+    ShowWindow(hwnd, SW_SHOWMAXIMIZED);
     UpdateWindow(hwnd);
     return true;
 }
