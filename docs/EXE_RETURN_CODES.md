@@ -33,6 +33,8 @@ This document catalogs miscellaneous EXE return (exit) codes emitted by the Tran
 | 4    | `EXIT_PERMISSION_DENIED` | Insufficient privileges (run as admin/root). | All |
 | 110  | `EXIT_DISK_FULL` | Insufficient disk space to complete the operation. Maps to Win32 `ERROR_DISK_FULL` (112) and POSIX `ENOSPC` (28). | Installer, Scanner cache, Report exporter |
 | 111  | `EXIT_INSTALL_CANCELLED` | Installation cancelled by user (e.g., user clicked Cancel in the installer UI or sent SIGINT). | Installer |
+| 112  | `EXIT_APP_ALREADY_EXISTS` | The application is already installed at the target location (and re-install is not permitted by the current options). | Installer |
+| 113  | `EXIT_INSTALL_IN_PROGRESS` | Another installation/uninstallation of the application is already running (mutex/lock held by another installer process). | Installer |
 | _TBD_ | _TBD_ | _Add additional miscellaneous codes here._ | _TBD_ |
 
 > Fill in the rows above as new exit codes are introduced. Keep the list alphabetized by code.
