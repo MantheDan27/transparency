@@ -589,15 +589,28 @@ function updateFilterCounts() {
     if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
   }
 
+  // ⚡ Bolt Performance Optimization: Replace multiple .filter().length passes with a single loop
+  let unknownCount = 0, watchlistCount = 0, ownedCount = 0;
+  let riskyCount = 0, changedCount = 0, vmCount = 0;
+
+  for (const d of allDevices) {
+    if ((d.meta?.trustState || 'unknown') === 'unknown') unknownCount++;
+    if (d.meta?.watchlist) watchlistCount++;
+    if (d.meta?.trustState === 'owned') ownedCount++;
+    if (anomalyIpSet.has(d.ip)) riskyCount++;
+    if (changedSet.has(d.ip)) changedCount++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) vmCount++;
+  }
+
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  $('fUnknown').textContent  = unknownCount;
+  $('fWatchlist').textContent = watchlistCount;
+  $('fOwned').textContent    = ownedCount;
+  $('fRisky').textContent    = riskyCount;
+  $('fChanged').textContent  = changedCount;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = vmCount;
 }
 
 function renderDeviceTable() {
@@ -2250,9 +2263,19 @@ async function refreshLedger() {
 }
 
 function updateLedgerStats(entries) {
-  $('lstatSend').textContent    = entries.filter(e => e.action === 'SEND').length;
-  $('lstatDelete').textContent  = entries.filter(e => e.action?.startsWith('DELETE')).length;
-  $('lstatDevices').textContent = new Set(entries.filter(e => e.deviceIp).map(e => e.deviceIp)).size;
+  // ⚡ Bolt Performance Optimization: Replace multiple .filter() passes with a single loop
+  let sendCount = 0, deleteCount = 0;
+  const deviceIps = new Set();
+
+  for (const e of entries) {
+    if (e.action === 'SEND') sendCount++;
+    if (e.action?.startsWith('DELETE')) deleteCount++;
+    if (e.deviceIp) deviceIps.add(e.deviceIp);
+  }
+
+  $('lstatSend').textContent    = sendCount;
+  $('lstatDelete').textContent  = deleteCount;
+  $('lstatDevices').textContent = deviceIps.size;
 }
 
 function renderLedgerList(entries) {
