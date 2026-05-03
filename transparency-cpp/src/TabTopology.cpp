@@ -175,27 +175,25 @@ void TabTopology::BuildLayout(int totalW, int totalH) {
     // Node radius scales down for crowded maps
     int nodeR = (N > 20) ? 10 : (N > 12) ? 12 : 14;
 
-    // Compute ring radius — enough arc spacing between nodes
-    double minSpacing = nodeR * 2.0 + 18.0;
-    double minFromSpacing = (N > 0) ? (N * minSpacing) / (2.0 * M_PI) : 80.0;
-    double maxFromCanvas  = (std::min(canvasW, canvasH) * 0.5 - nodeR - 70.0);
-    double ringR = std::max(minFromSpacing, 80.0);
-    if (maxFromCanvas > 80.0) ringR = std::min(ringR, maxFromCanvas);
+    // Min arc between adjacent nodes: diameter + room for text labels (≈90px wide)
+    double minSpacing = nodeR * 2.0 + 90.0;
 
-    // Two concentric rings if one ring can't fit all nodes comfortably
-    bool   twoRings   = false;
+    // Maximum ring radius the canvas can hold (reserve margin for labels + edges)
+    double canvasR = std::min(canvasW, canvasH) * 0.5 - nodeR - 65.0;
+    if (canvasR < 80.0) canvasR = 80.0;
+
+    // How many nodes fit in one ring at the full canvas radius?
+    int maxSingleRing = (N > 0) ? (int)((2.0 * M_PI * canvasR) / minSpacing) : N;
+
+    // Use two rings only when a single ring can't hold all nodes
+    bool   twoRings   = (N > maxSingleRing);
+    double outerR     = canvasR;
+    double innerR     = canvasR * 0.50;
     int    innerCount = N;
-    double innerR     = ringR;
-    double outerR     = ringR;
 
-    if (N > 1) {
-        double maxInner = (2.0 * M_PI * ringR * 0.55) / minSpacing;
-        if ((int)maxInner < N) {
-            twoRings   = true;
-            innerCount = std::max(1, (int)maxInner);
-            innerR     = ringR * 0.55;
-            outerR     = ringR;
-        }
+    if (twoRings) {
+        innerCount = std::max(1, std::min(N - 1,
+            (int)((2.0 * M_PI * innerR) / minSpacing)));
     }
 
     // Center of canvas (adjusted down slightly so labels clear the toolbar)
@@ -225,8 +223,8 @@ void TabTopology::BuildLayout(int totalW, int totalH) {
         for (int i = 0; i < N; i++) {
             double angle = -M_PI / 2.0 + (2.0 * M_PI * i) / std::max(N, 1);
             NodeInfo ni;
-            ni.cx        = cx + (int)(ringR * std::cos(angle));
-            ni.cy        = cy + (int)(ringR * std::sin(angle));
+            ni.cx        = cx + (int)(outerR * std::cos(angle));
+            ni.cy        = cy + (int)(outerR * std::sin(angle));
             ni.radius    = nodeR;
             ni.isGateway = false;
             ni.dev       = others[i];
@@ -538,7 +536,7 @@ void TabTopology::DrawNode(Gdiplus::Graphics& g, HDC hdc,
     std::wstring label = DeviceLabel(n.dev);
     HFONT hLabel = (HFONT)SelectObject(hdc, Theme::FontCaption());
     SetTextColor(hdc, n.dev.online ? Theme::TEXT_PRIMARY : Theme::TEXT_TERTIARY);
-    RECT lbRc = { n.cx - 52, n.cy + r + 2, n.cx + 52, n.cy + r + 18 };
+    RECT lbRc = { n.cx - 44, n.cy + r + 2, n.cx + 44, n.cy + r + 18 };
     DrawText(hdc, label.c_str(), -1, &lbRc,
         DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     SelectObject(hdc, hLabel);
