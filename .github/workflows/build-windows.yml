@@ -101,12 +101,25 @@ jobs:
     - name: Build Transparencii C++ App
       run: cmake --build build --config Release
 
+    - name: Build installer (Inno Setup)
+      run: |
+        $sourceDir = (Get-Location).Path
+        $version   = "${{ needs.resolve-version.outputs.version }}"
+        iscc `
+          /DSourceDir="$sourceDir" `
+          /DAppVersion="$version" `
+          /O"transparency-cpp\installer\Output" `
+          "transparency-cpp\installer\setup.iss"
+      shell: pwsh
+
     - name: Upload to release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ needs.resolve-version.outputs.release_tag }}
         name: "${{ needs.resolve-version.outputs.release_tag }} (C++ Windows)"
-        files: build/Release/Transparencii.exe
+        files: |
+          build/Release/Transparencii.exe
+          transparency-cpp/installer/Output/Transparencii-Setup-*.exe
         draft: false
         prerelease: false
         generate_release_notes: true

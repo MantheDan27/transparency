@@ -304,7 +304,7 @@ LRESULT MainWindow::OnCreate(HWND hwnd, LPCREATESTRUCT) {
 
     ShowActivePanel();
 
-    AddLedgerEntry(L"App Started", L"Transparencii v4.35.1 initialized");
+    AddLedgerEntry(L"App Started", L"Transparencii v4.35.3 initialized");
     SetTimer(hwnd, 1, 60000, nullptr);
 
     // Refresh status bar every 5 seconds (avoid excessive repaints)

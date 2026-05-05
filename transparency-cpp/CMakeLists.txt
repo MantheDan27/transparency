@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Transparencii VERSION 4.35.2 LANGUAGES CXX)
+project(Transparencii VERSION 4.35.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
