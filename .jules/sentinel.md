@@ -46,3 +46,10 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2025-05-15 - Command Injection via execPromise
+
+**Vulnerability:** In `device-monitor-desktop/main.js`, `gwIp` and `gateway` IP strings were passed directly into string templates used for `arp` and `ping` commands and executed via `execPromise`. A maliciously crafted gateway string could inject shell characters and execute arbitrary commands.
+
+**Learning:** When invoking system binaries from Node.js (e.g. ping, arp, tracert), using `exec` or an `execPromise` wrapper passes the entire command string to the system shell. If any portion of that string originates from potentially untrusted sources or parsed command output, it introduces a severe risk of command injection.
+
+**Prevention:** To safely execute commands with variable arguments, always use `execFile` or an `execFilePromise` wrapper. This explicitly separates the executable path from its arguments (passed as an array), entirely bypassing the shell and thereby neutralizing shell-based command injection vectors.
