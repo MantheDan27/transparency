@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2024-05-25 - Loading State Feedback on Auth Forms
+**Learning:** In vanilla JS applications lacking dedicated component states, it is critical to manually manage the `disabled` attribute and text content of submit buttons during asynchronous operations (like Firebase authentication). Failing to do so allows users to multi-click, triggering parallel requests and confusing error messages.
+**Action:** Always wrap asynchronous form submissions in `try...finally` blocks, proactively disabling the submit button and updating its text content (e.g., "Loading...") before the `await` call, and reliably restoring its original state in the `finally` block to ensure consistent and resilient UX feedback.
