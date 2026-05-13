@@ -30,6 +30,11 @@ const http = require('http');
 
 const execPromise = util.promisify(exec);
 const execFilePromise = util.promisify(execFile);
+
+function isValidHost(host) {
+  // Allow IPv4, IPv6, and standard hostnames. Prevent command injection characters.
+  return /^[a-zA-Z0-9.-]+$/.test(host) || net.isIP(host) !== 0;
+}
 const dnsLookup   = util.promisify(dns.lookup);
 const dnsReverse  = util.promisify(dns.reverse);
 const dnsResolve4 = util.promisify(dns.resolve4);
@@ -189,8 +194,10 @@ async function checkGatewayMacChange() {
     // Get ARP entry for gateway
     let gwMac = null;
     try {
-      const cmd = process.platform === 'win32' ? `arp -a ${gwIp}` : `arp -n ${gwIp} 2>/dev/null`;
-      const { stdout: arpOut } = await execPromise(cmd, { timeout: 3000 });
+      if (!isValidHost(gwIp)) return;
+      const exe = 'arp';
+      const args = process.platform === 'win32' ? ['-a', gwIp] : ['-n', gwIp];
+      const { stdout: arpOut } = await execFilePromise(exe, args, { timeout: 3000 });
       const macM = arpOut.match(/([0-9a-f]{2}[:-]){5}[0-9a-f]{2}/i);
       if (macM) gwMac = macM[0].toLowerCase().replace(/-/g, ':');
     } catch { /* ignore */ }
@@ -610,10 +617,7 @@ ipcMain.handle('delete-snapshot', async (_e, id) => {
   return { success: true };
 });
 
-function isValidHost(host) {
-  // Allow IPv4, IPv6, and standard hostnames. Prevent command injection characters.
-  return /^[a-zA-Z0-9.-]+$/.test(host) || net.isIP(host) !== 0;
-}
+
 
 // ── IPC: Diagnostic tools ─────────────────────────────────────────────────────
 ipcMain.handle('ping-host', async (_e, host, count = 4) => {
@@ -779,9 +783,12 @@ ipcMain.handle('get-gateway-info', async () => {
 
     if (!gateway) return { success: false, error: 'Could not determine gateway' };
 
+    if (!isValidHost(gateway)) return { success: false, error: 'Invalid gateway' };
+
     // Ping gateway for latency
-    const cmd = process.platform === 'win32' ? `ping -n 4 ${gateway}` : `ping -c 4 ${gateway}`;
-    const { stdout: pingOut } = await execPromise(cmd, { timeout: 10000 });
+    const exe = 'ping';
+    const args = process.platform === 'win32' ? ['-n', '4', gateway] : ['-c', '4', gateway];
+    const { stdout: pingOut } = await execFilePromise(exe, args, { timeout: 10000 });
     let latencyMs = null;
     const winM  = pingOut.match(/Average\s*=\s*(\d+)ms/i);
     const unixM = pingOut.match(/min\/avg\/max.*=\s*[\d.]+\/([\d.]+)/);
