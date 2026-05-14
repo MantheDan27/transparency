@@ -28,3 +28,6 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2024-05-14 - Redundant array traversals for UI statistics in Electron apps
+**Learning:** Found a common anti-pattern in `device-monitor-desktop` where multiple chained `.filter().length` calls were used on a potentially large `allDevices` array to calculate UI statistic counts. This results in $O(M \times N)$ time complexity and triggers multiple garbage collection cycles due to intermediate array allocations.
+**Action:** When calculating multiple aggregate statistics over the same dataset, consolidate them into a single `for...of` loop using accumulator variables to reduce time complexity to $O(N)$ and avoid redundant array allocations.
