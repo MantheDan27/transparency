@@ -736,6 +736,16 @@ void MainWindow::DrawStatusBar(HDC hdc, int cx, int cy) {
         x += 50;
     }
 
+    // Network indicator dot — green after a successful scan, dim otherwise
+    {
+        Gdiplus::Graphics g(hdc);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        COLORREF dotCol = _networkOk ? Theme::ACCENT_GREEN : Theme::TEXT_TERTIARY;
+        Gdiplus::SolidBrush dot(Theme::GdipColor(dotCol));
+        g.FillEllipse(&dot, x, sbTop + 10, 5, 5);
+        x += 10;
+    }
+
     // Network info — use cached data to avoid expensive calls during paint
     static wstring s_cachedNetInfo;
     static DWORD s_netCacheTick = 0;
@@ -1485,6 +1495,7 @@ LRESULT MainWindow::OnScanComplete(HWND hwnd, WPARAM, LPARAM lp) {
     }
     delete result;
     _lastScanTick = GetTickCount();
+    _networkOk    = true;
     InvalidateRect(hwnd, nullptr, FALSE);
 
     // ── Build device history diff ──────────────────────────────────────────────

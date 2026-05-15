@@ -92,6 +92,7 @@ public:
     // Layout state
     bool _sidebarExpanded = true;
     bool _monitorActive   = false;
+    bool _networkOk       = false;
 
     // Notifications
     std::vector<std::wstring> _notifications;
