@@ -502,7 +502,8 @@ const testConnectionBtn = document.getElementById("test-connection-btn");
 const syncDevicesBtn = document.getElementById("sync-devices-btn");
 const connectionStatus = document.getElementById("connection-status");
 
-testConnectionBtn.addEventListener("click", async () => {
+testConnectionBtn.addEventListener("click", async (e) => {
+  const btn = e.target;
   const endpoint = document.getElementById("setting-api-endpoint").value.trim();
   const apiKey = document.getElementById("setting-api-key").value.trim();
 
@@ -511,6 +512,8 @@ testConnectionBtn.addEventListener("click", async () => {
     return;
   }
 
+  btn.disabled = true;
+  btn.textContent = "Testing...";
   try {
     const headers = {};
     if (apiKey) headers["X-API-Key"] = apiKey;
@@ -528,10 +531,14 @@ testConnectionBtn.addEventListener("click", async () => {
     }
   } catch (err) {
     showConnectionStatus(`Connection failed: ${err.message}`, "error");
+  } finally {
+    testConnectionBtn.disabled = false;
+    testConnectionBtn.textContent = "Test Connection";
   }
 });
 
-syncDevicesBtn.addEventListener("click", async () => {
+syncDevicesBtn.addEventListener("click", async (e) => {
+  const btn = e.target;
   const endpoint = document.getElementById("setting-api-endpoint").value.trim();
   const apiKey = document.getElementById("setting-api-key").value.trim();
 
@@ -540,6 +547,8 @@ syncDevicesBtn.addEventListener("click", async () => {
     return;
   }
 
+  btn.disabled = true;
+  btn.textContent = "Syncing...";
   try {
     const headers = {};
     if (apiKey) headers["X-API-Key"] = apiKey;
@@ -593,6 +602,9 @@ syncDevicesBtn.addEventListener("click", async () => {
     loadOverviewData(uid);
   } catch (err) {
     showConnectionStatus(`Sync failed: ${err.message}`, "error");
+  } finally {
+    syncDevicesBtn.disabled = false;
+    syncDevicesBtn.textContent = "Sync Devices";
   }
 });
 
