@@ -64,6 +64,12 @@ signupForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const btn = document.getElementById("signup-submit");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Creating...";
+  }
+
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
@@ -80,6 +86,11 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Create Account";
+    }
   }
 });
 
@@ -90,10 +101,21 @@ loginForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
+  const btn = document.getElementById("login-submit");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Logging In...";
+  }
+
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Log In";
+    }
   }
 });
 
