@@ -453,11 +453,12 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    const promises = [];
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -472,9 +473,10 @@ uploadForm.addEventListener("submit", async (e) => {
         sightings: dev.sightings || 1,
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
-      });
+      }));
       count++;
     }
+    await Promise.all(promises);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -555,21 +557,27 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    const promises = [];
+    const subnetMap = new Map();
+    for (const n of allNetworksCache) {
+      if (n.subnet) subnetMap.set(n.subnet, n.id);
+    }
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && subnetMap.has(dev.subnet)) {
+        networkId = subnetMap.get(dev.subnet);
       }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (!networkId) {
+        networkId = defaultNetworkId;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -585,9 +593,10 @@ syncDevicesBtn.addEventListener("click", async () => {
         classificationReason: dev.classificationReason || "",
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
-      }, { merge: true });
+      }, { merge: true }));
       count++;
     }
+    await Promise.all(promises);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
