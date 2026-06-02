@@ -453,11 +453,12 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    const promises = [];
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -472,9 +473,10 @@ uploadForm.addEventListener("submit", async (e) => {
         sightings: dev.sightings || 1,
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
-      });
+      }));
       count++;
     }
+    await Promise.all(promises);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -555,21 +557,30 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    const promises = [];
+
+    // Pre-compute network lookup map to prevent O(N*M) execution bottleneck
+    const subnetToNetworkId = new Map();
+    if (allNetworksCache.length > 0) {
+      allNetworksCache.forEach((n) => {
+        if (n.subnet) subnetToNetworkId.set(n.subnet, n.id);
+      });
+    }
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && subnetToNetworkId.has(dev.subnet)) {
+        networkId = subnetToNetworkId.get(dev.subnet);
       }
       if (!networkId && allNetworksCache.length > 0) {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -585,9 +596,10 @@ syncDevicesBtn.addEventListener("click", async () => {
         classificationReason: dev.classificationReason || "",
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
-      }, { merge: true });
+      }, { merge: true }));
       count++;
     }
+    await Promise.all(promises);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
