@@ -453,28 +453,33 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    const uploadPromises = [];
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
-        mac: dev.mac || dev.macAddress || "",
-        ip: dev.ip || dev.ipAddress || "",
-        hostname: dev.hostname || dev.name || "",
-        name: dev.name || dev.hostname || "",
-        vendor: dev.vendor || dev.manufacturer || "",
-        deviceType: dev.deviceType || dev.type || "Unknown",
-        trust: dev.trust || "Unknown",
-        ports: dev.ports || [],
-        networkId: networkId,
-        lastSeen: serverTimestamp(),
-        firstSeen: dev.firstSeen || serverTimestamp(),
-        sightings: dev.sightings || 1,
-        classificationReason: dev.classificationReason || "",
-        uploadedAt: serverTimestamp()
-      });
+      // ⚡ Bolt: Batch async updates with Promise.all to fix N+1 Firestore request bottleneck
+      uploadPromises.push(
+        setDoc(doc(db, "users", uid, "devices", mac), {
+          mac: dev.mac || dev.macAddress || "",
+          ip: dev.ip || dev.ipAddress || "",
+          hostname: dev.hostname || dev.name || "",
+          name: dev.name || dev.hostname || "",
+          vendor: dev.vendor || dev.manufacturer || "",
+          deviceType: dev.deviceType || dev.type || "Unknown",
+          trust: dev.trust || "Unknown",
+          ports: dev.ports || [],
+          networkId: networkId,
+          lastSeen: serverTimestamp(),
+          firstSeen: dev.firstSeen || serverTimestamp(),
+          sightings: dev.sightings || 1,
+          classificationReason: dev.classificationReason || "",
+          uploadedAt: serverTimestamp()
+        })
+      );
       count++;
     }
+    await Promise.all(uploadPromises);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -555,39 +560,51 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+
+    // ⚡ Bolt: Pre-compute O(1) lookup map to prevent O(N*M) nested loop bottleneck
+    const subnetToNetworkId = new Map();
+    for (const net of allNetworksCache) {
+      if (net.subnet) subnetToNetworkId.set(net.subnet, net.id);
+    }
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
+    const syncPromises = [];
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      // Find which network to associate
+      // Find which network to associate using O(1) lookup
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && subnetToNetworkId.has(dev.subnet)) {
+        networkId = subnetToNetworkId.get(dev.subnet);
       }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (!networkId) {
+        networkId = defaultNetworkId;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
-        mac: dev.mac || "",
-        ip: dev.ip || "",
-        hostname: dev.hostname || "",
-        name: dev.name || dev.hostname || "",
-        vendor: dev.vendor || "",
-        deviceType: dev.deviceType || dev.type || "Unknown",
-        trust: dev.trust || "Unknown",
-        ports: dev.ports || [],
-        networkId: networkId,
-        lastSeen: serverTimestamp(),
-        firstSeen: dev.firstSeen || serverTimestamp(),
-        sightings: dev.sightings || 1,
-        classificationReason: dev.classificationReason || "",
-        subnet: dev.subnet || "",
-        syncedAt: serverTimestamp()
-      }, { merge: true });
+      // ⚡ Bolt: Batch async updates with Promise.all to fix N+1 Firestore request bottleneck
+      syncPromises.push(
+        setDoc(doc(db, "users", uid, "devices", mac), {
+          mac: dev.mac || "",
+          ip: dev.ip || "",
+          hostname: dev.hostname || "",
+          name: dev.name || dev.hostname || "",
+          vendor: dev.vendor || "",
+          deviceType: dev.deviceType || dev.type || "Unknown",
+          trust: dev.trust || "Unknown",
+          ports: dev.ports || [],
+          networkId: networkId,
+          lastSeen: serverTimestamp(),
+          firstSeen: dev.firstSeen || serverTimestamp(),
+          sightings: dev.sightings || 1,
+          classificationReason: dev.classificationReason || "",
+          subnet: dev.subnet || "",
+          syncedAt: serverTimestamp()
+        }, { merge: true })
+      );
       count++;
     }
+    await Promise.all(syncPromises);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
