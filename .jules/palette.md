@@ -16,3 +16,6 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+## 2024-06-04 - Reliable Button States for Async Actions
+**Learning:** In single-page applications, updating a submit button to a disabled/loading state during async operations can leave the button permanently stuck if a network or validation error occurs and isn't caught properly.
+**Action:** Always wrap the async operation in a try/catch and ensure the button is re-enabled and its original text restored within a `finally` block to prevent it from remaining permanently disabled on error.
