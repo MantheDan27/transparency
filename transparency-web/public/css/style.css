@@ -265,6 +265,14 @@ h1, h2, h3, h4 {
   transform: translateY(0);
 }
 
+.btn-primary:disabled,
+.btn-primary-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 .btn-primary-action {
   padding: 10px 20px;
   background: linear-gradient(135deg, #3d7fff, #2960d9);
