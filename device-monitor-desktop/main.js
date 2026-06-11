@@ -189,8 +189,8 @@ async function checkGatewayMacChange() {
     // Get ARP entry for gateway
     let gwMac = null;
     try {
-      const cmd = process.platform === 'win32' ? `arp -a ${gwIp}` : `arp -n ${gwIp} 2>/dev/null`;
-      const { stdout: arpOut } = await execPromise(cmd, { timeout: 3000 });
+      const arpArgs = process.platform === 'win32' ? ['-a', gwIp] : ['-n', gwIp];
+      const { stdout: arpOut } = await execFilePromise('arp', arpArgs, { timeout: 3000 });
       const macM = arpOut.match(/([0-9a-f]{2}[:-]){5}[0-9a-f]{2}/i);
       if (macM) gwMac = macM[0].toLowerCase().replace(/-/g, ':');
     } catch { /* ignore */ }
@@ -780,8 +780,8 @@ ipcMain.handle('get-gateway-info', async () => {
     if (!gateway) return { success: false, error: 'Could not determine gateway' };
 
     // Ping gateway for latency
-    const cmd = process.platform === 'win32' ? `ping -n 4 ${gateway}` : `ping -c 4 ${gateway}`;
-    const { stdout: pingOut } = await execPromise(cmd, { timeout: 10000 });
+    const pingArgs = process.platform === 'win32' ? ['-n', '4', gateway] : ['-c', '4', gateway];
+    const { stdout: pingOut } = await execFilePromise('ping', pingArgs, { timeout: 10000 });
     let latencyMs = null;
     const winM  = pingOut.match(/Average\s*=\s*(\d+)ms/i);
     const unixM = pingOut.match(/min\/avg\/max.*=\s*[\d.]+\/([\d.]+)/);

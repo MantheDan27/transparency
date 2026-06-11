@@ -46,3 +46,13 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-05-18 - Command Injection via Diagnostic Tools in gateway info
+
+**Vulnerability:**
+Gateway network calls (`arp` and `ping`) in `main.js` pass user-controlled or implicitly trusted variables (`gwIp`, `gateway`) directly into a shell command using `execPromise` without validation, exposing the system to command injection.
+
+**Learning:**
+Even if variables represent network attributes like IPs, they must not be interpolated into system shell calls when `execPromise` is used, as it processes shell metacharacters.
+
+**Prevention:**
+Use `execFilePromise` which does not use a subshell and safely passes parameters as an array.
