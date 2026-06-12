@@ -16,3 +16,11 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2026-06-12 - Disabled States on Async Form Submissions
+**Learning:** When submitting vanilla HTML forms asynchronously, it's a common oversight to leave the submit button enabled while the network request is pending. This lack of visual feedback often leads to user confusion and double-submissions.
+**Action:** Always wrap async form submissions in a `try...finally` block that explicitly disables the submit button and updates its text (e.g., "Logging in...") before the request, and reliably restores the original state in the `finally` block to prevent the button from getting permanently stuck on network or validation errors.
+
+## 2026-06-12 - Autocomplete Attributes in Custom Forms
+**Learning:** Custom HTML forms often miss `autocomplete` attributes, which are essential for accessibility (helping users with cognitive disabilities) and utility (enabling password managers to correctly autofill or save credentials).
+**Action:** Always manually audit custom forms and add explicit `autocomplete` attributes (`email`, `current-password`, `new-password`, `name`) to inputs that ask for standard user data, as this is a minimal-effort change with high UX impact.
