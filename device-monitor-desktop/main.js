@@ -19,6 +19,7 @@ const path  = require('path');
 const os    = require('os');
 const net   = require('net');
 const dns   = require('dns');
+const crypto = require('crypto');
 const { exec, execFile } = require('child_process');
 const util  = require('util');
 const axios = require('axios');
@@ -1398,7 +1399,9 @@ function restartLocalApiWithAuth() {
     // API key authentication (skip for root/health)
     if (req.url !== '/' && req.url !== '/api/health') {
       const reqKey = req.headers['x-api-key'];
-      if (apiKeyStore.key && reqKey !== apiKeyStore.key) {
+      const reqKeyBuffer = Buffer.from(reqKey || '', 'utf8');
+      const storedKeyBuffer = Buffer.from(apiKeyStore.key || '', 'utf8');
+      if (apiKeyStore.key && (!reqKey || reqKeyBuffer.length !== storedKeyBuffer.length || !crypto.timingSafeEqual(reqKeyBuffer, storedKeyBuffer))) {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'Unauthorized — include X-API-Key header', hint: 'Get your key from the Privacy tab in Transparency.' }));
       }
