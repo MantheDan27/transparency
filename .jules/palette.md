@@ -16,3 +16,6 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+## 2024-06-25 - Autocomplete attributes significantly boost auth accessibility
+**Learning:** Adding standard `autocomplete` attributes (`email`, `current-password`, `new-password`) to auth form inputs is an invisible but highly impactful UX and accessibility win, as it allows browsers and password managers to assist users, natively fulfilling WCAG 1.3.5 (Identify Input Purpose).
+**Action:** Always proactively review standard forms (login, signup, checkout) and ensure all applicable text inputs have specific, standardized `autocomplete` tokens.
