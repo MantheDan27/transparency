@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-05-24 - Timing attack in API key authentication
+**Vulnerability:** API key was being verified using a standard string equality check (`===` / `!==`).
+**Learning:** In Node.js, standard string comparison is vulnerable to timing attacks, which can allow an attacker to guess the API key character by character by measuring response times.
+**Prevention:** Always use `crypto.timingSafeEqual` to verify secrets in Node.js. Convert inputs to Buffers first and ensure their lengths are identical before calling `timingSafeEqual`.
