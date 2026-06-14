@@ -256,6 +256,14 @@ h1, h2, h3, h4 {
   transition: transform 200ms ease-out, box-shadow 200ms ease-out;
 }
 
+.btn-primary:disabled,
+.btn-primary[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-medium);
