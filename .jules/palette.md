@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2026-06-02 - UI Loading States and Autocomplete on Auth Forms
+**Learning:** In vanilla JS apps, form submissions that perform async operations (like Firebase auth) can leave the user wondering if their click registered, potentially leading to double-submissions. Furthermore, omitting `autocomplete` attributes makes it difficult for assistive password managers and screen readers to correctly identify the purpose of auth fields.
+**Action:** Always add explicit `autocomplete` attributes (e.g. `autocomplete="email"`) to authentication forms and implement UI loading/disabled states for async form submission buttons in vanilla HTML/JS apps to prevent double-submissions and aid password managers.
