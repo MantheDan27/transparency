@@ -1,0 +1,6 @@
+🎨 Palette: [UX improvement] Hide decorative SVGs from screen readers
+
+💡 What: Added `aria-hidden="true"` to all 7 decorative SVG icons in the UI.
+🎯 Why: Prevents screen readers from announcing meaningless image descriptions or attempting to interpret SVG elements, making navigation cleaner.
+📸 Before/After: N/A (invisible accessibility change)
+♿ Accessibility: Improved screen reader experience by explicitly hiding decorative SVG icons that are either paired with visible text or contained within elements that already have an `aria-label`.
