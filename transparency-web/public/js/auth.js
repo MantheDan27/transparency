@@ -59,10 +59,15 @@ signupForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
 
-  if (password.length < 6) {
+if (password.length < 6) {
     showError("Password must be at least 6 characters.");
     return;
   }
+
+  const btn = signupForm.querySelector('button[type="submit"]');
+  const originalText = btn.textContent;
+  btn.textContent = "Creating Account...";
+  btn.disabled = true;
 
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -80,6 +85,9 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
   }
 });
 
@@ -90,10 +98,18 @@ loginForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
+  const btn = loginForm.querySelector('button[type="submit"]');
+  const originalText = btn.textContent;
+  btn.textContent = "Logging In...";
+  btn.disabled = true;
+
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
   }
 });
 
