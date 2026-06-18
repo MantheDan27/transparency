@@ -28,3 +28,6 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2025-03-24 - [N+1 Bottleneck in Firebase Web App Loops]
+**Learning:** For Firestore bulk operations in frontend clients (e.g., uploading or syncing devices), executing sequential `await setDoc()` calls inside a loop creates an N+1 execution bottleneck that scales poorly and blocks the application longer than necessary. Additionally, having $O(N)$ `.find()` lookups inside those loops compounds the issue.
+**Action:** Replace sequential `await setDoc()` calls inside loops with an array of promises executed via `Promise.all()` to resolve N+1 execution bottlenecks. Pre-compute lookup tables (`Map` or `Set`) before loops to avoid $O(N \times M)$ complexity during bulk array operations.
