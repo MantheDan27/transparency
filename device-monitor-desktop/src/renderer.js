@@ -591,13 +591,33 @@ function updateFilterCounts() {
 
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+
+  // ⚡ Bolt Performance Optimization:
+  // Consolidate chained .filter().length calls into a single for...of loop with accumulator variables
+  // to avoid redundant O(N) passes and intermediate array allocations.
+  let fUnknownCount = 0;
+  let fWatchlistCount = 0;
+  let fOwnedCount = 0;
+  let fRiskyCount = 0;
+  let fChangedCount = 0;
+  let fVirtualCount = 0;
+
+  for (const d of allDevices) {
+    if ((d.meta?.trustState || 'unknown') === 'unknown') fUnknownCount++;
+    if (d.meta?.watchlist) fWatchlistCount++;
+    if (d.meta?.trustState === 'owned') fOwnedCount++;
+    if (anomalyIpSet.has(d.ip)) fRiskyCount++;
+    if (changedSet.has(d.ip)) fChangedCount++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) fVirtualCount++;
+  }
+
+  $('fUnknown').textContent = fUnknownCount;
+  $('fWatchlist').textContent = fWatchlistCount;
+  $('fOwned').textContent = fOwnedCount;
+  $('fRisky').textContent = fRiskyCount;
+  $('fChanged').textContent = fChangedCount;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = fVirtualCount;
 }
 
 function renderDeviceTable() {
