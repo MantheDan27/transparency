@@ -1424,3 +1424,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline: 2px solid var(--accent-blue);
   outline-offset: 2px;
 }
+
+button:disabled,
+.btn-primary:disabled,
+.btn-primary-action:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
