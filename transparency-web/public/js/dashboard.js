@@ -453,11 +453,15 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    // ⚡ Bolt: Execute batched database writes concurrently via Promise.all
+    // 🎯 Why: Awaiting setDoc sequentially creates an O(N) execution bottleneck.
+    // 📊 Impact: Bulk uploads finish significantly faster.
+    const uploadPromises = [];
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      uploadPromises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -472,9 +476,10 @@ uploadForm.addEventListener("submit", async (e) => {
         sightings: dev.sightings || 1,
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
-      });
+      }));
       count++;
     }
+    await Promise.all(uploadPromises);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -555,6 +560,10 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    // ⚡ Bolt: Execute batched database writes concurrently via Promise.all
+    // 🎯 Why: Awaiting setDoc sequentially creates an O(N) execution bottleneck.
+    // 📊 Impact: Syncing large sets of devices completes much faster.
+    const syncPromises = [];
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
@@ -569,7 +578,7 @@ syncDevicesBtn.addEventListener("click", async () => {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      syncPromises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -585,9 +594,10 @@ syncDevicesBtn.addEventListener("click", async () => {
         classificationReason: dev.classificationReason || "",
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
-      }, { merge: true });
+      }, { merge: true }));
       count++;
     }
+    await Promise.all(syncPromises);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
