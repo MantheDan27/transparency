@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+## 2025-05-18 - Decorative Navigation SVGs
+
+**Learning:** This app heavily relies on purely decorative inline SVGs for navigation buttons and icon-only buttons. Screen readers frequently fail to ignore these unless explicitly told to do so, causing them to read out "unlabeled graphic" repeatedly when navigating the sidebar.
+**Action:** When adding or auditing navigation elements or icon-only buttons with visible text equivalents in this app, explicitly add `aria-hidden="true"` to the `<svg>` tags to prevent screen reader noise.
