@@ -452,12 +452,14 @@ uploadForm.addEventListener("submit", async (e) => {
 
     const devices = Array.isArray(data) ? data : data.devices || [];
 
+    // ⚡ Bolt: Prevent N+1 bottlenecks by executing bulk Firestore writes concurrently using Promise.all()
+    const promises = [];
     let count = 0;
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -472,9 +474,10 @@ uploadForm.addEventListener("submit", async (e) => {
         sightings: dev.sightings || 1,
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
-      });
+      }));
       count++;
     }
+    await Promise.all(promises);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -554,6 +557,8 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // ⚡ Bolt: Prevent N+1 bottlenecks by executing bulk Firestore writes concurrently using Promise.all()
+    const promises = [];
     let count = 0;
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
@@ -569,7 +574,7 @@ syncDevicesBtn.addEventListener("click", async () => {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -585,9 +590,10 @@ syncDevicesBtn.addEventListener("click", async () => {
         classificationReason: dev.classificationReason || "",
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
-      }, { merge: true });
+      }, { merge: true }));
       count++;
     }
+    await Promise.all(promises);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
