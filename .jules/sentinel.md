@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-05-01 - Missing XSS Escape in Dashboard Network Card
+**Vulnerability:** The dashboard UI interpolates `net.location` into HTML directly without passing it through `escHtml()`, leading to a stored XSS vulnerability if an attacker injects malicious tags into the location field of a network object in Firestore.
+**Learning:** Even when core functions (`escHtml`) are used correctly throughout most of a template literal (e.g. `escHtml(net.name)`, `escHtml(net.subnet)`), individual fields can be easily missed.
+**Prevention:** Implement comprehensive and consistent escaping in all DOM insertion routines and consider adding static analysis tooling to ensure all interpolated variables in HTML template literals are passed through a sanitation layer.
