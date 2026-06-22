@@ -554,6 +554,17 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // Pre-compute network lookups by subnet to change O(N*M) loop to O(N+M)
+    const networksBySubnet = new Map();
+    if (allNetworksCache.length > 0) {
+      for (const n of allNetworksCache) {
+        if (n.subnet && !networksBySubnet.has(n.subnet)) {
+          networksBySubnet.set(n.subnet, n.id);
+        }
+      }
+    }
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
     let count = 0;
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
@@ -561,12 +572,11 @@ syncDevicesBtn.addEventListener("click", async () => {
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && networksBySubnet.has(dev.subnet)) {
+        networkId = networksBySubnet.get(dev.subnet);
       }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (!networkId) {
+        networkId = defaultNetworkId;
       }
 
       await setDoc(doc(db, "users", uid, "devices", mac), {

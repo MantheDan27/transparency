@@ -28,3 +28,8 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2024-06-22 - O(N*M) performance bottleneck in device sync
+
+**Learning:** When syncing bulk device operations, iterating over an array of networks using `allNetworksCache.find()` for every single device causes an O(N*M) bottleneck, which is slow for large networks or large device uploads.
+
+**Action:** Replace `Array.prototype.find()` inside loops with O(1) lookups against a `Map` pre-computed outside the loop to optimize bulk operations.
