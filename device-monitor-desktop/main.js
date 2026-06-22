@@ -23,6 +23,7 @@ const { exec, execFile } = require('child_process');
 const util  = require('util');
 const axios = require('axios');
 const fs    = require('fs');
+const crypto = require('crypto');
 
 const { scanNetwork, analyzeAnomalies, getLocalNetwork, getLocalNetworks } = require('./scanner');
 const { createCloudMockService } = require('./cloud-mock');
@@ -1397,8 +1398,25 @@ function restartLocalApiWithAuth() {
 
     // API key authentication (skip for root/health)
     if (req.url !== '/' && req.url !== '/api/health') {
-      const reqKey = req.headers['x-api-key'];
-      if (apiKeyStore.key && reqKey !== apiKeyStore.key) {
+      const reqKey = String(req.headers['x-api-key'] || '');
+
+      let authorized = false;
+      if (!apiKeyStore.key) {
+        // If API key is falsy (unconfigured), allow access
+        authorized = true;
+      } else {
+        try {
+          const reqKeyBuffer = Buffer.from(reqKey);
+          const storeKeyBuffer = Buffer.from(apiKeyStore.key);
+          if (reqKeyBuffer.length === storeKeyBuffer.length) {
+            authorized = crypto.timingSafeEqual(reqKeyBuffer, storeKeyBuffer);
+          }
+        } catch (e) {
+          authorized = false;
+        }
+      }
+
+      if (!authorized) {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'Unauthorized — include X-API-Key header', hint: 'Get your key from the Privacy tab in Transparency.' }));
       }
