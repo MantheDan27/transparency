@@ -555,18 +555,29 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+
+    // Pre-compute network subnet map for O(1) lookups
+    const subnetMap = new Map();
+    if (allNetworksCache.length > 0) {
+      for (const n of allNetworksCache) {
+        if (n.subnet) {
+          subnetMap.set(n.subnet, n.id);
+        }
+      }
+    }
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && subnetMap.has(dev.subnet)) {
+        networkId = subnetMap.get(dev.subnet);
       }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (!networkId) {
+        networkId = defaultNetworkId;
       }
 
       await setDoc(doc(db, "users", uid, "devices", mac), {
