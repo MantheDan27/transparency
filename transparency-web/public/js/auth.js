@@ -58,6 +58,8 @@ signupForm.addEventListener("submit", async (e) => {
   const name = document.getElementById("signup-name").value.trim();
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
+  const submitBtn = signupForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
 
   if (password.length < 6) {
     showError("Password must be at least 6 characters.");
@@ -65,6 +67,8 @@ signupForm.addEventListener("submit", async (e) => {
   }
 
   try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Creating Account...";
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
     // Create user document in Firestore
@@ -80,6 +84,9 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
@@ -89,11 +96,18 @@ loginForm.addEventListener("submit", async (e) => {
   clearError();
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
+  const submitBtn = loginForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
 
   try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Logging In...";
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
