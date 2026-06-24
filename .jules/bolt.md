@@ -28,3 +28,7 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+
+## 2024-10-24 - Pre-compute Maps outside loops to prevent O(N*M) lookups
+**Learning:** In transparency-web/public/js/dashboard.js, iterating over devices and using `allNetworksCache.find()` for every single device causes an $O(N \times M)$ execution bottleneck.
+**Action:** When optimizing bulk array operations (e.g., on large device lists), prevent $O(N \times M)$ execution bottlenecks by replacing $O(N)$ methods like `Array.prototype.find()` inside loops with $O(1)$ lookups against a `Map` pre-computed outside the loop.

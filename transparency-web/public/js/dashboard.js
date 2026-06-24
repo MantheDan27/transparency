@@ -554,19 +554,23 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // ⚡ Bolt Performance Optimization:
+    // Prevent O(N*M) execution bottleneck by pre-computing a Map for O(1) network lookups
+    const networkSubnetMap = new Map();
+    allNetworksCache.forEach(n => {
+      if (n.subnet) networkSubnetMap.set(n.subnet, n.id);
+    });
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
     let count = 0;
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
-      let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
-      }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      let networkId = dev.subnet ? networkSubnetMap.get(dev.subnet) || "" : "";
+      if (!networkId) {
+        networkId = defaultNetworkId;
       }
 
       await setDoc(doc(db, "users", uid, "devices", mac), {
