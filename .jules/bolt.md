@@ -28,3 +28,6 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2026-10-26 - [N+1 Array Filter Bottleneck]
+**Learning:** Using chained `.filter().length` operations to compute multiple statistics over the same large array (e.g., `allDevices`) creates an N+1 rendering bottleneck, allocating intermediate arrays and forcing redundant $O(N)$ passes over the data.
+**Action:** Consolidate multiple aggregate filters into a single $O(N)$ `for...of` loop using accumulator variables to prevent unnecessary intermediate allocations and reduce iteration overhead.
