@@ -47,6 +47,19 @@ const DEVICE_ICONS = {
 
 // ── Global state ──────────────────────────────────────────────────────────────
 let allDevices       = [];  // last scan result with meta
+
+// ⚡ Bolt Performance Optimization:
+// O(1) Map cache to replace O(N) array searches for devices by IP.
+// This eliminates UI jank during hover/click events on large networks.
+let __deviceCacheMap = new Map();
+let __deviceCacheArr = null;
+function getDeviceByIp(ip) {
+  if (__deviceCacheArr !== allDevices) {
+    __deviceCacheMap = new Map(allDevices.map(d => [d.ip, d]));
+    __deviceCacheArr = allDevices;
+  }
+  return __deviceCacheMap.get(ip);
+}
 let allAnomalies     = [];
 let allAlerts        = [];
 let allAlertRules    = [];
@@ -534,7 +547,7 @@ function renderRecentChanges(anomalies) {
     el.style.cursor = 'pointer';
     el.addEventListener('click', e => {
       if (e.target.classList.contains('change-link')) return;
-      const dev = allDevices.find(d => d.ip === el.dataset.anomalyIp);
+      const dev = getDeviceByIp(el.dataset.anomalyIp);
       if (dev) { switchTab('devices'); openDetailPanel(dev); }
     });
   });
@@ -717,7 +730,7 @@ function renderDeviceTable() {
     const detailBtn = e.target.closest('.detail-btn');
     if (detailBtn) {
       e.stopPropagation();
-      const dev = allDevices.find(d => d.ip === detailBtn.dataset.ip);
+      const dev = getDeviceByIp(detailBtn.dataset.ip);
       if (dev) openDetailPanel(dev);
       return;
     }
@@ -725,14 +738,14 @@ function renderDeviceTable() {
     if (e.target.type === 'checkbox') return;
     const row = e.target.closest('.device-row');
     if (!row) return;
-    const dev = allDevices.find(d => d.ip === row.dataset.ip);
+    const dev = getDeviceByIp(row.dataset.ip);
     if (dev) openDetailPanel(dev);
   });
 
   tbody.addEventListener('contextmenu', e => {
     const row = e.target.closest('.device-row');
     if (!row) return;
-    const dev = allDevices.find(d => d.ip === row.dataset.ip);
+    const dev = getDeviceByIp(row.dataset.ip);
     if (dev) showContextMenu(e, dev);
   });
 })();
@@ -1278,7 +1291,7 @@ function openDetailPanel(dev, tab) {
   // Trust select
   document.querySelectorAll('.detail-trust-sel').forEach(sel => {
     sel.addEventListener('change', async () => {
-      const d = allDevices.find(d2 => d2.ip === sel.dataset.ip);
+      const d = getDeviceByIp(sel.dataset.ip);
       if (!d) return;
       const t = sel.value;
       await window.electronAPI.setDeviceMeta(getDeviceKey(d), { trustState: t, watchlist: t==='watchlist' });
@@ -1292,7 +1305,7 @@ function openDetailPanel(dev, tab) {
   document.querySelectorAll('.tag-rm').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      const d = allDevices.find(d2 => d2.ip === btn.dataset.ip);
+      const d = getDeviceByIp(btn.dataset.ip);
       if (!d) return;
       const tags2 = (d.meta?.tags||[]).filter(t => t !== btn.dataset.tag);
       await window.electronAPI.setDeviceMeta(getDeviceKey(d), { tags: tags2 });
@@ -1306,7 +1319,7 @@ function openDetailPanel(dev, tab) {
     btn.addEventListener('click', () => {
       const input = prompt('Tag name:');
       if (!input) return;
-      const d = allDevices.find(d2 => d2.ip === btn.dataset.ip);
+      const d = getDeviceByIp(btn.dataset.ip);
       if (!d) return;
       const tags2 = [...new Set([...(d.meta?.tags||[]), input.trim()])];
       window.electronAPI.setDeviceMeta(getDeviceKey(d), { tags: tags2 }).then(() => {
@@ -1374,7 +1387,7 @@ window.saveDeviceNotes = async function() {
   const ip    = $('detailNotes')?.dataset.ip;
   const notes = $('detailNotes')?.value || '';
   if (!ip) return;
-  const dev = allDevices.find(d => d.ip === ip);
+  const dev = getDeviceByIp(ip);
   if (!dev) return;
   await window.electronAPI.setDeviceMeta(getDeviceKey(dev), { notes });
   if (dev.meta) dev.meta.notes = notes;
@@ -1724,7 +1737,7 @@ function initMapListeners() {
     if (glow) glow.setAttribute('opacity', '0.5');
     const conn = mapEl.querySelector(`.map-connection[data-ip="${ip}"]`);
     if (conn) { conn.setAttribute('opacity', '0.7'); conn.setAttribute('stroke-width', '2.5'); }
-    const dev = allDevices.find(d => d.ip === ip);
+    const dev = getDeviceByIp(ip);
     if (!dev) return;
     const tooltip = $('mapTooltip');
     if (!tooltip) return;
@@ -1757,7 +1770,7 @@ function initMapListeners() {
     const node = e.target.closest('.map-clickable');
     if (!node) return;
     const ip = node.dataset.ip;
-    const dev = allDevices.find(d => d.ip === ip);
+    const dev = getDeviceByIp(ip);
     if (dev) openDetailPanel(dev);
   });
 
@@ -1934,7 +1947,7 @@ window.clearAllAlerts = async function() {
   showToast('All alerts cleared.', 'success');
 };
 window.viewDeviceFromAlert = function(ip) {
-  const dev = allDevices.find(d => d.ip === ip);
+  const dev = getDeviceByIp(ip);
   if (dev) { switchTab('devices'); openDetailPanel(dev); }
   else { switchTab('devices'); }
 };
