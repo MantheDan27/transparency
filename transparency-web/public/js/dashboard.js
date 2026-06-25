@@ -228,20 +228,30 @@ networkForm.addEventListener("submit", async (e) => {
   const location = document.getElementById("net-location").value.trim();
   const apiEndpoint = document.getElementById("net-api-endpoint").value.trim();
 
-  const uid = currentUid();
-  const ref = await addDoc(collection(db, "users", uid, "networks"), {
-    name,
-    subnet,
-    location,
-    apiEndpoint,
-    deviceCount: 0,
-    createdAt: serverTimestamp()
-  });
+  const submitBtn = networkForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Adding...";
 
-  addNetworkCard(ref.id, { name, subnet, location, deviceCount: 0 });
-  networkModal.classList.add("hidden");
-  networkForm.reset();
-  kpiNetworks.textContent = (allNetworksCache.length + 1);
+  try {
+    const uid = currentUid();
+    const ref = await addDoc(collection(db, "users", uid, "networks"), {
+      name,
+      subnet,
+      location,
+      apiEndpoint,
+      deviceCount: 0,
+      createdAt: serverTimestamp()
+    });
+
+    addNetworkCard(ref.id, { name, subnet, location, deviceCount: 0 });
+    networkModal.classList.add("hidden");
+    networkForm.reset();
+    kpiNetworks.textContent = (allNetworksCache.length + 1);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
 });
 
 // ========== DEVICES ==========
@@ -445,6 +455,11 @@ uploadForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const submitBtn = uploadForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Uploading...";
+
   try {
     const text = await file.text();
     const data = JSON.parse(text);
@@ -494,6 +509,9 @@ uploadForm.addEventListener("submit", async (e) => {
     loadOverviewData(uid);
   } catch (err) {
     alert("Error parsing scan file: " + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
@@ -510,6 +528,11 @@ testConnectionBtn.addEventListener("click", async () => {
     showConnectionStatus("Enter an API endpoint first.", "error");
     return;
   }
+
+  const submitBtn = testConnectionBtn;
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Testing...";
 
   try {
     const headers = {};
@@ -528,6 +551,9 @@ testConnectionBtn.addEventListener("click", async () => {
     }
   } catch (err) {
     showConnectionStatus(`Connection failed: ${err.message}`, "error");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
@@ -539,6 +565,11 @@ syncDevicesBtn.addEventListener("click", async () => {
     showConnectionStatus("Enter an API endpoint first.", "error");
     return;
   }
+
+  const submitBtn = syncDevicesBtn;
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Syncing...";
 
   try {
     const headers = {};
@@ -593,6 +624,9 @@ syncDevicesBtn.addEventListener("click", async () => {
     loadOverviewData(uid);
   } catch (err) {
     showConnectionStatus(`Sync failed: ${err.message}`, "error");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
@@ -607,25 +641,35 @@ document.getElementById("export-data-btn").addEventListener("click", async () =>
   const uid = currentUid();
   if (!uid) return;
 
-  const devSnap = await getDocs(collection(db, "users", uid, "devices"));
-  const netSnap = await getDocs(collection(db, "users", uid, "networks"));
+  const submitBtn = document.getElementById("export-data-btn");
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Exporting...";
 
-  const exportData = {
-    exportedAt: new Date().toISOString(),
-    networks: [],
-    devices: []
-  };
+  try {
+    const devSnap = await getDocs(collection(db, "users", uid, "devices"));
+    const netSnap = await getDocs(collection(db, "users", uid, "networks"));
 
-  netSnap.forEach((d) => exportData.networks.push({ id: d.id, ...d.data() }));
-  devSnap.forEach((d) => exportData.devices.push({ id: d.id, ...d.data() }));
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      networks: [],
+      devices: []
+    };
 
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `transparency-export-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+    netSnap.forEach((d) => exportData.networks.push({ id: d.id, ...d.data() }));
+    devSnap.forEach((d) => exportData.devices.push({ id: d.id, ...d.data() }));
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transparency-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
 });
 
 // ========== ALERTS ==========

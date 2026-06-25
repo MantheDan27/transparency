@@ -64,6 +64,11 @@ signupForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const submitBtn = signupForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Creating Account...";
+
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
@@ -80,6 +85,9 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
@@ -90,10 +98,18 @@ loginForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
+  const submitBtn = loginForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Logging In...";
+
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 });
 
@@ -105,12 +121,20 @@ forgotPasswordLink.addEventListener("click", async (e) => {
     showError("Enter your email address first, then click Forgot Password.");
     return;
   }
+
+  const originalText = forgotPasswordLink.textContent;
+  forgotPasswordLink.style.pointerEvents = "none";
+  forgotPasswordLink.textContent = "Sending...";
+
   try {
     await sendPasswordResetEmail(auth, email);
     showError("Password reset email sent. Check your inbox.");
     authError.style.color = "#00e5ff";
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    forgotPasswordLink.style.pointerEvents = "auto";
+    forgotPasswordLink.textContent = originalText;
   }
 });
 
