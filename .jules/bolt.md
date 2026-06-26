@@ -28,3 +28,6 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2025-03-23 - [Sequential Async Operations Bottleneck in UI Handlers]
+**Learning:** Executing async operations sequentially (like `await setDoc`) inside a `for` loop blocks UI state transitions and creates a massive $O(N \times \text{latency})$ bottleneck when processing bulk sync operations.
+**Action:** When handling bulk writes from external sync sources (like device list updates), always batch Promises into an array and execute them concurrently with `Promise.all()`. Combine this with O(1) `Map` lookups instead of inner `Array.prototype.find()` calls to guarantee linear time complexity.

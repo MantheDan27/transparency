@@ -555,21 +555,25 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    // ⚡ Bolt: Pre-compute network subnet map for O(1) lookups
+    const subnetToNetworkMap = new Map();
+    if (allNetworksCache.length > 0) {
+      allNetworksCache.forEach(n => { if (n.subnet) subnetToNetworkMap.set(n.subnet, n.id); });
+    }
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
+    // ⚡ Bolt: Batch Firestore writes using Promise.all
+    const writePromises = [];
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      // Find which network to associate
-      let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
-      }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
-      }
+      const networkId = (dev.subnet && subnetToNetworkMap.has(dev.subnet))
+        ? subnetToNetworkMap.get(dev.subnet)
+        : defaultNetworkId;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      writePromises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -585,9 +589,10 @@ syncDevicesBtn.addEventListener("click", async () => {
         classificationReason: dev.classificationReason || "",
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
-      }, { merge: true });
+      }, { merge: true }));
       count++;
     }
+    await Promise.all(writePromises);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
