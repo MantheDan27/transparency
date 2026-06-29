@@ -452,12 +452,16 @@ uploadForm.addEventListener("submit", async (e) => {
 
     const devices = Array.isArray(data) ? data : data.devices || [];
 
+    const promises = [];
     let count = 0;
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      // ⚡ Bolt Performance Optimization:
+      // Executing Firebase setDoc promises concurrently using Promise.all()
+      // to avoid N+1 network waterfall and significantly speed up bulk uploads.
+      promises.push(setDoc(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -472,9 +476,10 @@ uploadForm.addEventListener("submit", async (e) => {
         sightings: dev.sightings || 1,
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
-      });
+      }));
       count++;
     }
+    await Promise.all(promises);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
