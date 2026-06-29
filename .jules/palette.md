@@ -16,3 +16,9 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2026-06-29 - Restoring Inline Styles on Transient UI States
+
+**Learning:** When using JavaScript inline styles to temporarily simulate a disabled state (e.g., `element.style.opacity = "0.7"`), restoring those styles explicitly (e.g., `element.style.opacity = "1"`) within a `finally` block can sometimes inadvertently override existing CSS classes or hover states defined in stylesheets.
+
+**Action:** When cleaning up transient inline styles applied via JavaScript, prefer clearing the style property by setting it to an empty string (e.g., `element.style.opacity = ""`) to allow the browser to naturally fall back to the element's defined stylesheet rules, rather than hardcoding a default value.

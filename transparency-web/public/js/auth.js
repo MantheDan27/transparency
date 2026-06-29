@@ -64,6 +64,13 @@ signupForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Creating Account...";
+  submitBtn.style.opacity = "0.7";
+  submitBtn.style.cursor = "not-allowed";
+
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
@@ -80,6 +87,13 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+      submitBtn.style.opacity = "1";
+      submitBtn.style.cursor = "pointer";
+    }
   }
 });
 
@@ -90,10 +104,24 @@ loginForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
+  const loginBtn = e.target.querySelector('button[type="submit"]');
+  const loginOriginalText = loginBtn.textContent;
+  loginBtn.disabled = true;
+  loginBtn.textContent = "Logging In...";
+  loginBtn.style.opacity = "0.7";
+  loginBtn.style.cursor = "not-allowed";
+
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = loginOriginalText;
+      loginBtn.style.opacity = "1";
+      loginBtn.style.cursor = "pointer";
+    }
   }
 });
 
