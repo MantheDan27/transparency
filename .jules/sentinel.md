@@ -46,3 +46,13 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2025-05-18 - Stored XSS via Template Literals in dashboard.js
+
+**Vulnerability:**
+The `addNetworkCard` function in `transparency-web/public/js/dashboard.js` used `innerHTML` to render user-controlled network properties, specifically `net.location`, without sanitization. This allowed stored Cross-Site Scripting (XSS) if a user inputted malicious HTML/JS into the location field.
+
+**Learning:**
+Even if some fields (like `net.name`) are properly escaped with an internal `escHtml` function, forgetting to escape secondary descriptive fields (like `location`) in the same template literal still exposes the application to full XSS compromise when using `innerHTML`.
+
+**Prevention:**
+Always strictly apply HTML escaping (e.g., via the provided `escHtml` function) to *every* string-based variable interpolated into an `innerHTML` template literal, regardless of perceived importance. Alternatively, refactor to use `document.createElement` and `textContent` for dynamic text insertion to eliminate attribute/tag injection vectors completely.
