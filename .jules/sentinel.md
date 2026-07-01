@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-07-01 - DOM-based XSS Pattern in Dashboard Rendering
+**Vulnerability:** User-provided `location` field was rendered via `innerHTML` without sanitization in the network card component.
+**Learning:** The dashboard heavily relies on template literals and `innerHTML` for DOM manipulation (e.g., `addNetworkCard`, `renderOverviewDevices`). While most fields use `escHtml()`, it's a pervasive architectural pattern in this app that makes it very easy to accidentally omit escaping for a single field, leading to XSS.
+**Prevention:** Always verify that every single interpolated variable within `innerHTML` template strings in vanilla JS files (like `dashboard.js`) is wrapped in the globally available `escHtml()` function.
