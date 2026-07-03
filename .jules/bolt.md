@@ -28,3 +28,6 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2024-05-31 - Firestore N+1 Write Bottleneck in Loops
+**Learning:** Iterating through an array and calling `await setDoc()` sequentially creates an N+1 performance bottleneck due to excessive network round trips and waiting for each promise to resolve before starting the next.
+**Action:** In Firebase/Firestore apps like transparency-web, always push the asynchronous write operations into an array and use `await Promise.all()` to execute them concurrently, significantly reducing total execution time.
