@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2026-07-03 - Adding loading states to async auth buttons
+**Learning:** In transparency-web, the `public/css/style.css` file lacks `:disabled` rules for primary buttons like `.btn-primary`. Furthermore, during asynchronous form submissions (like login/signup), there's no visual feedback.
+**Action:** To implement disabled UI states while adhering to the 'no custom CSS' constraint, use JavaScript inline styling (e.g., `submitBtn.style.opacity = "0.7"; submitBtn.style.cursor = "not-allowed";`) combined with the native `disabled` attribute. Always ensure the button is re-enabled and its original text/style is restored within a `finally` block to prevent the UI from becoming permanently stuck if an error occurs.
