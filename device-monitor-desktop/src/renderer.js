@@ -589,15 +589,26 @@ function updateFilterCounts() {
     if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
   }
 
+  let unk = 0, wl = 0, own = 0, rsk = 0, chg = 0, vm = 0;
+  for (let i = 0; i < total; i++) {
+    const d = allDevices[i];
+    if ((d.meta?.trustState || 'unknown') === 'unknown') unk++;
+    if (d.meta?.watchlist) wl++;
+    if (d.meta?.trustState === 'owned') own++;
+    if (anomalyIpSet.has(d.ip)) rsk++;
+    if (changedSet.has(d.ip)) chg++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) vm++;
+  }
+
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  $('fUnknown').textContent  = unk;
+  $('fWatchlist').textContent = wl;
+  $('fOwned').textContent    = own;
+  $('fRisky').textContent    = rsk;
+  $('fChanged').textContent  = chg;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = vm;
 }
 
 function renderDeviceTable() {
