@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2024-07-05 - Auth form loading states
+**Learning:** Adding loading states to authentication forms (Login and Signup) is a crucial UX improvement that provides immediate visual feedback, prevents duplicate submissions during network operations, and improves accessibility by disabling the button while processing.
+**Action:** Always implement a `try...finally` block for async form submissions to ensure the button state (text, disabled attribute, opacity, cursor) is consistently updated and restored regardless of success or failure.
