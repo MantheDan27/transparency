@@ -16,3 +16,8 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+## 2026-07-07 - Handling Asynchronous UI States in Vanilla JS
+
+**Learning:** When adding transient UI states (like loading spinners, changing button text, or disabling buttons) during asynchronous operations (e.g., login or signup submissions) in vanilla JavaScript without a reactive framework like React, it's critical to ensure these states are properly reset. If the operation fails (e.g., an API error or simple client-side validation failure), the UI can become permanently stuck in the "loading" or disabled state if the reset logic isn't robust.
+
+**Action:** Always wrap the asynchronous logic in `try...catch...finally` blocks to guarantee the UI elements (like `submitBtn`) are re-enabled and restored to their original visual state (e.g., clearing inline styles like `opacity` and `cursor`, and reverting `textContent`) inside the `finally` block, ensuring a reliable user experience regardless of the operation's outcome.
