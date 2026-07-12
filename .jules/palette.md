@@ -16,3 +16,8 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2024-07-12 - Inline Styles for Transient Disabled States in Vanilla JS
+
+**Learning:** When vanilla JS applications lack dedicated `:disabled` CSS pseudo-class rules for buttons (like `.btn-primary` in `transparency-web`), adding the native `disabled` attribute alone provides no visual feedback.
+**Action:** Use temporary inline JavaScript styling (e.g., `element.style.opacity = "0.7"`; `element.style.cursor = "not-allowed"`) alongside the `disabled` attribute. When reverting, always clear these properties by setting them to an empty string (e.g., `element.style.opacity = ""`) rather than hardcoding defaults like `"1"`, to prevent overriding existing CSS classes and hover states.
