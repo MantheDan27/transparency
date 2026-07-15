@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2024-05-26 - Inline Disabled States for Vanilla UI Components
+**Learning:** In projects like `transparency-web` that restrict custom CSS and lack native `:disabled` style rules for generic components, relying only on the HTML `disabled` attribute leaves buttons visually unchanged, confusing users during async operations.
+**Action:** When working within strict "no custom CSS" constraints, apply transient visual disabled states using inline JS styles (e.g., `element.style.opacity = '0.7'`, `element.style.cursor = 'not-allowed'`) and ensure they are cleared (via `element.style.opacity = ''`) in a `finally` block to prevent persistent style conflicts.
