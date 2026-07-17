@@ -64,7 +64,15 @@ signupForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  const submitBtn = signupForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+
   try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Creating Account...";
+    submitBtn.style.opacity = "0.7";
+    submitBtn.style.cursor = "not-allowed";
+
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
     // Create user document in Firestore
@@ -80,6 +88,11 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+    submitBtn.style.opacity = "";
+    submitBtn.style.cursor = "";
   }
 });
 
@@ -90,10 +103,23 @@ loginForm.addEventListener("submit", async (e) => {
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
+  const submitBtn = loginForm.querySelector('button[type="submit"]');
+  const originalText = submitBtn.textContent;
+
   try {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Logging In...";
+    submitBtn.style.opacity = "0.7";
+    submitBtn.style.cursor = "not-allowed";
+
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+    submitBtn.style.opacity = "";
+    submitBtn.style.cursor = "";
   }
 });
 
