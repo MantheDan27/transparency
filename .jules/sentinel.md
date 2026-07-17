@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-07-17 - XSS in Network Card Location
+**Vulnerability:** Found a Stored Cross-Site Scripting (XSS) vulnerability in `dashboard.js` where user-controlled network location data (`net.location`) was directly interpolated into an HTML template string and inserted via `innerHTML` without sanitization.
+**Learning:** Even when using a templating approach within JavaScript, variables must be explicitly sanitized if the template string is later assigned to `innerHTML`. In this codebase, the `escHtml()` helper was applied to `net.name` and `net.subnet` but missed for `net.location`.
+**Prevention:** Always consistently apply `escHtml()` (or equivalent sanitization) to all dynamic variables when constructing HTML strings intended for `innerHTML` injection, or prefer safe DOM manipulation methods like `textContent`.
