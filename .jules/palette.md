@@ -16,3 +16,8 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+## 2024-05-26 - Missing Loading States on Async Auth Buttons
+
+**Learning:** In standard HTML/JS implementations without framework state management, async form submissions (like Firebase authentication) often lack visual loading indicators. This causes users to click buttons multiple times or think the app is broken while waiting for a response, negatively impacting usability. Since `public/css/style.css` frequently lacks `:disabled` rules for standard buttons like `.btn-primary`, styling the disabled state via JS is necessary.
+
+**Action:** Always implement disabled states and text changes (e.g. "Logging In...") for submit buttons during async operations. Ensure the button is re-enabled and its original text is restored in a `finally` block to prevent the UI from getting stuck on errors.
