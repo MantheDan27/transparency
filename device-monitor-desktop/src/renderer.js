@@ -477,9 +477,19 @@ async function renderSubnetBreakdown(devices) {
 function updateOverviewStatus(devices, anomalies) {
   const strip = $('statusStrip');
   const text  = $('statusStripText');
-  const high  = anomalies.filter(a => a.severity === 'High').length;
-  const newDevs = anomalies.filter(a => a.type === 'New Device').length;
-  const unknown = devices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
+
+  // ⚡ Bolt Optimization:
+  // Replaced multiple .filter().length chains with a single O(N) loop to compute totals.
+  // Impact: Avoids allocating intermediate arrays and improves CPU efficiency for large sets.
+  let high = 0, newDevs = 0;
+  for (const a of anomalies) {
+    if (a.severity === 'High') high++;
+    if (a.type === 'New Device') newDevs++;
+  }
+  let unknown = 0;
+  for (const d of devices) {
+    if ((d.meta?.trustState || 'unknown') === 'unknown') unknown++;
+  }
 
   if (high > 0) {
     strip.className = 'status-strip status-danger';
@@ -589,15 +599,29 @@ function updateFilterCounts() {
     if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
   }
 
+  // ⚡ Bolt Optimization:
+  // Reduced multiple chained O(N) .filter().length calls to a single O(N) pass.
+  // Impact: Eliminates multiple large intermediate array allocations and reduces
+  // O(K*N) complexity to O(N), saving memory and CPU on large device lists.
+  let unknown = 0, watchlist = 0, owned = 0, risky = 0, changed = 0, virtual = 0;
+  for (const d of allDevices) {
+    if ((d.meta?.trustState || 'unknown') === 'unknown') unknown++;
+    if (d.meta?.watchlist) watchlist++;
+    if (d.meta?.trustState === 'owned') owned++;
+    if (anomalyIpSet.has(d.ip)) risky++;
+    if (changedSet.has(d.ip)) changed++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) virtual++;
+  }
+
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  $('fUnknown').textContent  = unknown;
+  $('fWatchlist').textContent = watchlist;
+  $('fOwned').textContent    = owned;
+  $('fRisky').textContent    = risky;
+  $('fChanged').textContent  = changed;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = virtual;
 }
 
 function renderDeviceTable() {
