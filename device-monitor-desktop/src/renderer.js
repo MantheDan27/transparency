@@ -645,7 +645,9 @@ function renderDeviceTable() {
     const portBadges = dev.ports?.length
       ? dev.ports.slice(0, 6).map(p => {
           const risky = RISKY_PORTS.has(p);
-          return `<span class="port-badge${risky ? ' risky' : ''}" title="${PORT_NAMES[p] || 'Port ' + p}">${p}</span>`;
+          // SECURITY: Sanitize PORT_NAMES output to prevent XSS since dev.ports data comes from network scans.
+          // While ports are usually integers, they shouldn't be fully trusted without escaping before rendering inside DOM title attributes.
+          return `<span class="port-badge${risky ? ' risky' : ''}" title="${escHtml(PORT_NAMES[p] || 'Port ' + p)}">${escHtml(p)}</span>`;
         }).join('') + (dev.ports.length > 6 ? `<span class="port-badge more">+${dev.ports.length - 6}</span>` : '')
       : '<span class="no-ports">—</span>';
 
@@ -667,7 +669,7 @@ function renderDeviceTable() {
         <td class="col-status"><span class="online-dot" title="Online"></span>${changeDot}</td>
         <td class="col-name">
           <div class="device-name-cell">
-            <span class="device-type-icon">${icon}</span>
+            <span class="device-type-icon">${escHtml(icon)}</span>
             <div>
               <div class="device-display-name">${escHtml(name)}</div>
               <div class="device-sub">${escHtml(dev.deviceType || 'Unknown')}</div>
@@ -2184,11 +2186,11 @@ function showPreviewModal(device, preview) {
   const fieldsHtml = (preview.dataFields || []).map(f => {
     const valStr = Array.isArray(f.value)
       ? (f.value.length ? f.value.map(p => PORT_NAMES[p] ? `${p} (${PORT_NAMES[p]})` : p).join(', ') : 'None')
-      : escHtml(String(f.value));
+      : String(f.value);
     return `<div class="preview-field">
       <span class="preview-field-key">${escHtml(f.field)}</span>
       <div class="preview-field-body">
-        <div class="preview-field-val">${valStr}</div>
+        <div class="preview-field-val">${escHtml(valStr)}</div>
         <div class="preview-cat-row"><span class="preview-cat-label">${escHtml(f.category)} — ${escHtml(f.description)}</span></div>
       </div>
     </div>`;

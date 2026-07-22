@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-07-22 - DOM-based XSS in Device Monitoring Desktop
+**Vulnerability:** Unsanitized network device data (ports, icons, metadata) inserted via `innerHTML` in `device-monitor-desktop/src/renderer.js`.
+**Learning:** Even data originating from local network scans or cloud-enrichment responses must be explicitly sanitized, as attackers on the local network can spoof these responses to inject malicious payloads into the desktop app UI.
+**Prevention:** Always use escaping functions like `escHtml()` before interpolating dynamic variables into template strings assigned to `innerHTML`.
