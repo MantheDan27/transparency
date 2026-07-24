@@ -46,3 +46,8 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+
+## 2026-07-24 - Timing Attack in API Key Authentication
+**Vulnerability:** The local REST API compared the provided `x-api-key` against the stored API key using a standard string inequality operator (`!==`).
+**Learning:** Standard string comparisons fail early, meaning the time taken to evaluate the comparison is proportional to the number of matching characters. This introduces a timing attack vulnerability, allowing an attacker to guess the API key character by character by measuring response times. Additionally, Node.js parses duplicate HTTP headers as arrays, which can crash `Buffer.from()` if the header is not explicitly cast to a string.
+**Prevention:** Always use constant-time comparison functions like `crypto.timingSafeEqual()` for sensitive secrets. Ensure the inputs are explicitly cast to strings to handle duplicate HTTP headers gracefully, and always check that both buffers are of equal length before comparing them to avoid `RangeError` exceptions.
