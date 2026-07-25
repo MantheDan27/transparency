@@ -581,7 +581,7 @@ function getFilteredDevices() {
 }
 
 function updateFilterCounts() {
-  const total   = allDevices.length;
+  const total = allDevices.length;
   const anomalyIpSet = new Set();
   const changedSet = new Set();
   for (const a of allAnomalies) {
@@ -589,15 +589,30 @@ function updateFilterCounts() {
     if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
   }
 
-  $('fAll').textContent      = total;
-  $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  // ⚡ Bolt Performance Optimization:
+  // Replaced multiple O(N) .filter().length passes with a single O(N) loop
+  // computing all counts simultaneously to minimize UI rendering latency.
+  let unknownCount = 0, watchlistCount = 0, ownedCount = 0;
+  let riskyCount = 0, changedCount = 0, virtualCount = 0;
+
+  for (const d of allDevices) {
+    if ((d.meta?.trustState || 'unknown') === 'unknown') unknownCount++;
+    if (d.meta?.watchlist) watchlistCount++;
+    if (d.meta?.trustState === 'owned') ownedCount++;
+    if (anomalyIpSet.has(d.ip)) riskyCount++;
+    if (changedSet.has(d.ip)) changedCount++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) virtualCount++;
+  }
+
+  $('fAll').textContent       = total;
+  $('fOnline').textContent    = total;
+  $('fUnknown').textContent   = unknownCount;
+  $('fWatchlist').textContent = watchlistCount;
+  $('fOwned').textContent     = ownedCount;
+  $('fRisky').textContent     = riskyCount;
+  $('fChanged').textContent   = changedCount;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = virtualCount;
 }
 
 function renderDeviceTable() {
