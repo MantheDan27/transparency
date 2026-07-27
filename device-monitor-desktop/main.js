@@ -1298,7 +1298,6 @@ function runScriptHooks(event, payload = {}) {
       const file = args[0];
       const childArgs = args.slice(1);
 
-      const child = execFile(file, childArgs, { timeout: 15000 }, (err) => {
       // Parse command string into file and args (simplified parsing)
       const parts = h.cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
       if (parts.length === 0) continue;
@@ -1397,8 +1396,17 @@ function restartLocalApiWithAuth() {
 
     // API key authentication (skip for root/health)
     if (req.url !== '/' && req.url !== '/api/health') {
-      const reqKey = req.headers['x-api-key'];
-      if (apiKeyStore.key && reqKey !== apiKeyStore.key) {
+      let isAuthorized = !apiKeyStore.key;
+      if (apiKeyStore.key) {
+        const reqKeyStr = String(req.headers['x-api-key'] || '');
+        const reqKeyBuf = Buffer.from(reqKeyStr);
+        const expectedKeyBuf = Buffer.from(apiKeyStore.key);
+        if (reqKeyBuf.length === expectedKeyBuf.length) {
+          isAuthorized = require('crypto').timingSafeEqual(reqKeyBuf, expectedKeyBuf);
+        }
+      }
+
+      if (!isAuthorized) {
         res.writeHead(401);
         return res.end(JSON.stringify({ error: 'Unauthorized — include X-API-Key header', hint: 'Get your key from the Privacy tab in Transparency.' }));
       }
