@@ -13,13 +13,18 @@
 // ─── Input Validation ───────────────────────────────────────────────────────
 static bool isValidTarget(const std::string& target) {
     if (target.empty() || target.length() > 255) return false;
-    // Prevent flag injection
-    if (target[0] == '-') return false;
+    // Strictly validate IP address (IPv4 or IPv6) or a very strict alphanumeric hostname
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+    if (inet_pton(AF_INET, target.c_str(), &(sa.sin_addr)) == 1) return true;
+    if (inet_pton(AF_INET6, target.c_str(), &(sa6.sin6_addr)) == 1) return true;
 
-    // Alphanumeric, dots, hyphens and colons (for IPv6)
+    // Strict hostname validation (no command injection characters)
     for (char c : target) {
-        if (!isalnum(c) && c != '.' && c != '-' && c != ':') return false;
+        if (!isalnum(c) && c != '.' && c != '-') return false;
     }
+    // Prevent starting with a hyphen (flag injection)
+    if (target[0] == '-') return false;
     return true;
 }
 

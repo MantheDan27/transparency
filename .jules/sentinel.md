@@ -46,3 +46,13 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2024-10-25 - Command Injection in Linux Desktop Tools API
+
+**Vulnerability:**
+The `runTool` function in `transparency-linux/src/app.cpp` was vulnerable to command injection because the `isValidTarget` function allowed colons (`:`) in hostnames (intended for IPv6 support), which could be used to execute arbitrary commands if a user bypassed the rudimentary checks or exploited shell interpretation.
+
+**Learning:**
+Validating user input for shell commands must be strictly compartmentalized. An IP address should be validated via strict network primitives like `inet_pton`, rather than allowing characters like `:` into a generic string validation loop that also approves hostnames. Combining loose character allowance for one data type (IPv6) weakens validation for others (hostnames).
+
+**Prevention:**
+Use `inet_pton` for both IPv4 and IPv6 validation. For hostnames, strictly permit only alphanumeric characters, dots, and hyphens. Never use a single, loose regex or character loop to validate both IP addresses and hostnames when that data will be passed to a shell.
