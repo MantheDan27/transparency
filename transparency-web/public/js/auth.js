@@ -58,11 +58,18 @@ signupForm.addEventListener("submit", async (e) => {
   const name = document.getElementById("signup-name").value.trim();
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
+  const btn = signupForm.querySelector('button[type="submit"]');
 
   if (password.length < 6) {
     showError("Password must be at least 6 characters.");
     return;
   }
+
+  if (!btn.dataset.originalText) {
+    btn.dataset.originalText = btn.textContent;
+  }
+  btn.disabled = true;
+  btn.textContent = "Creating...";
 
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -80,6 +87,8 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+    btn.disabled = false;
+    btn.textContent = btn.dataset.originalText;
   }
 });
 
@@ -89,11 +98,20 @@ loginForm.addEventListener("submit", async (e) => {
   clearError();
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
+  const btn = loginForm.querySelector('button[type="submit"]');
+
+  if (!btn.dataset.originalText) {
+    btn.dataset.originalText = btn.textContent;
+  }
+  btn.disabled = true;
+  btn.textContent = "Logging in...";
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+    btn.disabled = false;
+    btn.textContent = btn.dataset.originalText;
   }
 });
 
