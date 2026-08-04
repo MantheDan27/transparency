@@ -1397,10 +1397,24 @@ function restartLocalApiWithAuth() {
 
     // API key authentication (skip for root/health)
     if (req.url !== '/' && req.url !== '/api/health') {
-      const reqKey = req.headers['x-api-key'];
-      if (apiKeyStore.key && reqKey !== apiKeyStore.key) {
-        res.writeHead(401);
-        return res.end(JSON.stringify({ error: 'Unauthorized — include X-API-Key header', hint: 'Get your key from the Privacy tab in Transparency.' }));
+      const reqKey = String(req.headers['x-api-key'] || '');
+      if (apiKeyStore.key) {
+        const expectedKeyBuffer = Buffer.from(apiKeyStore.key);
+        const reqKeyBuffer = Buffer.from(reqKey);
+
+        let isValid = false;
+        if (expectedKeyBuffer.length === reqKeyBuffer.length) {
+          try {
+            isValid = require('crypto').timingSafeEqual(expectedKeyBuffer, reqKeyBuffer);
+          } catch (e) {
+            isValid = false;
+          }
+        }
+
+        if (!isValid) {
+          res.writeHead(401);
+          return res.end(JSON.stringify({ error: 'Unauthorized — include X-API-Key header', hint: 'Get your key from the Privacy tab in Transparency.' }));
+        }
       }
     }
 
