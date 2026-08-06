@@ -589,15 +589,29 @@ function updateFilterCounts() {
     if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Optimize multiple O(N) array filters into a single O(N) loop to compute all device counts at once.
+  // This reduces updateFilterCounts from O(N * 6) to O(N).
+  let counts = { unknown: 0, watchlist: 0, owned: 0, risky: 0, changed: 0, virtual: 0 };
+  for (const d of allDevices) {
+    const trustState = d.meta?.trustState || 'unknown';
+    if (trustState === 'unknown') counts.unknown++;
+    if (d.meta?.watchlist) counts.watchlist++;
+    if (trustState === 'owned') counts.owned++;
+    if (anomalyIpSet.has(d.ip)) counts.risky++;
+    if (changedSet.has(d.ip)) counts.changed++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) counts.virtual++;
+  }
+
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  $('fUnknown').textContent  = counts.unknown;
+  $('fWatchlist').textContent = counts.watchlist;
+  $('fOwned').textContent    = counts.owned;
+  $('fRisky').textContent    = counts.risky;
+  $('fChanged').textContent  = counts.changed;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = counts.virtual;
 }
 
 function renderDeviceTable() {
@@ -1461,18 +1475,6 @@ function renderMap() {
   // Precompute new device lookup to avoid O(N) array search inside the O(M) device render loop
   const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
-  // ⚡ Bolt: Pre-calculate new devices to avoid O(N*M) lookups during rendering
-  const newDeviceSet = new Set();
-  for (const a of allAnomalies) {
-    if (a.type === 'New Device') newDeviceSet.add(a.device);
-  }
-
-  // ⚡ Bolt Performance Optimization:
-  // Replaced O(N*M) nested array search (allAnomalies.some inside tierDevices.forEach)
-  // with O(N+M) Set lookup. This significantly improves map rendering time for networks
-  // with many devices and frequent changes.
-  const newDeviceIpSet = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
-
   const latencyOf = d => (typeof d.latencyMs === 'number' && d.latencyMs > 0) ? d.latencyMs : null;
   const withLatency    = devices.filter(d => latencyOf(d) !== null);
   const withoutLatency = devices.filter(d => latencyOf(d) === null);
@@ -1519,11 +1521,6 @@ function renderMap() {
   if (gateway) nodePositions.set(gateway.ip, { x: cx, y: routerY });
 
   const maxPerRow = Math.max(1, Math.floor(W / 120));
-
-  // ⚡ Bolt Performance Optimization:
-  // Pre-compute Set of IPs with 'New Device' anomalies outside the render loop
-  // to avoid O(N) array iteration per device inside the mapping loop.
-  const newDeviceIpsMap = new Set(allAnomalies.filter(a => a.type === 'New Device').map(a => a.device));
 
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
@@ -1627,14 +1624,6 @@ function renderMap() {
   });
 
   // Device nodes
-  // ⚡ Bolt Performance Optimization:
-  // Pre-computed O(1) Set lookup for new devices to avoid O(N*M) nested
-  // searches inside the map rendering loop (activeTiers.forEach -> tierDevices.forEach).
-  // This significantly reduces main-thread blocking during map render for large networks.
-  const newMapDeviceIps = new Set(
-    allAnomalies.filter(a => a.type === 'New Device').map(a => a.device)
-  );
-
   activeTiers.forEach(tier => {
     const tierDevices = tierGroups.get(tier);
     const baseY = tierYMap.get(tier);
