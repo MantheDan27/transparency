@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2026-08-13 - Stored XSS via innerHTML and Firestore Data
+**Vulnerability:** The `addNetworkCard` function directly interpolated user-controlled data (`net.location`) retrieved from Firestore into an HTML string assigned to `innerHTML`, allowing Stored Cross-Site Scripting (XSS).
+**Learning:** Even data retrieved from a database (like Firestore) must be treated as untrusted user input if it was originally supplied by users. Bypassing escaping when assigning to `innerHTML` creates a vector for malicious scripts to execute in other users' sessions.
+**Prevention:** Always wrap dynamically interpolated string properties with an escaping function (e.g., `escHtml()`) before assigning them to `innerHTML` or `dangerouslySetInnerHTML`.
