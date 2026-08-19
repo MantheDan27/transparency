@@ -58,6 +58,7 @@ signupForm.addEventListener("submit", async (e) => {
   const name = document.getElementById("signup-name").value.trim();
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
+  const btn = signupForm.querySelector('button[type="submit"]');
 
   if (password.length < 6) {
     showError("Password must be at least 6 characters.");
@@ -65,6 +66,9 @@ signupForm.addEventListener("submit", async (e) => {
   }
 
   try {
+    btn.disabled = true;
+    btn.dataset.originalText = btn.textContent;
+    btn.textContent = "Creating...";
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: name });
     // Create user document in Firestore
@@ -80,6 +84,8 @@ signupForm.addEventListener("submit", async (e) => {
     });
   } catch (err) {
     showError(friendlyError(err.code));
+    btn.disabled = false;
+    btn.textContent = btn.dataset.originalText;
   }
 });
 
@@ -89,11 +95,17 @@ loginForm.addEventListener("submit", async (e) => {
   clearError();
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
+  const btn = loginForm.querySelector('button[type="submit"]');
 
   try {
+    btn.disabled = true;
+    btn.dataset.originalText = btn.textContent;
+    btn.textContent = "Logging In...";
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
     showError(friendlyError(err.code));
+    btn.disabled = false;
+    btn.textContent = btn.dataset.originalText;
   }
 });
 
@@ -133,6 +145,16 @@ onAuthStateChanged(auth, (user) => {
     currentUser = null;
     loginPage.classList.remove("hidden");
     dashboardPage.classList.add("hidden");
+    const loginBtn = loginForm.querySelector('button[type="submit"]');
+    if (loginBtn.disabled) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = loginBtn.dataset.originalText || loginBtn.textContent;
+    }
+    const signupBtn = signupForm.querySelector('button[type="submit"]');
+    if (signupBtn.disabled) {
+      signupBtn.disabled = false;
+      signupBtn.textContent = signupBtn.dataset.originalText || signupBtn.textContent;
+    }
   }
 });
 
