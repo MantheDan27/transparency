@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -452,12 +452,19 @@ uploadForm.addEventListener("submit", async (e) => {
 
     const devices = Array.isArray(data) ? data : data.devices || [];
 
+    // ⚡ Bolt Performance Optimization:
+    // Replaced sequential await setDoc with writeBatch to prevent N+1 network requests
+    // during bulk uploads, drastically reducing UI blocking and API latency.
     let count = 0;
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const docRef = doc(db, "users", uid, "devices", mac);
+      batch.set(docRef, {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -473,7 +480,18 @@ uploadForm.addEventListener("submit", async (e) => {
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
       });
+
       count++;
+      batchCount++;
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     // Update device count on network
@@ -554,7 +572,13 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // ⚡ Bolt Performance Optimization:
+    // Replaced sequential await setDoc with writeBatch to prevent N+1 network requests
+    // during device sync, significantly improving API performance.
     let count = 0;
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
@@ -569,7 +593,8 @@ syncDevicesBtn.addEventListener("click", async () => {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const docRef = doc(db, "users", uid, "devices", mac);
+      batch.set(docRef, {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -586,7 +611,18 @@ syncDevicesBtn.addEventListener("click", async () => {
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
       }, { merge: true });
+
       count++;
+      batchCount++;
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
