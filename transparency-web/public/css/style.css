@@ -287,6 +287,11 @@ h1, h2, h3, h4 {
   transform: translateY(0);
 }
 
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+}
+
 .btn-secondary {
   padding: 10px 20px;
   background: var(--bg-elevated);
