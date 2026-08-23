@@ -55,12 +55,19 @@ function clearError() {
 signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearError();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.dataset.originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Creating Account...";
+
   const name = document.getElementById("signup-name").value.trim();
   const email = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
 
   if (password.length < 6) {
     showError("Password must be at least 6 characters.");
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitBtn.dataset.originalText;
     return;
   }
 
@@ -78,8 +85,12 @@ signupForm.addEventListener("submit", async (e) => {
         notifications: true
       }
     });
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitBtn.dataset.originalText;
   } catch (err) {
     showError(friendlyError(err.code));
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitBtn.dataset.originalText;
   }
 });
 
@@ -87,13 +98,22 @@ signupForm.addEventListener("submit", async (e) => {
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearError();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.dataset.originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Logging in...";
+
   const email = document.getElementById("login-email").value.trim();
   const password = document.getElementById("login-password").value;
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitBtn.dataset.originalText;
   } catch (err) {
     showError(friendlyError(err.code));
+    submitBtn.disabled = false;
+    submitBtn.textContent = submitBtn.dataset.originalText;
   }
 });
 
