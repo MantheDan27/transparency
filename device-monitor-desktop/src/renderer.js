@@ -589,15 +589,29 @@ function updateFilterCounts() {
     if (a.type === 'Ports Changed' || a.type === 'New Device') changedSet.add(a.device);
   }
 
+  // ⚡ Bolt Performance Optimization:
+  // Replaced multiple O(N) array filter passes with a single O(N) pass over allDevices.
+  // This reduces the time complexity from O(6*N) to O(N) when updating filter counts,
+  // preventing UI blocking during large device list updates.
+  let unknown = 0, watchlist = 0, owned = 0, risky = 0, changed = 0, virtual = 0;
+  for (const d of allDevices) {
+    if ((d.meta?.trustState || 'unknown') === 'unknown') unknown++;
+    if (d.meta?.watchlist) watchlist++;
+    if (d.meta?.trustState === 'owned') owned++;
+    if (anomalyIpSet.has(d.ip)) risky++;
+    if (changedSet.has(d.ip)) changed++;
+    if (d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor) virtual++;
+  }
+
   $('fAll').textContent      = total;
   $('fOnline').textContent   = total;
-  $('fUnknown').textContent  = allDevices.filter(d => (d.meta?.trustState || 'unknown') === 'unknown').length;
-  $('fWatchlist').textContent = allDevices.filter(d => d.meta?.watchlist).length;
-  $('fOwned').textContent    = allDevices.filter(d => d.meta?.trustState === 'owned').length;
-  $('fRisky').textContent    = allDevices.filter(d => anomalyIpSet.has(d.ip)).length;
-  $('fChanged').textContent  = allDevices.filter(d => changedSet.has(d.ip)).length;
+  $('fUnknown').textContent  = unknown;
+  $('fWatchlist').textContent = watchlist;
+  $('fOwned').textContent    = owned;
+  $('fRisky').textContent    = risky;
+  $('fChanged').textContent  = changed;
   const vmEl = $('fVirtual');
-  if (vmEl) vmEl.textContent = allDevices.filter(d => d.fingerprint?.isVirtualMachine || d.fingerprint?.isHypervisor).length;
+  if (vmEl) vmEl.textContent = virtual;
 }
 
 function renderDeviceTable() {
