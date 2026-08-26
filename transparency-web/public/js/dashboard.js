@@ -511,6 +511,10 @@ testConnectionBtn.addEventListener("click", async () => {
     return;
   }
 
+  testConnectionBtn.dataset.originalText = testConnectionBtn.textContent;
+  testConnectionBtn.textContent = "Testing...";
+  testConnectionBtn.disabled = true;
+
   try {
     const headers = {};
     if (apiKey) headers["X-API-Key"] = apiKey;
@@ -528,6 +532,9 @@ testConnectionBtn.addEventListener("click", async () => {
     }
   } catch (err) {
     showConnectionStatus(`Connection failed: ${err.message}`, "error");
+  } finally {
+    testConnectionBtn.textContent = testConnectionBtn.dataset.originalText;
+    testConnectionBtn.disabled = false;
   }
 });
 
@@ -539,6 +546,10 @@ syncDevicesBtn.addEventListener("click", async () => {
     showConnectionStatus("Enter an API endpoint first.", "error");
     return;
   }
+
+  syncDevicesBtn.dataset.originalText = syncDevicesBtn.textContent;
+  syncDevicesBtn.textContent = "Syncing...";
+  syncDevicesBtn.disabled = true;
 
   try {
     const headers = {};
@@ -593,6 +604,9 @@ syncDevicesBtn.addEventListener("click", async () => {
     loadOverviewData(uid);
   } catch (err) {
     showConnectionStatus(`Sync failed: ${err.message}`, "error");
+  } finally {
+    syncDevicesBtn.textContent = syncDevicesBtn.dataset.originalText;
+    syncDevicesBtn.disabled = false;
   }
 });
 
