@@ -2717,7 +2717,7 @@ function renderAlertWithGuidance(a) {
         <ul class="alert-steps-list">${guidance.steps.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
       </div>
     </div>
-    <button class="alert-guidance-toggle" onclick="window.toggleAlertGuidance('${escHtml(a.id)}')">
+    <button class="alert-guidance-toggle" onclick="window.toggleAlertGuidance('${escHtml(a.id)}')" aria-expanded="false" aria-controls="guidance-${escHtml(a.id)}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       What does this mean? What should I do?
     </button>` : '';
@@ -2761,7 +2761,11 @@ function inferGuidanceFromAlert(a) {
 
 window.toggleAlertGuidance = function(id) {
   const el = document.getElementById(`guidance-${id}`);
-  if (el) el.classList.toggle('hidden');
+  if (el) {
+    const isHidden = el.classList.toggle('hidden');
+    const toggleBtn = document.querySelector(`button[aria-controls='guidance-${id}']`);
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+  }
 };
 
 // Note: alert rendering uses the patched renderAlerts at the bottom of the file.
