@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## 2026-08-28 - Dynamic aria-expanded for Hidden Guidance Blocks
+**Learning:** When using vanilla JS to implement expandable/collapsible guidance blocks or accordions, the toggle button must dynamically update its `aria-expanded` attribute. If it's missing or static, screen readers will not announce the state change when the user clicks the button, leaving them unaware if the content has been revealed or hidden.
+**Action:** Always ensure toggle buttons that control the visibility of other elements have an `aria-controls` attribute linking to the target ID, and dynamically update `aria-expanded` (true/false) whenever the target's visibility changes.
