@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2026-08-28 - XSS Pivoting Risk via Client-Side API Integration
+**Vulnerability:** Stored XSS in the network location field (`addNetworkCard`) due to unescaped input in `innerHTML`.
+**Learning:** In architectures where a web dashboard communicates directly with a local desktop app API (e.g., `http://192.168.1.100:7722`), an XSS vulnerability in the web app becomes significantly more dangerous. It allows an attacker to bypass CORS and pivot into the user's local network by making arbitrary requests to the local desktop app on the user's behalf using their stored API keys.
+**Prevention:** Always use `escHtml()` when rendering user-supplied data in template strings, especially in dashboards with local network integrations.
