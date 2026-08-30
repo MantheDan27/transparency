@@ -16,3 +16,7 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+
+## $(date +%Y-%m-%d) - Transient Loading States for Async Network Forms
+**Learning:** In vanilla JS Firebase applications with fast-failing API errors (like authentication), failing to implement transient visual loading states coupled with `disabled=true` can lead to confusing UX where the user clicks repeatedly if the network lags.
+**Action:** Always implement a `try/catch/finally` block that disables the submit button and uses `btn.dataset.originalText` to swap its text to a loading state (e.g., 'Logging in...') during the `try` and restores it in the `finally` block for all async form handlers.
