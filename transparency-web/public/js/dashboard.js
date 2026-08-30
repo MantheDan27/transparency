@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -452,12 +452,15 @@ uploadForm.addEventListener("submit", async (e) => {
 
     const devices = Array.isArray(data) ? data : data.devices || [];
 
+    // ⚡ Bolt: Batching Firestore writes to fix N+1 performance issue (~99% fewer requests for large uploads)
     let count = 0;
+    let batchCount = 0;
+    let batch = writeBatch(db);
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      batch.set(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -474,6 +477,15 @@ uploadForm.addEventListener("submit", async (e) => {
         uploadedAt: serverTimestamp()
       });
       count++;
+
+      if (++batchCount === 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     // Update device count on network
@@ -554,7 +566,10 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // ⚡ Bolt: Batching Firestore writes to fix N+1 performance issue (~99% fewer requests for large syncs)
     let count = 0;
+    let batchCount = 0;
+    let batch = writeBatch(db);
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
@@ -569,7 +584,7 @@ syncDevicesBtn.addEventListener("click", async () => {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      batch.set(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -587,6 +602,15 @@ syncDevicesBtn.addEventListener("click", async () => {
         syncedAt: serverTimestamp()
       }, { merge: true });
       count++;
+
+      if (++batchCount === 500) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
