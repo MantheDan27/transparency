@@ -192,8 +192,8 @@ function addNetworkCard(id, net) {
       <span>${net.location || "Unknown location"}</span>
     </div>
     <div class="network-card-actions">
-      <button class="btn-sm btn-view" data-id="${id}">View Devices</button>
-      <button class="btn-sm btn-delete" data-id="${id}">Remove</button>
+      <button class="btn-sm btn-view" data-id="${id}" aria-label="View devices for network ${escHtml(net.name)}">View Devices</button>
+      <button class="btn-sm btn-delete" data-id="${id}" aria-label="Remove network ${escHtml(net.name)}">Remove</button>
     </div>
   `;
   networkList.appendChild(card);
