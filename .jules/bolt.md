@@ -28,3 +28,6 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2023-10-27 - N+1 Firestore Writes in Client Batch Processing
+**Learning:** Sequential `await setDoc` calls within large loops (e.g., during device syncing or log uploading in Firebase) block the UI and create significant N+1 network request overhead, severely degrading client performance and risking rate limits.
+**Action:** When ingesting or syncing bulk data into Firestore, always refactor sequential writes to utilize `writeBatch()`, chunking the operations into groups of up to 500 (the maximum allowed per batch) to transform O(N) network requests into O(N/500).
