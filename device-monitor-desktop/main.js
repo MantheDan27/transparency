@@ -1299,14 +1299,6 @@ function runScriptHooks(event, payload = {}) {
       const childArgs = args.slice(1);
 
       const child = execFile(file, childArgs, { timeout: 15000 }, (err) => {
-      // Parse command string into file and args (simplified parsing)
-      const parts = h.cmd.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-      if (parts.length === 0) continue;
-
-      const execName = parts[0].replace(/"/g, '');
-      const execArgs = parts.slice(1).map(p => p.replace(/"/g, ''));
-
-      const child = execFile(execName, execArgs, { timeout: 15000 }, (err) => {
         if (err) console.error(`[hook] "${h.cmd}" failed:`, err.message);
       });
       child.stdin.on('error', () => { /* ignore EPIPE */ });
