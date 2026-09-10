@@ -72,7 +72,8 @@ namespace TransparencyApp.Services
             var arpTable = await GetArpTableAsync();
 
             progress?.Report($"Scanning ports on {liveHosts.Count} host(s)…");
-            var hostTasks = liveHosts.Select(ip => ScanHostAsync(ip, arpTable)).ToList();
+            var prevSnapshotMap = _lastSnapshot.ToDictionary(d => d.IpAddress);
+            var hostTasks = liveHosts.Select(ip => ScanHostAsync(ip, arpTable, prevSnapshotMap)).ToList();
             var devices   = (await Task.WhenAll(hostTasks))
                                 .Where(d => d is not null)
                                 .Select(d => d!)
@@ -168,7 +169,7 @@ namespace TransparencyApp.Services
         }
 
         // ── Host scan (ports + DNS) ───────────────────────────────────────────
-        private async Task<Device?> ScanHostAsync(string ip, Dictionary<string, string> arpTable)
+        private async Task<Device?> ScanHostAsync(string ip, Dictionary<string, string> arpTable, Dictionary<string, Device> prevSnapshotMap)
         {
             var device = new Device { IpAddress = ip };
 
@@ -193,7 +194,7 @@ namespace TransparencyApp.Services
                                        .ToList();
 
             // Carry forward previous ports for diff
-            var prev = _lastSnapshot.FirstOrDefault(d => d.IpAddress == ip);
+            var prev = prevSnapshotMap.TryGetValue(ip, out var p) ? p : null;
             device.PreviousPorts = prev?.OpenPorts.ToList() ?? new List<int>();
 
             return device;
@@ -217,6 +218,7 @@ namespace TransparencyApp.Services
         private List<Anomaly> AnalyzeAnomalies(List<Device> current)
         {
             var anomalies = new List<Anomaly>();
+            var prevIps = new HashSet<string>(_lastSnapshot.Select(d => d.IpAddress));
 
             foreach (var device in current)
             {
@@ -245,7 +247,7 @@ namespace TransparencyApp.Services
                     });
 
                 // Rule 3 — New device vs snapshot
-                if (_lastSnapshot.Count > 0 && !_lastSnapshot.Any(d => d.IpAddress == device.IpAddress))
+                if (_lastSnapshot.Count > 0 && !prevIps.Contains(device.IpAddress))
                     anomalies.Add(new Anomaly
                     {
                         Type        = "New Device Detected",
