@@ -405,7 +405,11 @@ function setupTrustActions(device) {
 
   document.getElementById("detail-trust-btn").onclick = () => updateDeviceTrust(mac, "Owned");
   document.getElementById("detail-watch-btn").onclick = () => updateDeviceTrust(mac, "Watchlist");
-  document.getElementById("detail-block-btn").onclick = () => updateDeviceTrust(mac, "Blocked");
+  document.getElementById("detail-block-btn").onclick = () => {
+    if (confirm("Are you sure you want to block this device?")) {
+      updateDeviceTrust(mac, "Blocked");
+    }
+  };
 }
 
 async function updateDeviceTrust(mac, trust) {
