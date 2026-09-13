@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,27 +453,35 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
-    for (const dev of devices) {
-      const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
-      if (!mac) continue;
+    // Process devices in batches of 500 (Firestore limit) to avoid N+1 requests
+    for (let i = 0; i < devices.length; i += 500) {
+      const batch = writeBatch(db);
+      const chunk = devices.slice(i, i + 500);
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
-        mac: dev.mac || dev.macAddress || "",
-        ip: dev.ip || dev.ipAddress || "",
-        hostname: dev.hostname || dev.name || "",
-        name: dev.name || dev.hostname || "",
-        vendor: dev.vendor || dev.manufacturer || "",
-        deviceType: dev.deviceType || dev.type || "Unknown",
-        trust: dev.trust || "Unknown",
-        ports: dev.ports || [],
-        networkId: networkId,
-        lastSeen: serverTimestamp(),
-        firstSeen: dev.firstSeen || serverTimestamp(),
-        sightings: dev.sightings || 1,
-        classificationReason: dev.classificationReason || "",
-        uploadedAt: serverTimestamp()
-      });
-      count++;
+      for (const dev of chunk) {
+        const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
+        if (!mac) continue;
+
+        const deviceRef = doc(db, "users", uid, "devices", mac);
+        batch.set(deviceRef, {
+          mac: dev.mac || dev.macAddress || "",
+          ip: dev.ip || dev.ipAddress || "",
+          hostname: dev.hostname || dev.name || "",
+          name: dev.name || dev.hostname || "",
+          vendor: dev.vendor || dev.manufacturer || "",
+          deviceType: dev.deviceType || dev.type || "Unknown",
+          trust: dev.trust || "Unknown",
+          ports: dev.ports || [],
+          networkId: networkId,
+          lastSeen: serverTimestamp(),
+          firstSeen: dev.firstSeen || serverTimestamp(),
+          sightings: dev.sightings || 1,
+          classificationReason: dev.classificationReason || "",
+          uploadedAt: serverTimestamp()
+        });
+        count++;
+      }
+      await batch.commit();
     }
 
     // Update device count on network
@@ -555,38 +563,46 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
-    for (const dev of devices) {
-      const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
-      if (!mac) continue;
+    // Process devices in batches of 500 (Firestore limit) to avoid N+1 requests
+    for (let i = 0; i < devices.length; i += 500) {
+      const batch = writeBatch(db);
+      const chunk = devices.slice(i, i + 500);
 
-      // Find which network to associate
-      let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
-      }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
-      }
+      for (const dev of chunk) {
+        const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
+        if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
-        mac: dev.mac || "",
-        ip: dev.ip || "",
-        hostname: dev.hostname || "",
-        name: dev.name || dev.hostname || "",
-        vendor: dev.vendor || "",
-        deviceType: dev.deviceType || dev.type || "Unknown",
-        trust: dev.trust || "Unknown",
-        ports: dev.ports || [],
-        networkId: networkId,
-        lastSeen: serverTimestamp(),
-        firstSeen: dev.firstSeen || serverTimestamp(),
-        sightings: dev.sightings || 1,
-        classificationReason: dev.classificationReason || "",
-        subnet: dev.subnet || "",
-        syncedAt: serverTimestamp()
-      }, { merge: true });
-      count++;
+        // Find which network to associate
+        let networkId = "";
+        if (dev.subnet && allNetworksCache.length > 0) {
+          const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
+          if (match) networkId = match.id;
+        }
+        if (!networkId && allNetworksCache.length > 0) {
+          networkId = allNetworksCache[0].id;
+        }
+
+        const deviceRef = doc(db, "users", uid, "devices", mac);
+        batch.set(deviceRef, {
+          mac: dev.mac || "",
+          ip: dev.ip || "",
+          hostname: dev.hostname || "",
+          name: dev.name || dev.hostname || "",
+          vendor: dev.vendor || "",
+          deviceType: dev.deviceType || dev.type || "Unknown",
+          trust: dev.trust || "Unknown",
+          ports: dev.ports || [],
+          networkId: networkId,
+          lastSeen: serverTimestamp(),
+          firstSeen: dev.firstSeen || serverTimestamp(),
+          sightings: dev.sightings || 1,
+          classificationReason: dev.classificationReason || "",
+          subnet: dev.subnet || "",
+          syncedAt: serverTimestamp()
+        }, { merge: true });
+        count++;
+      }
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
