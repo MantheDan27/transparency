@@ -392,9 +392,9 @@
   <!-- ========== MODALS ========== -->
 
   <!-- Add Network Modal -->
-  <div id="network-modal" class="modal-overlay hidden">
+  <div id="network-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="network-modal-title">
     <div class="modal">
-      <h2>Add Network</h2>
+      <h2 id="network-modal-title">Add Network</h2>
       <form id="network-form">
         <div class="form-group">
           <label for="net-name">Network Name</label>
@@ -421,9 +421,9 @@
   </div>
 
   <!-- Upload Scan Modal -->
-  <div id="upload-modal" class="modal-overlay hidden">
+  <div id="upload-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
     <div class="modal">
-      <h2>Upload Scan Data</h2>
+      <h2 id="upload-modal-title">Upload Scan Data</h2>
       <p class="modal-desc">
         Upload a JSON file exported from the Transparency desktop app. The file should contain an array of device objects.
       </p>
