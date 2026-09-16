@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,11 +453,20 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    // ⚡ BOLT OPTIMIZATION:
+    // Batching Firestore writes to eliminate N+1 network requests.
+    // Expected impact: Speeds up bulk operations from O(N) round-trips to O(N/500),
+    // significantly reducing UI blocking and network overhead.
+    const batches = [];
+    let currentBatch = writeBatch(db);
+    let opsInBatch = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const deviceRef = doc(db, "users", uid, "devices", mac);
+      currentBatch.set(deviceRef, {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -473,8 +482,22 @@ uploadForm.addEventListener("submit", async (e) => {
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
       });
+
       count++;
+      opsInBatch++;
+
+      if (opsInBatch === 500) {
+        batches.push(currentBatch.commit());
+        currentBatch = writeBatch(db);
+        opsInBatch = 0;
+      }
     }
+
+    if (opsInBatch > 0) {
+      batches.push(currentBatch.commit());
+    }
+
+    await Promise.all(batches);
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -555,6 +578,14 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    // ⚡ BOLT OPTIMIZATION:
+    // Batching Firestore writes to eliminate N+1 network requests.
+    // Expected impact: Speeds up bulk operations from O(N) round-trips to O(N/500),
+    // significantly reducing UI blocking and network overhead.
+    const batches = [];
+    let currentBatch = writeBatch(db);
+    let opsInBatch = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
@@ -569,7 +600,8 @@ syncDevicesBtn.addEventListener("click", async () => {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const deviceRef = doc(db, "users", uid, "devices", mac);
+      currentBatch.set(deviceRef, {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -586,8 +618,22 @@ syncDevicesBtn.addEventListener("click", async () => {
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
       }, { merge: true });
+
       count++;
+      opsInBatch++;
+
+      if (opsInBatch === 500) {
+        batches.push(currentBatch.commit());
+        currentBatch = writeBatch(db);
+        opsInBatch = 0;
+      }
     }
+
+    if (opsInBatch > 0) {
+      batches.push(currentBatch.commit());
+    }
+
+    await Promise.all(batches);
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
