@@ -46,3 +46,13 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2026-09-19 - Cross-Site Scripting (XSS) via Attribute Injection in escHtml
+
+**Vulnerability:**
+The `escHtml` function in `transparency-web/public/js/dashboard.js` used `div.textContent` and `div.innerHTML` to escape HTML. While this escapes `<` and `>`, it does not reliably escape double quotes (`"`) or single quotes (`'`), leaving attributes vulnerable to injection if user-controlled input is interpolated into HTML attributes.
+
+**Learning:**
+DOM-based text insertion (`textContent`) is designed to prevent HTML element injection but does not always safely escape quote characters for use within HTML attributes. When dynamically generating HTML via template literals, using robust regex-based escaping or strict allowlists is required to prevent attribute injection.
+
+**Prevention:**
+Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
