@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,11 +453,19 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    let batchCount = 0;
+    let batch = writeBatch(db);
+    // ⚡ Bolt Performance Optimization:
+    // Replaced multiple individual await setDoc API calls within the loop with chunked writeBatches.
+    // This turns O(N) network requests into O(N/400) batched payload, significantly speeding up large scan uploads
+    // while safely avoiding Firestore's 500-operation limit per batch.
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const deviceRef = doc(db, "users", uid, "devices", mac);
+      batch.set(deviceRef, {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -474,13 +482,25 @@ uploadForm.addEventListener("submit", async (e) => {
         uploadedAt: serverTimestamp()
       });
       count++;
+      batchCount++;
+
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
     }
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
     const netSnap = await getDoc(netRef);
     if (netSnap.exists()) {
-      await setDoc(netRef, { deviceCount: count }, { merge: true });
+      batch.set(netRef, { deviceCount: count }, { merge: true });
+      batchCount++;
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     alert(`Uploaded ${count} devices successfully.`);
@@ -555,21 +575,30 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    let batchCount = 0;
+    // ⚡ Bolt Performance Optimization:
+    // Replaced multiple individual await setDoc API calls within the loop with chunked writeBatches.
+    // Also pre-computed O(1) Map lookup to replace O(N) array search (allNetworksCache.find) inside the O(M) device processing loop.
+    // Chunking to 400 safely avoids Firestore's 500-operation limit per batch while retaining performance.
+    const networkSubnetMap = new Map();
+    for (const n of allNetworksCache) if (n.subnet) networkSubnetMap.set(n.subnet, n.id);
+    let batch = writeBatch(db);
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && networkSubnetMap.has(dev.subnet)) {
+        networkId = networkSubnetMap.get(dev.subnet);
       }
       if (!networkId && allNetworksCache.length > 0) {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const deviceRef = doc(db, "users", uid, "devices", mac);
+      batch.set(deviceRef, {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -587,6 +616,17 @@ syncDevicesBtn.addEventListener("click", async () => {
         syncedAt: serverTimestamp()
       }, { merge: true });
       count++;
+      batchCount++;
+
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
