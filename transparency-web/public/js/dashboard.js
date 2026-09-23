@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,11 +453,15 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const docRef = doc(db, "users", uid, "devices", mac);
+      batch.set(docRef, {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -473,7 +477,22 @@ uploadForm.addEventListener("submit", async (e) => {
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
       });
+
       count++;
+      batchCount++;
+
+      // Expected impact: Speeds up bulk operations by batching database writes, turning O(N) network requests into batched O(N/400) operations.
+      // Firestore limits batches to 500 operations, so we commit every 400.
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    // Commit any remaining operations in the batch
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     // Update device count on network
