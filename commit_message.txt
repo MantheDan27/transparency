@@ -1,0 +1,4 @@
+💡 What: Replaced sequential `await setDoc` operations in bulk workflows (Upload Scan and Desktop Sync) with batched Firestore operations using `writeBatch(db)` chunked to 400 operations per batch.
+🎯 Why: Iterating over an array and executing a network request per device created a massive N+1 performance bottleneck during bulk device imports.
+📊 Impact: Reduces network overhead significantly, turning N individual Firestore writes into O(N/400) requests, leading to a much faster UI experience when processing large network scans.
+🔬 Measurement: Verified the optimization by successfully applying the script, running a static verifier against `dashboard.js`, and confirming there are no automated tests for this web frontend.
