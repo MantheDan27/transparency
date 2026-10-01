@@ -251,16 +251,23 @@ document.addEventListener('DOMContentLoaded', () => {
   $('refreshLedgerBtn').addEventListener('click', refreshLedger);
   $('ledgerDeviceSelect').addEventListener('change', () => {
     const has = !!$('ledgerDeviceSelect').value;
-    $('deleteLocalCacheBtn').disabled = !has;
-    $('requestCloudDeleteBtn').disabled = !has;
+    const delBtn = $('deleteLocalCacheBtn');
+    const reqBtn = $('requestCloudDeleteBtn');
+    delBtn.disabled = !has;
+    reqBtn.disabled = !has;
+    delBtn.title = has ? '' : 'Select a device to delete from local cache';
+    reqBtn.title = has ? '' : 'Select a device to request cloud deletion';
   });
   $('deleteLocalCacheBtn').addEventListener('click', deleteLocalCache);
   $('requestCloudDeleteBtn').addEventListener('click', requestCloudDelete);
 
   // Privacy controls
   $('deviceSelect').addEventListener('change', () => {
-    $('deleteDeviceBtn').disabled = !$('deviceSelect').value;
-    $('delDeviceOptions').classList.toggle('hidden', !$('deviceSelect').value);
+    const has = !!$('deviceSelect').value;
+    const btn = $('deleteDeviceBtn');
+    btn.disabled = !has;
+    btn.title = has ? '' : 'Select a device to forget';
+    $('delDeviceOptions').classList.toggle('hidden', !has);
   });
   $('deleteDeviceBtn').addEventListener('click', forgetDevice);
   $('deleteAllBtn').addEventListener('click', deleteAllCloud);
@@ -2309,8 +2316,12 @@ async function populateLedgerDeviceSelect() {
   });
   if (prev && ips.includes(prev)) sel.value = prev;
   const has = !!sel.value;
-  $('deleteLocalCacheBtn').disabled = !has;
-  $('requestCloudDeleteBtn').disabled = !has;
+  const delBtn = $('deleteLocalCacheBtn');
+  const reqBtn = $('requestCloudDeleteBtn');
+  delBtn.disabled = !has;
+  reqBtn.disabled = !has;
+  delBtn.title = has ? '' : 'Select a device to delete from local cache';
+  reqBtn.title = has ? '' : 'Select a device to request cloud deletion';
 }
 
 async function deleteLocalCache() {
@@ -2355,7 +2366,10 @@ async function populateDeviceSelects() {
     sel.appendChild(opt);
   });
   if (prev && ips.includes(prev)) sel.value = prev;
-  $('deleteDeviceBtn').disabled = (ips.length === 0 || !sel.value);
+  const has = ips.length !== 0 && !!sel.value;
+  const btn = $('deleteDeviceBtn');
+  btn.disabled = !has;
+  btn.title = has ? '' : 'Select a device to forget';
 }
 
 async function forgetDevice() {
