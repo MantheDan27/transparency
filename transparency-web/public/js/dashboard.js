@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -554,22 +554,40 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // ⚡ Bolt Performance Optimization:
+    // Pre-compute O(1) Map lookup to replace O(N) array search inside loops
+    // Expected impact: Speeds up bulk operations by eliminating O(N*M) lookup times
+    const networkSubnetMap = new Map();
+    if (allNetworksCache.length > 0) {
+      for (const n of allNetworksCache) {
+        if (n.subnet) networkSubnetMap.set(n.subnet, n.id);
+      }
+    }
+
     let count = 0;
+
+    // ⚡ Bolt Performance Optimization:
+    // Batch Firestore writes to prevent N+1 network requests and chunk by 400
+    // to avoid exceeding Firebase's 500 operations per batch limit.
+    // Expected impact: Speeds up bulk operations significantly (O(1) network request per chunk instead of O(N))
+    let batch = writeBatch(db);
+    let opsInBatch = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && networkSubnetMap.has(dev.subnet)) {
+        networkId = networkSubnetMap.get(dev.subnet);
       }
       if (!networkId && allNetworksCache.length > 0) {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const devRef = doc(db, "users", uid, "devices", mac);
+      batch.set(devRef, {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -586,7 +604,19 @@ syncDevicesBtn.addEventListener("click", async () => {
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
       }, { merge: true });
+
       count++;
+      opsInBatch++;
+
+      if (opsInBatch >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opsInBatch = 0;
+      }
+    }
+
+    if (opsInBatch > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
