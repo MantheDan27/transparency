@@ -253,14 +253,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const has = !!$('ledgerDeviceSelect').value;
     $('deleteLocalCacheBtn').disabled = !has;
     $('requestCloudDeleteBtn').disabled = !has;
+    if (!has) {
+      $('deleteLocalCacheBtn').title = 'Select a device first';
+      $('requestCloudDeleteBtn').title = 'Select a device first';
+    } else {
+      $('deleteLocalCacheBtn').removeAttribute('title');
+      $('requestCloudDeleteBtn').removeAttribute('title');
+    }
   });
   $('deleteLocalCacheBtn').addEventListener('click', deleteLocalCache);
   $('requestCloudDeleteBtn').addEventListener('click', requestCloudDelete);
 
   // Privacy controls
   $('deviceSelect').addEventListener('change', () => {
-    $('deleteDeviceBtn').disabled = !$('deviceSelect').value;
-    $('delDeviceOptions').classList.toggle('hidden', !$('deviceSelect').value);
+    const has = !!$('deviceSelect').value;
+    $('deleteDeviceBtn').disabled = !has;
+    $('delDeviceOptions').classList.toggle('hidden', !has);
+    if (!has) {
+      $('deleteDeviceBtn').title = 'Select a device first';
+    } else {
+      $('deleteDeviceBtn').removeAttribute('title');
+    }
   });
   $('deleteDeviceBtn').addEventListener('click', forgetDevice);
   $('deleteAllBtn').addEventListener('click', deleteAllCloud);
@@ -316,9 +329,15 @@ async function runScan(mode) {
 
   // Disable all scan buttons
   ['quickScanBtn','quickScanBtnMain','btnQuickScan','btnDeepScan'].forEach(id => {
-    if ($(id)) $(id).disabled = true;
+    if ($(id)) {
+      $(id).disabled = true;
+      $(id).title = 'Scan currently running';
+    }
   });
-  if ($('scanDropdownBtn')) $('scanDropdownBtn').disabled = true;
+  if ($('scanDropdownBtn')) {
+    $('scanDropdownBtn').disabled = true;
+    $('scanDropdownBtn').title = 'Scan currently running';
+  }
   bar.classList.remove('hidden');
   progTxt.textContent = 'Initializing…';
 
@@ -394,8 +413,15 @@ async function runScan(mode) {
       const phases = $('scanPhases'); if(phases) phases.classList.add('hidden');
     }, 1200);
     ['quickScanBtn','quickScanBtnMain','btnQuickScan','btnDeepScan'].forEach(id => {
-      if ($(id)) $(id).disabled = false;
+      if ($(id)) {
+        $(id).disabled = false;
+        $(id).removeAttribute('title');
+      }
     });
+    if ($('scanDropdownBtn')) {
+      $('scanDropdownBtn').disabled = false;
+      $('scanDropdownBtn').removeAttribute('title');
+    }
   }
 }
 window.runScan = runScan;
@@ -2311,6 +2337,13 @@ async function populateLedgerDeviceSelect() {
   const has = !!sel.value;
   $('deleteLocalCacheBtn').disabled = !has;
   $('requestCloudDeleteBtn').disabled = !has;
+  if (!has) {
+    $('deleteLocalCacheBtn').title = 'Select a device first';
+    $('requestCloudDeleteBtn').title = 'Select a device first';
+  } else {
+    $('deleteLocalCacheBtn').removeAttribute('title');
+    $('requestCloudDeleteBtn').removeAttribute('title');
+  }
 }
 
 async function deleteLocalCache() {
@@ -2355,7 +2388,13 @@ async function populateDeviceSelects() {
     sel.appendChild(opt);
   });
   if (prev && ips.includes(prev)) sel.value = prev;
-  $('deleteDeviceBtn').disabled = (ips.length === 0 || !sel.value);
+  const has = ips.length > 0 && !!sel.value;
+  $('deleteDeviceBtn').disabled = !has;
+  if (!has) {
+    $('deleteDeviceBtn').title = 'Select a device first';
+  } else {
+    $('deleteDeviceBtn').removeAttribute('title');
+  }
 }
 
 async function forgetDevice() {
