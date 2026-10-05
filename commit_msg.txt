@@ -1,0 +1,7 @@
+🛡️ Sentinel: [CRITICAL/HIGH] Fix XSS Vulnerability in network card generation
+
+🚨 Severity: HIGH
+💡 Vulnerability: Cross-Site Scripting (XSS) vulnerability found in `transparency-web/public/js/dashboard.js`. The `net.deviceCount`, `net.location`, and `id` variables were directly interpolated into HTML attributes and content within the `addNetworkCard` template string without proper sanitization.
+🎯 Impact: If a malicious user controls the `net.location` or `id` attributes in Firestore, they could inject arbitrary HTML or JavaScript that executes in the context of the user viewing the dashboard, potentially stealing session data or performing actions on their behalf.
+🔧 Fix: Wrapped the unsafe variable interpolations (`net.location`, `net.deviceCount`, `id`) with the existing `escHtml()` function to ensure malicious input is safely HTML-escaped before insertion into the DOM.
+✅ Verification: Code changes verified statically with assertions. Playwright testing skipped as this is a purely structural security change with no visual modifications.
