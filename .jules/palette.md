@@ -16,3 +16,8 @@
 **Learning:** When creating custom toggle switches in vanilla HTML/JS, developers often wrap the input element inside a `<label>` without a `for` attribute, using an adjacent `<span>` for visual text and knobs. While visually pleasing, this pattern fails screen readers because the implicit label relationship is broken or poorly announced when interacting with the hidden checkbox. Screen readers need an explicit `aria-label` directly on the `<input>` or a strict `<label for="id">` to properly voice the toggle's function and its checked/unchecked state.
 
 **Action:** Always inject `aria-label` directly onto visually-hidden inputs embedded in toggle components (e.g. `<input type="checkbox" aria-label="Toggle feature">`), or refactor the wrapper to use an explicit `for` attribute matching the input's ID.
+## 2024-05-26 - Explaining Disabled States via Tooltips
+
+**Learning:** When buttons are disabled (e.g., waiting for user selection), providing no context leaves users guessing, especially screen reader users. Simply adding a `title` attribute dynamically via JS or statically in HTML (e.g., `title="Select an item to enable"`) gives immediate, clear guidance on how to unblock the action. In `device-monitor-desktop`, native `title` attributes on disabled buttons continue to function for mouse users because the CSS for `.btn:disabled` does not use `pointer-events: none;`.
+
+**Action:** Always provide an explanatory `title` or `aria-disabled` combined with a descriptive element for disabled actions. If the state toggles dynamically via JS, ensure the script manages updating or removing the explanation when the element becomes active to prevent stale tooltips.
