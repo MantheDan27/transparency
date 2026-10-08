@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,11 +453,19 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    // ⚡ BOLT: Batch Firestore writes to optimize performance and prevent N+1 API calls
+    // Expected impact: Dramatically reduces network I/O and speeds up bulk operations by batching requests.
+    // Firestore has a 500 operation limit per batch, so we chunk it at 400
+    const BATCH_LIMIT = 400;
+    let batch = writeBatch(db);
+    let operations = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const ref = doc(db, "users", uid, "devices", mac);
+      batch.set(ref, {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -474,6 +482,16 @@ uploadForm.addEventListener("submit", async (e) => {
         uploadedAt: serverTimestamp()
       });
       count++;
+      operations++;
+
+      if (operations >= BATCH_LIMIT) {
+        await batch.commit();
+        batch = writeBatch(db);
+        operations = 0;
+      }
+    }
+    if (operations > 0) {
+      await batch.commit();
     }
 
     // Update device count on network
@@ -555,21 +573,29 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    // ⚡ BOLT: Batch Firestore writes and use O(1) lookups to optimize sync performance
+    // Expected impact: Dramatically reduces network I/O, prevents N+1 issues, and prevents O(N^2) looping complexity for bulk device updates.
+    const subnetLookup = new Map(allNetworksCache.map((n) => [n.subnet, n.id]));
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
+    const BATCH_LIMIT = 400;
+    let batch = writeBatch(db);
+    let operations = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      // Find which network to associate
+      // Find which network to associate using O(1) lookup
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
-      }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (dev.subnet && subnetLookup.has(dev.subnet)) {
+        networkId = subnetLookup.get(dev.subnet);
+      } else {
+        networkId = defaultNetworkId;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const ref = doc(db, "users", uid, "devices", mac);
+      batch.set(ref, {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -587,6 +613,16 @@ syncDevicesBtn.addEventListener("click", async () => {
         syncedAt: serverTimestamp()
       }, { merge: true });
       count++;
+      operations++;
+
+      if (operations >= BATCH_LIMIT) {
+        await batch.commit();
+        batch = writeBatch(db);
+        operations = 0;
+      }
+    }
+    if (operations > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
