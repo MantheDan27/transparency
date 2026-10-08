@@ -28,3 +28,7 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+
+## 2026-10-26 - [O(1) Map Lookups & Batched Writes in Bulk API Processing]
+**Learning:** In web frontends interacting with backend databases (like Firestore), processing bulk data (e.g., syncing hundreds of devices) by firing individual writes (`setDoc`) inside a loop alongside $O(N)$ lookups (`Array.find`) creates a severe $O(N^2)$ algorithmic bottleneck and triggers network API limits (N+1 problem).
+**Action:** When implementing bulk data ingestion, chunk the writes using the database's batched API (e.g., Firestore's `writeBatch` capped at 400 operations) to consolidate network calls. Furthermore, pre-compute a lookup map before the loop (e.g., `const subnetLookup = new Map(...)`) to turn $O(N^2)$ nested loop lookups into $O(N)$ linear complexity, ensuring smooth UI performance even on large datasets.
