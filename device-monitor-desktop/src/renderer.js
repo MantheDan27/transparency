@@ -253,14 +253,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const has = !!$('ledgerDeviceSelect').value;
     $('deleteLocalCacheBtn').disabled = !has;
     $('requestCloudDeleteBtn').disabled = !has;
+    $('deleteLocalCacheBtn').title = has ? 'Delete local event ledger cache for this device' : 'Select a device to delete local cache';
+    $('requestCloudDeleteBtn').title = has ? 'Request deletion of remote ledger events for this device' : 'Select a device to request cloud deletion';
   });
   $('deleteLocalCacheBtn').addEventListener('click', deleteLocalCache);
   $('requestCloudDeleteBtn').addEventListener('click', requestCloudDelete);
 
   // Privacy controls
   $('deviceSelect').addEventListener('change', () => {
-    $('deleteDeviceBtn').disabled = !$('deviceSelect').value;
-    $('delDeviceOptions').classList.toggle('hidden', !$('deviceSelect').value);
+    const hasVal = !!$('deviceSelect').value;
+    $('deleteDeviceBtn').disabled = !hasVal;
+    $('deleteDeviceBtn').title = hasVal ? 'Forget this device' : 'Select a device to forget';
+    $('delDeviceOptions').classList.toggle('hidden', !hasVal);
   });
   $('deleteDeviceBtn').addEventListener('click', forgetDevice);
   $('deleteAllBtn').addEventListener('click', deleteAllCloud);
@@ -2311,6 +2315,8 @@ async function populateLedgerDeviceSelect() {
   const has = !!sel.value;
   $('deleteLocalCacheBtn').disabled = !has;
   $('requestCloudDeleteBtn').disabled = !has;
+  $('deleteLocalCacheBtn').title = has ? 'Delete local event ledger cache for this device' : 'Select a device to delete local cache';
+  $('requestCloudDeleteBtn').title = has ? 'Request deletion of remote ledger events for this device' : 'Select a device to request cloud deletion';
 }
 
 async function deleteLocalCache() {
@@ -2355,7 +2361,9 @@ async function populateDeviceSelects() {
     sel.appendChild(opt);
   });
   if (prev && ips.includes(prev)) sel.value = prev;
-  $('deleteDeviceBtn').disabled = (ips.length === 0 || !sel.value);
+  const hasSel = (ips.length > 0 && !!sel.value);
+  $('deleteDeviceBtn').disabled = !hasSel;
+  $('deleteDeviceBtn').title = hasSel ? 'Forget this device' : 'Select a device to forget';
 }
 
 async function forgetDevice() {
