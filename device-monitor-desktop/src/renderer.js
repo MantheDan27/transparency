@@ -769,10 +769,9 @@ async function bulkAction(action) {
     return;
   }
   if (action === 'markKnown') {
-    const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
     const updates = {};
     for (const ip of ips) {
-      const dev = devicesByIp.get(ip);
+      const dev = deviceMap.get(ip);
       if (dev) updates[getDeviceKey(dev)] = { trustState: 'known' };
     }
     if (Object.keys(updates).length > 0) {
@@ -783,11 +782,10 @@ async function bulkAction(action) {
     renderDeviceTable();
   }
   if (action === 'watchlist') {
-    const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
     const updates = {};
     const allMeta = await window.electronAPI.getAllDeviceMeta();
     for (const ip of ips) {
-      const dev = devicesByIp.get(ip);
+      const dev = deviceMap.get(ip);
       if (dev) {
         const key = getDeviceKey(dev);
         const cur = allMeta[key] || {};
@@ -802,8 +800,7 @@ async function bulkAction(action) {
     renderDeviceTable();
   }
   if (action === 'export') {
-    const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
-    const data = ips.map(ip => devicesByIp.get(ip)).filter(Boolean);
+    const data = ips.map(ip => deviceMap.get(ip)).filter(Boolean);
     downloadJSON(data, `transparency-devices-${dateStamp()}.json`);
     showToast('Device selection exported.', 'success');
   }
@@ -988,7 +985,6 @@ async function applyBulkTags() {
 
   const updates = {};
   const allMeta = await window.electronAPI.getAllDeviceMeta();
-  const devicesByIp = new Map(allDevices.map(d => [d.ip, d]));
 
   // ⚡ Bolt Performance Optimization:
   // Pre-compute O(1) Map lookup to replace O(N) array search inside loop
@@ -996,7 +992,7 @@ async function applyBulkTags() {
   for (const d of allDevices) deviceMap.set(d.ip, d);
 
   for (const ip of selectedDevices) {
-    const dev = devicesByIp.get(ip);
+    const dev = deviceMap.get(ip);
     if (!dev) continue;
     const key = getDeviceKey(dev);
     const cur = allMeta[key] || {};
