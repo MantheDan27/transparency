@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,11 +453,15 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    // ⚡ Bolt: Batch writes to Firestore to prevent excessive network requests and N+1 overhead
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      batch.set(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -473,7 +477,18 @@ uploadForm.addEventListener("submit", async (e) => {
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
       });
+
       count++;
+      batchCount++;
+      if (batchCount === 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     // Update device count on network
@@ -555,21 +570,32 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    // ⚡ Bolt: Batch writes to Firestore to prevent excessive network requests and N+1 overhead
+    let batch = writeBatch(db);
+    let batchCount = 0;
+
+    // ⚡ Bolt: Use O(1) subnet lookup Map instead of O(N) Array.find() inside a loop
+    const subnetToNetworkId = new Map();
+    for (const n of allNetworksCache) {
+      if (n.subnet && !subnetToNetworkId.has(n.subnet)) {
+        subnetToNetworkId.set(n.subnet, n.id);
+      }
+    }
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet) {
+        networkId = subnetToNetworkId.get(dev.subnet) || "";
       }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (!networkId) {
+        networkId = defaultNetworkId;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      batch.set(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -586,7 +612,18 @@ syncDevicesBtn.addEventListener("click", async () => {
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
       }, { merge: true });
+
       count++;
+      batchCount++;
+      if (batchCount === 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
