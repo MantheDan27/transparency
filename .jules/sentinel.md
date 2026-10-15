@@ -46,3 +46,7 @@ DOM-based text insertion (`textContent`) is designed to prevent HTML element inj
 
 **Prevention:**
 Always implement `escHtml` using explicit string replacements for `&`, `<`, `>`, `"`, and `'`. Ensure all untrusted data interpolated into HTML strings is passed through this strict escaping function before insertion into the DOM.
+## 2026-10-15 - Fix XSS in addNetworkCard
+**Vulnerability:** Unescaped HTML interpolations found in transparency-web dashboard.js addNetworkCard. Variables like `id`, `net.deviceCount` and `net.location` were injected directly into DOM via innerHTML without sanitization.
+**Learning:** Even internal or non-user input fields like IDs or counts should be safely coerced and escaped when modifying innerHTML since they come from external stores (Firestore) where data types might be manipulated.
+**Prevention:** Always use the `escHtml()` helper for dynamically interpolated variables in HTML templates, and ensure non-string types like numbers are coerced to string using `String(val)` prior to escaping.
