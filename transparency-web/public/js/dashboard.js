@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -453,11 +453,14 @@ uploadForm.addEventListener("submit", async (e) => {
     const devices = Array.isArray(data) ? data : data.devices || [];
 
     let count = 0;
+    // Expected impact: Speeds up bulk operations by reducing N+1 network requests
+    let batch = writeBatch(db);
+    let batchOps = 0;
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      batch.set(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -474,7 +477,14 @@ uploadForm.addEventListener("submit", async (e) => {
         uploadedAt: serverTimestamp()
       });
       count++;
+      batchOps++;
+      if (batchOps >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchOps = 0;
+      }
     }
+    if (batchOps > 0) await batch.commit();
 
     // Update device count on network
     const netRef = doc(db, "users", uid, "networks", networkId);
@@ -555,21 +565,27 @@ syncDevicesBtn.addEventListener("click", async () => {
     const uid = currentUid();
 
     let count = 0;
+    // Expected impact: Speeds up bulk operations by replacing O(N) lookup with O(1) Map
+    const networkMap = new Map();
+    allNetworksCache.forEach((n) => networkMap.set(n.subnet, n.id));
+
+    // Expected impact: Speeds up bulk operations by reducing N+1 network requests
+    let batch = writeBatch(db);
+    let batchOps = 0;
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      // Find which network to associate
+      // Find which network to associate using O(1) lookup
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
+      if (dev.subnet && networkMap.size > 0) {
+        networkId = networkMap.get(dev.subnet) || "";
       }
       if (!networkId && allNetworksCache.length > 0) {
         networkId = allNetworksCache[0].id;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      batch.set(doc(db, "users", uid, "devices", mac), {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -587,7 +603,14 @@ syncDevicesBtn.addEventListener("click", async () => {
         syncedAt: serverTimestamp()
       }, { merge: true });
       count++;
+      batchOps++;
+      if (batchOps >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        batchOps = 0;
+      }
     }
+    if (batchOps > 0) await batch.commit();
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
     loadOverviewData(uid);
