@@ -115,14 +115,15 @@ function renderOverviewDevices(devices) {
     return;
   }
 
+  // Sentinel: Wrap variables in escHtml to prevent XSS via unescaped attribute or text interpolation
   overviewDeviceBody.innerHTML = devices.map((d) => `
     <tr>
-      <td><span class="trust-dot trust-${sanitizeTrust(d.trust)}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
+      <td><span class="trust-dot trust-${escHtml(sanitizeTrust(d.trust))}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td>
       <td class="mono">${escHtml(d.mac || "")}</td>
       <td class="mono">${escHtml(d.ip || "")}</td>
       <td>${escHtml(d.deviceType || "Unknown")}</td>
-      <td><span class="trust-badge trust-${sanitizeTrust(d.trust)}">${escHtml(d.trust || "Unknown")}</span></td>
-      <td class="mono">${d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A"}</td>
+      <td><span class="trust-badge trust-${escHtml(sanitizeTrust(d.trust))}">${escHtml(d.trust || "Unknown")}</span></td>
+      <td class="mono">${escHtml(d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A")}</td>
     </tr>
   `).join("");
 }
@@ -188,12 +189,13 @@ function addNetworkCard(id, net) {
       ${net.subnet ? `<span class="network-subnet">${escHtml(net.subnet)}</span>` : ""}
     </div>
     <div class="network-card-meta">
-      <span>${net.deviceCount || 0} devices</span>
-      <span>${net.location || "Unknown location"}</span>
+      <span>${escHtml(net.deviceCount || 0)} devices</span>
+      <span>${escHtml(net.location || "Unknown location")}</span>
     </div>
+    <!-- Sentinel: Wrap data attributes in escHtml to prevent XSS attribute injection -->
     <div class="network-card-actions">
-      <button class="btn-sm btn-view" data-id="${id}">View Devices</button>
-      <button class="btn-sm btn-delete" data-id="${id}">Remove</button>
+      <button class="btn-sm btn-view" data-id="${escHtml(id)}">View Devices</button>
+      <button class="btn-sm btn-delete" data-id="${escHtml(id)}">Remove</button>
     </div>
   `;
   networkList.appendChild(card);
@@ -320,7 +322,8 @@ function renderDeviceTable(devices) {
   for (let i = 0; i < devices.length; i++) {
     const d = devices[i];
     const trust = sanitizeTrust(d.trust);
-    htmlParts[i] = `<tr class="device-row" data-index="${i}" data-trust="${trust}"><td><span class="trust-dot trust-${trust}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td><td class="mono">${escHtml(d.mac || "")}</td><td class="mono">${escHtml(d.ip || "")}</td><td>${escHtml(d.vendor || "Unknown")}</td><td>${escHtml(d.deviceType || "Unknown")}</td><td><span class="trust-badge trust-${trust}">${escHtml(d.trust || "Unknown")}</span></td><td class="mono">${d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A"}</td></tr>`;
+    // Sentinel: Wrap variables in escHtml to prevent XSS
+    htmlParts[i] = `<tr class="device-row" data-index="${escHtml(i)}" data-trust="${escHtml(trust)}"><td><span class="trust-dot trust-${escHtml(trust)}"></span>${escHtml(d.name || d.hostname || "Unknown")}</td><td class="mono">${escHtml(d.mac || "")}</td><td class="mono">${escHtml(d.ip || "")}</td><td>${escHtml(d.vendor || "Unknown")}</td><td>${escHtml(d.deviceType || "Unknown")}</td><td><span class="trust-badge trust-${escHtml(trust)}">${escHtml(d.trust || "Unknown")}</span></td><td class="mono">${escHtml(d.lastSeen ? timeAgo(toDate(d.lastSeen)) : "N/A")}</td></tr>`;
   }
   deviceTableBody.innerHTML = htmlParts.join("");
 }
@@ -674,11 +677,12 @@ function loadAlerts(uid) {
 }
 
 function buildAlertHtml(a) {
+  // Sentinel: Wrap variables in escHtml to prevent XSS
   return `
-    <div class="alert-item alert-${sanitizeSeverity(a.severity)}">
+    <div class="alert-item alert-${escHtml(sanitizeSeverity(a.severity))}">
       <div class="alert-header">
         <span class="alert-type">${escHtml(a.type || "alert")}</span>
-        <span class="alert-time">${a.timestamp ? timeAgo(toDate(a.timestamp)) : ""}</span>
+        <span class="alert-time">${escHtml(a.timestamp ? timeAgo(toDate(a.timestamp)) : "")}</span>
       </div>
       <div class="alert-message">${escHtml(a.message || "")}</div>
     </div>
