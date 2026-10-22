@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import {
   collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
-  query, orderBy, limit, serverTimestamp, onSnapshot
+  query, orderBy, limit, serverTimestamp, onSnapshot, writeBatch
 } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 // --- DOM References ---
@@ -452,12 +452,17 @@ uploadForm.addEventListener("submit", async (e) => {
 
     const devices = Array.isArray(data) ? data : data.devices || [];
 
+    // ⚡ Bolt: Use chunked batched writes to prevent 500-op limit and reduce N+1 network calls
     let count = 0;
+    let batch = writeBatch(db);
+    let opsCount = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || dev.macAddress || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const deviceRef = doc(db, "users", uid, "devices", mac);
+      batch.set(deviceRef, {
         mac: dev.mac || dev.macAddress || "",
         ip: dev.ip || dev.ipAddress || "",
         hostname: dev.hostname || dev.name || "",
@@ -473,7 +478,17 @@ uploadForm.addEventListener("submit", async (e) => {
         classificationReason: dev.classificationReason || "",
         uploadedAt: serverTimestamp()
       });
+
       count++;
+      opsCount++;
+      if (opsCount >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opsCount = 0;
+      }
+    }
+    if (opsCount > 0) {
+      await batch.commit();
     }
 
     // Update device count on network
@@ -554,22 +569,32 @@ syncDevicesBtn.addEventListener("click", async () => {
     const devices = Array.isArray(data) ? data : data.devices || [];
     const uid = currentUid();
 
+    // ⚡ Bolt: Pre-compute network lookup map for O(1) access
+    const subnetToNetworkId = new Map();
+    allNetworksCache.forEach(n => {
+      if (n.subnet) subnetToNetworkId.set(n.subnet, n.id);
+    });
+    const defaultNetworkId = allNetworksCache.length > 0 ? allNetworksCache[0].id : "";
+
+    // ⚡ Bolt: Use chunked batched writes to prevent 500-op limit and reduce N+1 network calls
     let count = 0;
+    let batch = writeBatch(db);
+    let opsCount = 0;
+
     for (const dev of devices) {
       const mac = (dev.mac || "").toUpperCase().replace(/[^A-F0-9]/g, "");
       if (!mac) continue;
 
       // Find which network to associate
       let networkId = "";
-      if (dev.subnet && allNetworksCache.length > 0) {
-        const match = allNetworksCache.find((n) => n.subnet === dev.subnet);
-        if (match) networkId = match.id;
-      }
-      if (!networkId && allNetworksCache.length > 0) {
-        networkId = allNetworksCache[0].id;
+      if (dev.subnet && subnetToNetworkId.has(dev.subnet)) {
+        networkId = subnetToNetworkId.get(dev.subnet);
+      } else {
+        networkId = defaultNetworkId;
       }
 
-      await setDoc(doc(db, "users", uid, "devices", mac), {
+      const deviceRef = doc(db, "users", uid, "devices", mac);
+      batch.set(deviceRef, {
         mac: dev.mac || "",
         ip: dev.ip || "",
         hostname: dev.hostname || "",
@@ -586,7 +611,17 @@ syncDevicesBtn.addEventListener("click", async () => {
         subnet: dev.subnet || "",
         syncedAt: serverTimestamp()
       }, { merge: true });
+
       count++;
+      opsCount++;
+      if (opsCount >= 400) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opsCount = 0;
+      }
+    }
+    if (opsCount > 0) {
+      await batch.commit();
     }
 
     showConnectionStatus(`Synced ${count} devices from desktop app.`, "ok");
