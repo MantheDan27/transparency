@@ -2922,7 +2922,8 @@ window.runPortScan = async function() {
 
   const statusEl  = $('portScanStatus');
   const resultsEl = $('portScanResults');
-  if (statusEl)  { statusEl.innerHTML = `<span style="color:var(--text-muted)">Scanning ${host} — ${ports.length} ports…</span>`; statusEl.classList.remove('hidden'); }
+  // Prevent XSS by escaping host
+  if (statusEl)  { statusEl.innerHTML = `<span style="color:var(--text-muted)">Scanning ${escHtml(host)} — ${ports.length} ports…</span>`; statusEl.classList.remove('hidden'); }
   if (resultsEl) resultsEl.innerHTML = '';
 
   const result = await window.electronAPI.portScan(host, ports).catch(e => ({ open:[], error:e.message }));

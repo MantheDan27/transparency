@@ -182,6 +182,7 @@ function addNetworkCard(id, net) {
   const card = document.createElement("div");
   card.className = "network-card";
   card.dataset.id = id;
+  // Sanitize user input to prevent XSS
   card.innerHTML = `
     <div class="network-card-header">
       <h3>${escHtml(net.name)}</h3>
@@ -189,7 +190,7 @@ function addNetworkCard(id, net) {
     </div>
     <div class="network-card-meta">
       <span>${net.deviceCount || 0} devices</span>
-      <span>${net.location || "Unknown location"}</span>
+      <span>${escHtml(net.location || "Unknown location")}</span>
     </div>
     <div class="network-card-actions">
       <button class="btn-sm btn-view" data-id="${id}">View Devices</button>
