@@ -252,15 +252,32 @@ document.addEventListener('DOMContentLoaded', () => {
   $('ledgerDeviceSelect').addEventListener('change', () => {
     const has = !!$('ledgerDeviceSelect').value;
     $('deleteLocalCacheBtn').disabled = !has;
+    if (!has) {
+      $('deleteLocalCacheBtn').setAttribute('title', 'Select a device to delete its local cache');
+    } else {
+      $('deleteLocalCacheBtn').removeAttribute('title');
+    }
+
     $('requestCloudDeleteBtn').disabled = !has;
+    if (!has) {
+      $('requestCloudDeleteBtn').setAttribute('title', 'Select a device to request cloud deletion');
+    } else {
+      $('requestCloudDeleteBtn').removeAttribute('title');
+    }
   });
   $('deleteLocalCacheBtn').addEventListener('click', deleteLocalCache);
   $('requestCloudDeleteBtn').addEventListener('click', requestCloudDelete);
 
   // Privacy controls
   $('deviceSelect').addEventListener('change', () => {
-    $('deleteDeviceBtn').disabled = !$('deviceSelect').value;
-    $('delDeviceOptions').classList.toggle('hidden', !$('deviceSelect').value);
+    const has = !!$('deviceSelect').value;
+    $('deleteDeviceBtn').disabled = !has;
+    if (!has) {
+      $('deleteDeviceBtn').setAttribute('title', 'Select a device to forget');
+    } else {
+      $('deleteDeviceBtn').removeAttribute('title');
+    }
+    $('delDeviceOptions').classList.toggle('hidden', !has);
   });
   $('deleteDeviceBtn').addEventListener('click', forgetDevice);
   $('deleteAllBtn').addEventListener('click', deleteAllCloud);
@@ -2310,7 +2327,18 @@ async function populateLedgerDeviceSelect() {
   if (prev && ips.includes(prev)) sel.value = prev;
   const has = !!sel.value;
   $('deleteLocalCacheBtn').disabled = !has;
+  if (!has) {
+    $('deleteLocalCacheBtn').setAttribute('title', 'Select a device to delete its local cache');
+  } else {
+    $('deleteLocalCacheBtn').removeAttribute('title');
+  }
+
   $('requestCloudDeleteBtn').disabled = !has;
+  if (!has) {
+    $('requestCloudDeleteBtn').setAttribute('title', 'Select a device to request cloud deletion');
+  } else {
+    $('requestCloudDeleteBtn').removeAttribute('title');
+  }
 }
 
 async function deleteLocalCache() {
@@ -2355,7 +2383,13 @@ async function populateDeviceSelects() {
     sel.appendChild(opt);
   });
   if (prev && ips.includes(prev)) sel.value = prev;
-  $('deleteDeviceBtn').disabled = (ips.length === 0 || !sel.value);
+  const isDisabled = ips.length === 0 || !sel.value;
+  $('deleteDeviceBtn').disabled = isDisabled;
+  if (isDisabled) {
+    $('deleteDeviceBtn').setAttribute('title', 'Select a device to forget');
+  } else {
+    $('deleteDeviceBtn').removeAttribute('title');
+  }
 }
 
 async function forgetDevice() {
