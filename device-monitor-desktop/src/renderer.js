@@ -252,15 +252,19 @@ document.addEventListener('DOMContentLoaded', () => {
   $('ledgerDeviceSelect').addEventListener('change', () => {
     const has = !!$('ledgerDeviceSelect').value;
     $('deleteLocalCacheBtn').disabled = !has;
+    $('deleteLocalCacheBtn').title = !has ? 'Select a device to enable' : '';
     $('requestCloudDeleteBtn').disabled = !has;
+    $('requestCloudDeleteBtn').title = !has ? 'Select a device to enable' : '';
   });
   $('deleteLocalCacheBtn').addEventListener('click', deleteLocalCache);
   $('requestCloudDeleteBtn').addEventListener('click', requestCloudDelete);
 
   // Privacy controls
   $('deviceSelect').addEventListener('change', () => {
-    $('deleteDeviceBtn').disabled = !$('deviceSelect').value;
-    $('delDeviceOptions').classList.toggle('hidden', !$('deviceSelect').value);
+    const disabled = !$('deviceSelect').value;
+    $('deleteDeviceBtn').disabled = disabled;
+    $('deleteDeviceBtn').title = disabled ? 'Select a device to enable' : '';
+    $('delDeviceOptions').classList.toggle('hidden', disabled);
   });
   $('deleteDeviceBtn').addEventListener('click', forgetDevice);
   $('deleteAllBtn').addEventListener('click', deleteAllCloud);
@@ -2310,7 +2314,9 @@ async function populateLedgerDeviceSelect() {
   if (prev && ips.includes(prev)) sel.value = prev;
   const has = !!sel.value;
   $('deleteLocalCacheBtn').disabled = !has;
+  $('deleteLocalCacheBtn').title = !has ? 'Select a device to enable' : '';
   $('requestCloudDeleteBtn').disabled = !has;
+  $('requestCloudDeleteBtn').title = !has ? 'Select a device to enable' : '';
 }
 
 async function deleteLocalCache() {
@@ -2355,7 +2361,9 @@ async function populateDeviceSelects() {
     sel.appendChild(opt);
   });
   if (prev && ips.includes(prev)) sel.value = prev;
-  $('deleteDeviceBtn').disabled = (ips.length === 0 || !sel.value);
+  const disabled = (ips.length === 0 || !sel.value);
+  $('deleteDeviceBtn').disabled = disabled;
+  $('deleteDeviceBtn').title = disabled ? 'Select a device to enable' : '';
 }
 
 async function forgetDevice() {
