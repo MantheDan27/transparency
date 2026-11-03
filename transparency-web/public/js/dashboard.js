@@ -189,7 +189,8 @@ function addNetworkCard(id, net) {
     </div>
     <div class="network-card-meta">
       <span>${net.deviceCount || 0} devices</span>
-      <span>${net.location || "Unknown location"}</span>
+      <!-- 🛡️ Sentinel: Escape user input to prevent XSS -->
+      <span>${escHtml(net.location || "Unknown location")}</span>
     </div>
     <div class="network-card-actions">
       <button class="btn-sm btn-view" data-id="${id}">View Devices</button>
