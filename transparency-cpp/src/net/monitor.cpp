@@ -69,7 +69,11 @@ void Monitor::Start(
 // ─── Stop ─────────────────────────────────────────────────────────────────────
 
 void Monitor::Stop() {
-    _stopRequested = true;
+    {
+        std::lock_guard<std::mutex> lk(_mutex);
+        _stopRequested = true;
+    }
+    _cv.notify_all();
     _scanner.Cancel();
     if (_workerThread.joinable()) _workerThread.join();
     _running = false;
@@ -78,8 +82,11 @@ void Monitor::Stop() {
 // ─── UpdateConfig ─────────────────────────────────────────────────────────────
 
 void Monitor::UpdateConfig(const MonitorConfig& config) {
-    std::lock_guard<std::mutex> lk(_mutex);
-    _config = config;
+    {
+        std::lock_guard<std::mutex> lk(_mutex);
+        _config = config;
+    }
+    _cv.notify_all();
 }
 
 // ─── Getters ─────────────────────────────────────────────────────────────────
@@ -105,18 +112,19 @@ void Monitor::WorkerLoop() {
     while (!_stopRequested) {
         MonitorConfig cfg;
         {
-            std::lock_guard<std::mutex> lk(_mutex);
+            std::unique_lock<std::mutex> lk(_mutex);
             cfg = _config;
-        }
 
-        if (!cfg.enabled) {
-            // Sleep briefly and re-check
-            for (int i = 0; i < 20 && !_stopRequested; i++) Sleep(500);
-            continue;
+            if (!cfg.enabled) {
+                // Sleep using condition variable and wait for config change or stop request
+                _cv.wait_for(lk, std::chrono::seconds(10), [this]() { return _stopRequested.load(); });
+                continue;
+            }
         }
 
         if (IsInQuietHours(cfg)) {
-            for (int i = 0; i < 10 && !_stopRequested; i++) Sleep(1000);
+            std::unique_lock<std::mutex> lk(_mutex);
+            _cv.wait_for(lk, std::chrono::seconds(10), [this]() { return _stopRequested.load(); });
             continue;
         }
 
@@ -124,11 +132,8 @@ void Monitor::WorkerLoop() {
 
         // Sleep for interval
         int sleepMs = cfg.intervalMinutes * 60 * 1000;
-        int elapsed = 0;
-        while (elapsed < sleepMs && !_stopRequested) {
-            Sleep(500);
-            elapsed += 500;
-        }
+        std::unique_lock<std::mutex> lk(_mutex);
+        _cv.wait_for(lk, std::chrono::milliseconds(sleepMs), [this]() { return _stopRequested.load(); });
     }
 }
 
