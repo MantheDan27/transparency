@@ -253,14 +253,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const has = !!$('ledgerDeviceSelect').value;
     $('deleteLocalCacheBtn').disabled = !has;
     $('requestCloudDeleteBtn').disabled = !has;
+    $('deleteLocalCacheBtn').title = has ? '' : 'Select a device first';
+    $('requestCloudDeleteBtn').title = has ? '' : 'Select a device first';
   });
   $('deleteLocalCacheBtn').addEventListener('click', deleteLocalCache);
   $('requestCloudDeleteBtn').addEventListener('click', requestCloudDelete);
 
   // Privacy controls
   $('deviceSelect').addEventListener('change', () => {
-    $('deleteDeviceBtn').disabled = !$('deviceSelect').value;
-    $('delDeviceOptions').classList.toggle('hidden', !$('deviceSelect').value);
+    const hasVal = !!$('deviceSelect').value;
+    $('deleteDeviceBtn').disabled = !hasVal;
+    $('deleteDeviceBtn').title = hasVal ? '' : 'Select a device first';
+    $('delDeviceOptions').classList.toggle('hidden', !hasVal);
   });
   $('deleteDeviceBtn').addEventListener('click', forgetDevice);
   $('deleteAllBtn').addEventListener('click', deleteAllCloud);
@@ -2311,6 +2315,8 @@ async function populateLedgerDeviceSelect() {
   const has = !!sel.value;
   $('deleteLocalCacheBtn').disabled = !has;
   $('requestCloudDeleteBtn').disabled = !has;
+  $('deleteLocalCacheBtn').title = has ? '' : 'Select a device first';
+  $('requestCloudDeleteBtn').title = has ? '' : 'Select a device first';
 }
 
 async function deleteLocalCache() {
@@ -2355,7 +2361,9 @@ async function populateDeviceSelects() {
     sel.appendChild(opt);
   });
   if (prev && ips.includes(prev)) sel.value = prev;
-  $('deleteDeviceBtn').disabled = (ips.length === 0 || !sel.value);
+  const hasVal = !(ips.length === 0 || !sel.value);
+  $('deleteDeviceBtn').disabled = !hasVal;
+  $('deleteDeviceBtn').title = hasVal ? '' : 'Select a device first';
 }
 
 async function forgetDevice() {
