@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include "transparency/models.h"
 #include "net/scan_engine.h"
 
@@ -41,6 +42,7 @@ public:
 
 private:
     mutable std::mutex  _mutex;
+    std::condition_variable _cv;
     std::atomic<bool>   _running{ false };
     std::atomic<bool>   _stopRequested{ false };
     std::thread         _workerThread;

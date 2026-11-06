@@ -28,3 +28,9 @@
 ## 2024-05-30 - N+1 IPC Bottleneck in Electron Bulk Actions
 **Learning:** Iterating through a large array and calling an asynchronous IPC method (`ipcRenderer.invoke`) per item creates an N+1 performance bottleneck due to excessive IPC overhead, context switching, and potential synchronous disk I/O in the main process.
 **Action:** Always batch related IPC updates into a single "bulk" method (e.g., `bulkDeleteLocalDevices`) passing the array of identifiers, turning O(N) IPC calls into O(1). Filter the array in the main process using an O(1) Set lookup.
+## 2026-11-06 - [C++ Condition Variable Lost Wakeup]
+**Learning:** When replacing busy-wait polling loops with  in C++ background threads, modifying the state variable (like `_stopRequested`) and calling `notify_all()` without acquiring the same mutex used by the condition variable introduces a critical 'lost wakeup' race condition, which can cause the thread to hang indefinitely during shutdown.
+**Action:** Always wrap state modifications that a condition variable waits on (e.g., `_stopRequested = true;`) within a `std::lock_guard` using the associated mutex before calling `notify_all()`. Ensure build/test steps use the correct cross-compilation toolchain for Win32 apps.
+## $(date -u +%Y-%m-%d) - [C++ Condition Variable Lost Wakeup]
+**Learning:** When replacing busy-wait polling loops with `std::condition_variable` in C++ background threads, modifying the state variable (like `_stopRequested`) and calling `notify_all()` without acquiring the same mutex used by the condition variable introduces a critical 'lost wakeup' race condition, which can cause the thread to hang indefinitely during shutdown.
+**Action:** Always wrap state modifications that a condition variable waits on (e.g., `_stopRequested = true;`) within a `std::lock_guard` using the associated mutex before calling `notify_all()`. Ensure build/test steps use the correct cross-compilation toolchain for Win32 apps.
