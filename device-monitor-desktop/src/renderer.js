@@ -1858,17 +1858,27 @@ function renderAlerts() {
   const container = $('alertsContainer');
   const subtitle  = $('alertsSubtitle');
 
-  let filtered = allAlerts;
-  if (alertFilter === 'high')   filtered = allAlerts.filter(a => a.severity === 'high');
-  if (alertFilter === 'medium') filtered = allAlerts.filter(a => a.severity === 'medium');
-  if (alertFilter === 'low')    filtered = allAlerts.filter(a => a.severity === 'low');
-  if (alertFilter === 'unread') filtered = allAlerts.filter(a => !a.acknowledged);
-
+  // ⚡ Bolt Performance Optimization:
+  // Combined filter pass and metrics counting into a single O(N) loop.
+  // Defaults to O(1) reference assignment for unfiltered views.
   const counts = { high:0, medium:0, low:0, unread:0 };
+  let filtered = [];
+  const validFilters = new Set(['high', 'medium', 'low', 'unread']);
+  const isFiltering = validFilters.has(alertFilter);
+
   for (const a of allAlerts) {
     counts[a.severity] = (counts[a.severity] || 0) + 1;
-    if (!a.acknowledged) counts.unread++;
+    const unacked = !a.acknowledged;
+    if (unacked) counts.unread++;
+
+    if (isFiltering) {
+      if (alertFilter === 'unread' ? unacked : alertFilter === a.severity) {
+        filtered.push(a);
+      }
+    }
   }
+
+  if (!isFiltering) filtered = allAlerts;
   $('afAll').textContent    = allAlerts.length;
   $('afHigh').textContent   = counts.high || 0;
   $('afMedium').textContent = counts.medium || 0;
@@ -3396,17 +3406,27 @@ function renderAlerts() {
   const container = $('alertsContainer');
   const subtitle  = $('alertsSubtitle');
 
-  let filtered = allAlerts;
-  if (alertFilter === 'high')   filtered = allAlerts.filter(a => a.severity === 'high');
-  if (alertFilter === 'medium') filtered = allAlerts.filter(a => a.severity === 'medium');
-  if (alertFilter === 'low')    filtered = allAlerts.filter(a => a.severity === 'low');
-  if (alertFilter === 'unread') filtered = allAlerts.filter(a => !a.acknowledged);
-
+  // ⚡ Bolt Performance Optimization:
+  // Combined filter pass and metrics counting into a single O(N) loop.
+  // Defaults to O(1) reference assignment for unfiltered views.
   const counts = { high:0, medium:0, low:0, unread:0 };
+  let filtered = [];
+  const validFilters = new Set(['high', 'medium', 'low', 'unread']);
+  const isFiltering = validFilters.has(alertFilter);
+
   for (const a of allAlerts) {
     counts[a.severity] = (counts[a.severity] || 0) + 1;
-    if (!a.acknowledged) counts.unread++;
+    const unacked = !a.acknowledged;
+    if (unacked) counts.unread++;
+
+    if (isFiltering) {
+      if (alertFilter === 'unread' ? unacked : alertFilter === a.severity) {
+        filtered.push(a);
+      }
+    }
   }
+
+  if (!isFiltering) filtered = allAlerts;
   $('afAll').textContent    = allAlerts.length;
   $('afHigh').textContent   = counts.high || 0;
   $('afMedium').textContent = counts.medium || 0;
